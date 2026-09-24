@@ -13,5 +13,5 @@ entry and backlog before starting.
 -->
 
 - **Session:** 2026-09-24 — Amara / claude-sonnet-5
-- **Task:** build the browser-interaction foundation (Playwright) for the recorder's live adapter (B-2026-09-24-1) against the now-identified target site, "CryptonicHub Trader" (cryptonichub.pro)
-- **Status:** in progress — adapter built + unit-tested (commit 5a3411b); waiting on the user to run `record-live` against the live site to verify it end-to-end
+- **Task:** user re-prioritized: prove the strategy in layer 2 (replay) before any deposit or live recording. Added `low-digit-over` (Over(1) bet whenever the last digit is 0/1, $0.10 stake) to strategies.py; confirmed on synthetic data it converges to the -5% pricing, same as every other barrier (f305e5b)
+- **Status:** in progress — need a real recording (not synthetic) to test the strategy against the actual site's feed; browser adapter (5a3411b) is built but not yet run live
