@@ -72,6 +72,7 @@ Full spec: `.context_ledger/core/schemas/ledger-schema.md` →
 |----|---------|
 | B-2026-09-24-2 | Replay with `RiskGuard` in the loop: session-by-session replay showing how the limits bound drawdown (the discipline argument, measured) |
 | B-2026-09-24-3 | Harness: parameter sweeps tuned on in-sample only, with a multiple-comparisons correction on the out-of-sample verdict |
+| B-2026-09-24-6 | Fold into DESIGN.md: the -5% EV proof (p cancels out algebraically in `Contract.profit_ratio`, so no barrier/side/timing choice ever changes the edge — currently only in chat/commit history), and the Deriv account setup facts (app registration required, real app_id, account IDs, $0.35 min stake) currently living only in `current.md` |
 
 ### Low Priority
 

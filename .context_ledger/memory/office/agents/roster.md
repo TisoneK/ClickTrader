@@ -52,7 +52,7 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
-| Amara | S002 | claude-sonnet-5 | Both platforms' layer 1 proven end-to-end (no edge found on CryptonicHub, as predicted); Deriv live and working after tracking down a retired API URL | Working | 6f171d5 fixed the real Deriv WS endpoint; next: a real ~8k-tick Deriv recording for a cross-platform check+replay comparison, on the user's go-ahead |
+| Amara | S002 | claude-sonnet-5 | Both platforms' layer 1 proven (no edge on CryptonicHub); Deriv layer 3 (executor) built and live-verified — real demo contract placed | Working | contract 14296246299 confirmed live on Deriv demo (8d184bb/8bc36a5); Deriv 8k-tick recording running in background (~3992/8000); RiskGuard not yet wired to the executor (deliberate, see current.md) |
 
 **Keep your Status cells current — that is what the board is for.** The
 next live worker reads it to know at a glance what a peer has finished,

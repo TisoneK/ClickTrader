@@ -52,7 +52,9 @@ becomes a backlog row or an ADR in `plans/decisions.md`).
 | ID | Summary |
 |----|---------|
 | P-2026-09-24-1 | Platform identified from user-supplied screenshots: "CryptonicHub Trader" (Volatility 10 (1s) Index, digit contracts — Over/Under, Even/Odd, Match/Differs; built-in "Auto-Trading" panel visible, DESIGN.md open question 2). No API confirmed either way; user has chosen to proceed with browser automation (Playwright) rather than hold for an API check — decided, not deferred. |
-| P-2026-09-24-2 | Demo account available? DESIGN.md open question 3 — the executor (layer 3) does not get built against a live account until this is answered. |
+| P-2026-09-24-2 | Demo account available? DESIGN.md open question 3 — ANSWERED: yes, a Deriv demo account with a $10,000 USD starting balance (ID kept in `.env`, not this public repo), confirmed by placing a real demo contract live (see 8bc36a5). → promoted to B-2026-09-24-5/6 and layer 3 code (trading.py), no longer open. |
+| P-2026-09-24-3 | What stake should a live-runner actually use? `low-digit-over`'s $0.10 default (strategies.py) is the user's own backtest spec and is fine for replay, but Deriv's real minimum for DIGITOVER/1HZ10V/1-tick is $0.35 (confirmed live) — a fixed constant risks breaking on a different symbol/duration with a different minimum. Options: hardcode a higher constant, or read the minimum from the `proposal` response before deciding to buy. No owner yet — decide before any live-runner (not RiskGuard itself, which is unrelated to stake sizing) gets built. |
+| P-2026-09-24-4 | `RiskGuard` (limits.py) is not wired to `place_digit_contract` (trading.py) — deliberate per trading.py's own docstring (the boundary between "may we trade" and "how do we place one" is kept explicit), but that means nothing today stops a careless caller from placing a contract unchecked. Not a bug — there is no live-runner yet to make that mistake — but whoever builds one must wire the check in, not assume it's already there. |
 
 ## Deferred work
 
