@@ -51,7 +51,7 @@ becomes a backlog row or an ADR in `plans/decisions.md`).
 
 | ID | Summary |
 |----|---------|
-| P-2026-09-24-1 | Which platform/URL is the target, and does it expose a tick API (or is it a white-label over one, e.g. a Deriv-style WebSocket)? DESIGN.md open question 1 — decides whether the recorder adapter is a socket client or Playwright. Only the user can answer. |
+| P-2026-09-24-1 | Platform identified from user-supplied screenshots: "CryptonicHub Trader" (Volatility 10 (1s) Index, digit contracts — Over/Under, Even/Odd, Match/Differs; built-in "Auto-Trading" panel visible, DESIGN.md open question 2). No API confirmed either way; user has chosen to proceed with browser automation (Playwright) rather than hold for an API check — decided, not deferred. |
 | P-2026-09-24-2 | Demo account available? DESIGN.md open question 3 — the executor (layer 3) does not get built against a live account until this is answered. |
 
 ## Deferred work

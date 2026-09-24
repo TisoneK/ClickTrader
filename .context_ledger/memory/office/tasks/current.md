@@ -12,6 +12,6 @@ entry and backlog before starting.
 - **Status:** blocked (push not permitted from this session; target platform unknown — P-2026-09-24-1) | done | blocked (<blocker>)
 -->
 
-- **Session:** 2026-09-24 — Wanjiru / claude-opus-5-5
-- **Task:** bootstrap .context_ledger/, then start building DESIGN.md layer 1 (recorder) and the platform-agnostic core
-- **Status:** blocked (push not permitted from this session; target platform unknown — P-2026-09-24-1)
+- **Session:** 2026-09-24 — Amara / claude-sonnet-5
+- **Task:** build the browser-interaction foundation (Playwright) for the recorder's live adapter (B-2026-09-24-1) against the now-identified target site, "CryptonicHub Trader"
+- **Status:** in progress — confirming site URL and auth/session approach with the user before writing the adapter
