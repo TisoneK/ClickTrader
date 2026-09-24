@@ -112,10 +112,32 @@ class StreakReversal:
         return None
 
 
+class LowDigitOver:
+    """The user's own claim: after a low digit, bet it bounces. Bets Over(``barrier``) the instant the
+    last digit is at or below ``barrier`` — no run required, and it re-fires on every tick the trigger
+    still holds, even right after a loss. Included to be tested, not believed: digits are independent
+    (DESIGN.md), so the last one tells the next nothing, whatever the barrier."""
+
+    def __init__(self, barrier: int = 1, stake: float = 0.10) -> None:
+        self._contract = Contract(Side.OVER, barrier)  # validates barrier is a legal Over barrier
+        self.name = f"low-digit-over(barrier={barrier}, stake={stake})"
+        self._barrier = barrier
+        self._stake = stake
+
+    def decide(self, history: History) -> Decision | None:
+        if len(history) == 0:
+            return None
+        last = history[-1].digit
+        if last > self._barrier:
+            return None
+        return Decision(self._contract, self._stake, f"last digit {last} <= barrier {self._barrier}")
+
+
 REGISTRY: dict[str, Callable[[], Strategy]] = {
     "random": lambda: RandomControl(seed=1),
     "over-4": lambda: FixedContract(Contract(Side.OVER, 4)),
     "over-0": lambda: FixedContract(Contract(Side.OVER, 0)),
     "under-1": lambda: FixedContract(Contract(Side.UNDER, 1)),
     "streak-reversal": lambda: StreakReversal(run=4),
+    "low-digit-over": lambda: LowDigitOver(barrier=1, stake=0.10),
 }
