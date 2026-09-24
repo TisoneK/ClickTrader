@@ -52,7 +52,7 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
-| Amara | S002 | claude-sonnet-5 | layer 1+2: live recording running against CryptonicHub Trader; `low-digit-over` strategy ready to replay against it | Working | `record-live` running in background toward 30k ticks (174d5bd fixed 2 live bugs); next: replay + uniformity check once it has enough ticks |
+| Amara | S002 | claude-sonnet-5 | CryptonicHub proved out (no edge found, as predicted); now building the Deriv API adapter for a cross-platform comparison | Blocked | Deriv adapter shipped + unit-tested (d340856); blocked on Deriv's own WS outage (external, confirmed not our issue) before a live smoke test is possible |
 
 **Keep your Status cells current — that is what the board is for.** The
 next live worker reads it to know at a glance what a peer has finished,

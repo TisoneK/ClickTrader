@@ -64,7 +64,7 @@ Full spec: `.context_ledger/core/schemas/ledger-schema.md` →
 
 | ID | Summary |
 |----|---------|
-| B-2026-09-24-1 | Verify the CryptonicHub Playwright adapter (`clicktrader/browser/`) against the live site: `pip install -e ".[browser]"`, `playwright install chromium`, `clicktrader record-live <out>`, log in once in the window that opens. Parsing + snapshot logic is unit-tested (55 passing); the end-to-end run against real ticks is not yet done |
+| B-2026-09-24-4 | Verify the Deriv adapter (`clicktrader/api/deriv.py`) against a live tick once Deriv's WS backend recovers from its current outage: `pip install -e ".[deriv]"`, `clicktrader record-deriv recordings/live-deriv.jsonl --symbol 1HZ10V`. Message parsing is unit-tested (8 passing) against the documented shape; the actual live success path is unverified |
 
 ### Medium Priority
 
