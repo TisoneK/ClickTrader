@@ -52,7 +52,7 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
-| Amara | S002 | claude-sonnet-5 | layer 1 recorder: browser-interaction foundation (Playwright) for the target site | Working | reviewed DIGITS.zip + DESIGN.md; site identified as "CryptonicHub Trader" (Volatility 10 (1s) Index, digit contracts); confirming URL + auth approach with user |
+| Amara | S002 | claude-sonnet-5 | layer 1 recorder: browser-interaction foundation (Playwright) for CryptonicHub Trader | Working | adapter + driver + CLI (`record-live`) shipped, 55 tests passing (5a3411b); next: user runs it live to verify against real ticks |
 
 **Keep your Status cells current — that is what the board is for.** The
 next live worker reads it to know at a glance what a peer has finished,

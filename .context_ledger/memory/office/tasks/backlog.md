@@ -64,7 +64,7 @@ Full spec: `.context_ledger/core/schemas/ledger-schema.md` →
 
 | ID | Summary |
 |----|---------|
-| B-2026-09-24-1 | Write the recorder's live adapter once P-2026-09-24-1 is answered — WebSocket feed if one exists, Playwright DOM read otherwise; must emit `TickRecord`s into `clicktrader.recording.Recorder` |
+| B-2026-09-24-1 | Verify the CryptonicHub Playwright adapter (`clicktrader/browser/`) against the live site: `pip install -e ".[browser]"`, `playwright install chromium`, `clicktrader record-live <out>`, log in once in the window that opens. Parsing + snapshot logic is unit-tested (55 passing); the end-to-end run against real ticks is not yet done |
 
 ### Medium Priority
 

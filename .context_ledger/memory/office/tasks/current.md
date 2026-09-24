@@ -13,5 +13,5 @@ entry and backlog before starting.
 -->
 
 - **Session:** 2026-09-24 — Amara / claude-sonnet-5
-- **Task:** build the browser-interaction foundation (Playwright) for the recorder's live adapter (B-2026-09-24-1) against the now-identified target site, "CryptonicHub Trader"
-- **Status:** in progress — confirming site URL and auth/session approach with the user before writing the adapter
+- **Task:** build the browser-interaction foundation (Playwright) for the recorder's live adapter (B-2026-09-24-1) against the now-identified target site, "CryptonicHub Trader" (cryptonichub.pro)
+- **Status:** in progress — adapter built + unit-tested (commit 5a3411b); waiting on the user to run `record-live` against the live site to verify it end-to-end
