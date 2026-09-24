@@ -7,8 +7,24 @@ No AI in the decision loop. A language model needs twenty to forty seconds to de
 one. A DOM read and a click is 50–150 milliseconds, which is the whole reason this is browser automation
 and not an agent.
 
-> **Status: design only.** Nothing is built yet. [DESIGN.md](DESIGN.md) is the contract the code will be
-> written against — including the arithmetic that decides what this project can honestly be.
+> **Status: platform-agnostic core built; no page adapter yet.** The recorder's storage, the uniformity
+> and independence tests, the replay harness, the decision ledger and the risk limits exist and are
+> tested. Nothing reads a live page or places a trade — that waits on DESIGN.md's open questions (is
+> there an API?). [DESIGN.md](DESIGN.md) is the contract the code is written against.
+
+## Running it
+
+```bash
+uv venv && uv pip install -e '.[dev]'
+.venv/bin/python -m pytest
+
+clicktrader simulate recordings/synthetic.jsonl --ticks 20000   # SYNTHETIC feed, for the pipeline only
+clicktrader check recordings/synthetic.jsonl                    # chi-square: uniform? independent?
+clicktrader replay recordings/synthetic.jsonl --strategy streak-reversal --ledger recordings/ledger.jsonl
+```
+
+`check` refuses to report on fewer than 2,000 ticks, and `replay` gives no verdict on fewer than 500
+out-of-sample bets. Every replay runs a random control over the same ticks.
 
 ---
 
