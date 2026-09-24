@@ -15,7 +15,12 @@ DEFAULT_APP_ID = 1089
 A registered app_id (from developers.deriv.com) works identically here and is preferred for anything
 longer-lived, since the shared one is rate-limited across everyone using it."""
 
-WS_URL_TEMPLATE = "wss://ws.derivws.com/websockets/v3?app_id={app_id}"
+WS_URL_TEMPLATE = "wss://api.derivws.com/trading/v1/options/ws/public?app_id={app_id}"
+"""`ws.derivws.com/websockets/v3` (the URL Deriv's own developer docs and every third-party tutorial
+still cite) is retired -- it returns a Cloudflare 520 from every network path we tested (US and Kenya
+alike, ruling out geo-blocking), while this gateway responds with real tick data using the identical
+JSON-RPC message shape. Confirmed live 2026-09-24 via a direct `ticks`/`subscribe` request. Worth
+rechecking `developers.deriv.com/docs` occasionally in case they publish the migration officially."""
 
 
 class DerivAPIError(Exception):

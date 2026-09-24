@@ -1,11 +1,9 @@
 """Market-data reads: Deriv's `ticks` stream, turned into `TickRecord`s. Public and unauthenticated —
 nothing here needs the Trade-scoped token layer 3 will eventually use.
 
-Written against Deriv's documented message shapes, not verified against a live connection — their
-WebSocket backend was returning Cloudflare 520s (every documented endpoint, confirmed from both a raw
-client and a real browser on deriv.com's own origin — a Deriv-side issue, not a block on us) at the time
-this was written. `tick_record_from_message` is unit-tested against the documented shape regardless;
-`stream_ticks` itself needs a live smoke test once the API is reachable again.
+Verified live 2026-09-24 against `wss://api.derivws.com/trading/v1/options/ws/public` (see
+`connection.py` for why that URL, not the commonly-documented `ws.derivws.com/websockets/v3`) — a real
+subscribe/tick round trip, matching the shape `tick_record_from_message` expects exactly.
 """
 
 from __future__ import annotations
