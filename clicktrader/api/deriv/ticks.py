@@ -1,11 +1,5 @@
-"""Adapter for Deriv's public WebSocket API (developers.deriv.com).
-
-Unlike `clicktrader.browser.cryptonichub`, this needs no scraping and no login: `ticks`/`ticks_history`
-are public, unauthenticated market data, served as documented JSON over a WebSocket, with just an
-`app_id`. No histogram or payout guessing either — the pricing table's inputs (win probability, the
-0.95 constant) are already fixed in `model.py`, and the only thing a tick stream needs to supply is the
-price itself. A trade-scoped API token becomes necessary only for layer 3 (placing contracts); nothing
-here uses one.
+"""Market-data reads: Deriv's `ticks` stream, turned into `TickRecord`s. Public and unauthenticated —
+nothing here needs the Trade-scoped token layer 3 will eventually use.
 
 Written against Deriv's documented message shapes, not verified against a live connection — their
 WebSocket backend was returning Cloudflare 520s (every documented endpoint, confirmed from both a raw
@@ -20,24 +14,11 @@ import json
 import time
 from typing import Any, Iterator
 
-try:
-    import websocket
-except ImportError as exc:  # pragma: no cover - exercised only when the extra isn't installed
-    raise ImportError("the 'deriv' extra is required: pip install -e '.[deriv]'") from exc
+import websocket
 
-from ..model import Tick
-from ..recording import TickRecord
-
-DEFAULT_APP_ID = 1089
-"""Deriv's shared public "test" app_id, documented for exactly this kind of unauthenticated use.
-A registered app_id (from developers.deriv.com) works identically here and is preferred for anything
-longer-lived, since the shared one is rate-limited across everyone using it."""
-
-WS_URL_TEMPLATE = "wss://ws.derivws.com/websockets/v3?app_id={app_id}"
-
-
-class DerivAPIError(Exception):
-    """The API responded with an `error` object — a bad symbol, a bad app_id, a rate limit, etc."""
+from ...model import Tick
+from ...recording import TickRecord
+from .connection import DEFAULT_APP_ID, DerivAPIError, connect
 
 
 def tick_record_from_message(tick: dict[str, Any]) -> TickRecord:
@@ -50,10 +31,6 @@ def tick_record_from_message(tick: dict[str, Any]) -> TickRecord:
     pip_size = tick["pip_size"]
     price = f"{tick['quote']:.{pip_size}f}"
     return TickRecord(tick=Tick(ts=float(tick["epoch"]), price=price, symbol=tick.get("symbol", "")))
-
-
-def connect(app_id: int = DEFAULT_APP_ID, *, timeout: float = 10.0) -> websocket.WebSocket:
-    return websocket.create_connection(WS_URL_TEMPLATE.format(app_id=app_id), timeout=timeout)
 
 
 def iter_ticks(ws: websocket.WebSocket, symbol: str) -> Iterator[TickRecord]:
