@@ -20,6 +20,8 @@ HOUSE_EDGE = 1 - RETURN_FACTOR
 class Side(str, Enum):
     OVER = "over"
     UNDER = "under"
+    EVEN = "even"
+    ODD = "odd"
 
 
 def last_digit(price: str) -> int:
@@ -49,12 +51,19 @@ class Tick:
 
 @dataclass(frozen=True)
 class Contract:
-    """A digit contract: will the next tick's last digit be over / under ``barrier``?"""
+    """A digit contract. ``OVER``/``UNDER`` need a ``barrier`` (over/under that digit); ``EVEN``/``ODD``
+    take none — they're a fixed 50/50 split of all ten digits, not a threshold."""
 
     side: Side
-    barrier: int
+    barrier: int | None = None
 
     def __post_init__(self) -> None:
+        if self.side in (Side.EVEN, Side.ODD):
+            if self.barrier is not None:
+                raise ValueError(f"{self.side.value} does not take a barrier")
+            return
+        if self.barrier is None:
+            raise ValueError(f"{self.side.value} requires a barrier")
         low, high = (0, 8) if self.side is Side.OVER else (1, 9)
         if not low <= self.barrier <= high:
             raise ValueError(f"{self.side.value} {self.barrier} can never win or never lose")
@@ -62,6 +71,8 @@ class Contract:
     @property
     def win_probability(self) -> float:
         """Chance of winning if digits are uniform and independent."""
+        if self.side in (Side.EVEN, Side.ODD):
+            return 0.5
         if self.side is Side.OVER:
             return (9 - self.barrier) / 10
         return self.barrier / 10
@@ -72,6 +83,10 @@ class Contract:
         return RETURN_FACTOR / self.win_probability - 1
 
     def wins(self, digit: int) -> bool:
+        if self.side is Side.EVEN:
+            return digit % 2 == 0
+        if self.side is Side.ODD:
+            return digit % 2 == 1
         if self.side is Side.OVER:
             return digit > self.barrier
         return digit < self.barrier
@@ -81,4 +96,4 @@ class Contract:
         return stake * self.profit_ratio if self.wins(digit) else -stake
 
     def __str__(self) -> str:
-        return f"{self.side.value} {self.barrier}"
+        return self.side.value if self.barrier is None else f"{self.side.value} {self.barrier}"

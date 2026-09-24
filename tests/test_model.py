@@ -38,6 +38,27 @@ def test_settlement_edges():
     assert Contract(Side.UNDER, 5).wins(4) and not Contract(Side.UNDER, 5).wins(5)
 
 
+def test_even_odd_is_a_fixed_50_50_split():
+    even, odd = Contract(Side.EVEN), Contract(Side.ODD)
+    assert even.win_probability == odd.win_probability == pytest.approx(0.5)
+    assert even.profit_ratio == odd.profit_ratio == pytest.approx(0.90, abs=0.0005)
+    for d in range(10):
+        assert even.wins(d) == (d % 2 == 0)
+        assert odd.wins(d) == (d % 2 == 1)
+    assert str(even) == "even" and str(odd) == "odd"
+
+
+def test_even_odd_rejects_a_barrier():
+    with pytest.raises(ValueError):
+        Contract(Side.EVEN, 4)
+
+
+@pytest.mark.parametrize("side", [Side.OVER, Side.UNDER])
+def test_over_under_require_a_barrier(side):
+    with pytest.raises(ValueError):
+        Contract(side)
+
+
 def test_last_digit_keeps_trailing_zeros():
     assert last_digit("1234.50") == 0
     assert Tick(0, "987.123").digit == 3
