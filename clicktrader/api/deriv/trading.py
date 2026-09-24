@@ -9,6 +9,11 @@ trade, before this module is ever called — keeping the boundary between "may w
 Field names and the proposal-then-buy flow are from Deriv's own docs (developers.deriv.com/llms/
 proposal.md, buy.md, authentication.md), fetched directly 2026-09-24 after the commonly-documented
 ws.derivws.com/v3 endpoint turned out to be retired — see connection.py for that whole story.
+
+Verified live 2026-09-24 on the demo account: a real DIGITOVER(1) contract, $0.35 stake (Deriv's
+documented minimum for this contract is $0.35 — the strategy's $0.10 backtest default in strategies.py
+is fine for replay but too low to actually place; a live-trading caller needs to raise it). Contract
+14296246299, buy_price 0.35, payout 0.41, balance stepped from 10000.00 to 9999.65 exactly as expected.
 """
 
 from __future__ import annotations
