@@ -9,13 +9,17 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
+from typing import Callable, TypeVar
 
 try:
+    from playwright.sync_api import Error as PlaywrightError
     from playwright.sync_api import Page, sync_playwright
 except ImportError as exc:  # pragma: no cover - exercised only when the extra isn't installed
     raise ImportError(
         "the 'browser' extra is required: pip install -e '.[browser]' && playwright install chromium"
     ) from exc
+
+T = TypeVar("T")
 
 DEFAULT_PROFILE_DIR = Path.home() / ".clicktrader" / "browser-profile"
 
@@ -61,3 +65,34 @@ def wait_for_login(page: Page, *, poll_seconds: float = 2.0, timeout_seconds: fl
             return
         time.sleep(poll_seconds)
     raise TimeoutError(f"still not logged in after {timeout_seconds:.0f}s")
+
+
+def call_with_reconnect(page: Page, fn: Callable[[], T], *, retries: int = 5, backoff: float = 1.0) -> T:
+    """Call `fn()` (a DOM read against `page`), recovering from a navigation mid-read.
+
+    A page reload, a client-side redirect, or a session refresh destroys the JS execution context while
+    a read is in flight — Playwright raises "Execution context was destroyed" for exactly this, and it
+    happened live in the first long recording run. This waits for the page to settle, logs back in if
+    the navigation landed back on the login screen (session expired), and retries. Only Playwright's own
+    transient errors are caught here; anything else (e.g. a parsing `ValueError`) is a real bug in the
+    adapter, not a flaky page, and propagates immediately.
+    """
+    if retries < 1:
+        raise ValueError("retries must be at least 1")
+    for attempt in range(retries):
+        try:
+            return fn()
+        except PlaywrightError:
+            if attempt == retries - 1:
+                raise
+            try:
+                page.wait_for_load_state("domcontentloaded", timeout=10_000)
+            except PlaywrightError:
+                pass
+            try:
+                logged_in = is_logged_in(page)
+            except PlaywrightError:
+                logged_in = True  # page still settling; don't force a login wait on top of that
+            if not logged_in:
+                wait_for_login(page)
+            time.sleep(backoff)

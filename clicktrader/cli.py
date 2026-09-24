@@ -61,7 +61,7 @@ def cmd_record_live(args: argparse.Namespace) -> int:
     from pathlib import Path
 
     from .browser.cryptonichub import CryptonicHubAdapter
-    from .browser.driver import DEFAULT_PROFILE_DIR, open_page, wait_for_login
+    from .browser.driver import DEFAULT_PROFILE_DIR, call_with_reconnect, open_page, wait_for_login
 
     profile_dir = Path(args.profile_dir) if args.profile_dir else DEFAULT_PROFILE_DIR
     page = open_page(args.url, profile_dir=profile_dir)
@@ -69,13 +69,13 @@ def cmd_record_live(args: argparse.Namespace) -> int:
     adapter = CryptonicHubAdapter(page)
 
     with Recorder(args.out) as recorder:
-        record = adapter.read_tick_record()
+        record = call_with_reconnect(page, adapter.read_tick_record)
         recorder.write(record)
         last_price = record.tick.price
         print(f"recording to {args.out} — Ctrl+C to stop")
         try:
             while args.ticks is None or recorder.count < args.ticks:
-                record = adapter.wait_for_new_tick(last_price)
+                record = call_with_reconnect(page, lambda: adapter.wait_for_new_tick(last_price))
                 recorder.write(record)
                 last_price = record.tick.price
         except KeyboardInterrupt:
