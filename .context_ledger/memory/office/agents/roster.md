@@ -52,7 +52,7 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
-| Amara | S002 | claude-sonnet-5 | Layers 1-3 proven; now systematically replay-testing real YouTube strategy claims (8 registered, all converge to -5% as predicted) | Working | 838a5c4 added EVEN/ODD contracts + 4 new strategies + Martingale wrapper (98 tests); Deriv 8k-tick recording ~6.7k/8k in background; next: finish that recording, cross-platform comparison |
+| Amara | S002 | claude-sonnet-5 | Live-runner built (executor.py + `run-deriv`) — layers 1-3 now fully wired end to end, RiskGuard-gated | Working | a8d6b4b (104 tests); Deriv recording finished + cross-platform comparison done (both platforms agree: no edge); waiting on user to run `run-deriv` live in their own terminal for the first smoke test |
 
 **Keep your Status cells current — that is what the board is for.** The
 next live worker reads it to know at a glance what a peer has finished,
