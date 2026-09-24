@@ -13,5 +13,5 @@ entry and backlog before starting.
 -->
 
 - **Session:** 2026-09-24 — Amara / claude-sonnet-5
-- **Task:** user re-prioritized: prove the strategy in layer 2 (replay) before any deposit or live recording. Added `low-digit-over` (Over(1) bet whenever the last digit is 0/1, $0.10 stake) to strategies.py; confirmed on synthetic data it converges to the -5% pricing, same as every other barrier (f305e5b)
-- **Status:** in progress — need a real recording (not synthetic) to test the strategy against the actual site's feed; browser adapter (5a3411b) is built but not yet run live
+- **Task:** `record-live` is running against the real site (user logged in by hand), writing to `recordings/live-cryptonichub.jsonl`, target 30,000 ticks (~8h at ~1 tick/s) so `low-digit-over`'s out-of-sample bet count clears MIN_BETS_REPORT (500). Two real bugs found and fixed running it live (174d5bd): a login-detection race, and a `.textContent`-vs-`.innerText` parsing bug.
+- **Status:** blocked (waiting) — recording in progress in the background; next step once it finishes (or the user stops it early) is `clicktrader replay recordings/live-cryptonichub.jsonl --strategy low-digit-over` and also a `clicktrader check` for the uniformity/independence tests
