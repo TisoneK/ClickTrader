@@ -10,6 +10,7 @@ dependencies = []
 [project.optional-dependencies]
 dev = ["pytest>=8"]
 browser = ["playwright>=1.45"]
+deriv = ["websocket-client>=1.6"]
 
 [project.scripts]
 clicktrader = "clicktrader.cli:main"

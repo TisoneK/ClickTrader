@@ -84,6 +84,22 @@ def cmd_record_live(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_record_deriv(args: argparse.Namespace) -> int:
+    from .api.deriv import DEFAULT_APP_ID, stream_ticks
+
+    with Recorder(args.out) as recorder:
+        print(f"recording {args.symbol} to {args.out} — Ctrl+C to stop")
+        try:
+            for record in stream_ticks(args.symbol, app_id=args.app_id or DEFAULT_APP_ID):
+                recorder.write(record)
+                if args.ticks is not None and recorder.count >= args.ticks:
+                    break
+        except KeyboardInterrupt:
+            pass
+    print(f"wrote {recorder.count} ticks to {args.out}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="clicktrader", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -115,6 +131,15 @@ def main(argv: list[str] | None = None) -> int:
     live.add_argument("--profile-dir", help="persistent browser profile dir (default: ~/.clicktrader/browser-profile)")
     live.add_argument("--ticks", type=int, help="stop after this many ticks (default: run until Ctrl+C)")
     live.set_defaults(func=cmd_record_live)
+
+    deriv = sub.add_parser(
+        "record-deriv", help="record real ticks from Deriv's public WebSocket API (layer 1, no auth needed)"
+    )
+    deriv.add_argument("out")
+    deriv.add_argument("--symbol", default="1HZ10V", help="Deriv symbol, e.g. 1HZ10V = Volatility 10 (1s) Index")
+    deriv.add_argument("--app-id", type=int, help="default: Deriv's shared public test app_id (1089)")
+    deriv.add_argument("--ticks", type=int, help="stop after this many ticks (default: run until Ctrl+C)")
+    deriv.set_defaults(func=cmd_record_deriv)
 
     args = parser.parse_args(argv)
     return args.func(args)
