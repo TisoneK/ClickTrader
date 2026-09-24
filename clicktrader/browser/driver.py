@@ -35,8 +35,14 @@ def open_page(url: str, *, profile_dir: Path = DEFAULT_PROFILE_DIR, headless: bo
 
 
 def is_logged_in(page: Page) -> bool:
-    """Best-effort check: the login form asks for a password, the trade page never does."""
-    return page.locator('input[type="password"]').count() == 0
+    """Best-effort check: the trade page has a "Deposit" button and no password field.
+
+    Deliberately requires the *positive* signal (Deposit present), not just the negative one (no
+    password field) — right after `page.goto()` the React app may not have mounted anything yet, and a
+    blank page has no password field either. Checking absence alone raced this into a false "logged in"
+    the first time this ran live.
+    """
+    return page.get_by_role("button", name="Deposit").count() > 0 and page.locator('input[type="password"]').count() == 0
 
 
 def wait_for_login(page: Page, *, poll_seconds: float = 2.0, timeout_seconds: float = 600.0) -> None:

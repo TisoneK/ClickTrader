@@ -55,28 +55,28 @@ def parse_trade_count(text: str) -> tuple[int, int, int]:
     return trades, wins, losses
 
 
-def parse_payout_box(inner_text: str) -> dict[str, float]:
-    """The "Over"/"Under" box: a label line, a money line, a percent line, in no fixed order.
+_PERCENT_ANYWHERE_RE = re.compile(r"-?\d+(?:\.\d+)?%")
+_MONEY_ANYWHERE_RE = re.compile(r"\$?\s?-?[\d,]+\.\d{2}")
 
-    Returns ``{"amount": <money>, "profit_ratio": <fraction>}``. Raises if either is missing rather
-    than guessing — a half-read payout is worse than a loud failure (DESIGN.md: honesty of the numbers
-    above all).
+
+def parse_payout_box(inner_text: str) -> dict[str, float]:
+    """The "Over"/"Under" box: a label, a money amount, and a percentage, run together with no
+    separator — ``.textContent`` (unlike ``.innerText``) never inserts line breaks between sibling
+    elements, so this is really one string like ``"Over137.5%$2.38Payout"``.
+
+    Finds the percentage first and pulls it out, then looks for money in what's left — otherwise the
+    percentage's own digits ("137.5") would also look like a money amount. Raises if either is missing
+    rather than guessing — a half-read payout is worse than a loud failure (DESIGN.md: honesty of the
+    numbers above all).
     """
-    amount: float | None = None
-    percent: float | None = None
-    for line in (raw.strip() for raw in inner_text.splitlines()):
-        if not line:
-            continue
-        if "%" in line:
-            try:
-                percent = parse_percent(line)
-            except ValueError:
-                pass
-        else:
-            try:
-                amount = parse_money(line)
-            except ValueError:
-                pass
-    if amount is None or percent is None:
+    text = inner_text.strip()
+    percent_match = _PERCENT_ANYWHERE_RE.search(text)
+    if not percent_match:
         raise ValueError(f"can't parse payout box: {inner_text!r}")
+    percent = parse_percent(percent_match.group())
+    remainder = text[: percent_match.start()] + text[percent_match.end() :]
+    money_match = _MONEY_ANYWHERE_RE.search(remainder)
+    if not money_match:
+        raise ValueError(f"can't parse payout box: {inner_text!r}")
+    amount = parse_money(money_match.group())
     return {"amount": amount, "profit_ratio": percent}

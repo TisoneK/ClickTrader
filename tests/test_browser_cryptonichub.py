@@ -9,8 +9,8 @@ FULL_SNAPSHOT = {
     "sessionPl": "Session P/L:-1.00 USD",
     "tradeCount": "1T · 0W / 1L",
     "balanceRaw": "$ 0.00",
-    "overBox": "Over\n137.5%\n$2.38\nPayout",
-    "underBox": "Under\n90.0%\n$1.90\nPayout",
+    "overBox": "Over137.5%$2.38Payout",
+    "underBox": "Under90.0%$1.90Payout",
 }
 
 

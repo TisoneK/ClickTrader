@@ -46,7 +46,8 @@ def test_parse_trade_count():
 
 
 def test_parse_payout_box():
-    assert parse_payout_box("Over\n137.5%\n$2.38\nPayout") == {"amount": 2.38, "profit_ratio": 1.375}
-    assert parse_payout_box("Under\n90.0%\n1.90 USD\nPayout") == {"amount": 1.90, "profit_ratio": 0.9}
+    # .textContent runs sibling elements together with no separator — this is the real shape.
+    assert parse_payout_box("Over137.5%$2.38Payout") == {"amount": 2.38, "profit_ratio": 1.375}
+    assert parse_payout_box("Under90.0%$1.90Payout") == {"amount": 1.90, "profit_ratio": 0.9}
     with pytest.raises(ValueError):
-        parse_payout_box("Over\nPayout")
+        parse_payout_box("OverPayout")
