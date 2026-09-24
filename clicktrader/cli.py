@@ -57,6 +57,33 @@ def cmd_simulate(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_record_live(args: argparse.Namespace) -> int:
+    from pathlib import Path
+
+    from .browser.cryptonichub import CryptonicHubAdapter
+    from .browser.driver import DEFAULT_PROFILE_DIR, open_page, wait_for_login
+
+    profile_dir = Path(args.profile_dir) if args.profile_dir else DEFAULT_PROFILE_DIR
+    page = open_page(args.url, profile_dir=profile_dir)
+    wait_for_login(page)
+    adapter = CryptonicHubAdapter(page)
+
+    with Recorder(args.out) as recorder:
+        record = adapter.read_tick_record()
+        recorder.write(record)
+        last_price = record.tick.price
+        print(f"recording to {args.out} — Ctrl+C to stop")
+        try:
+            while args.ticks is None or recorder.count < args.ticks:
+                record = adapter.wait_for_new_tick(last_price)
+                recorder.write(record)
+                last_price = record.tick.price
+        except KeyboardInterrupt:
+            pass
+    print(f"wrote {recorder.count} ticks to {args.out}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="clicktrader", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -79,6 +106,15 @@ def main(argv: list[str] | None = None) -> int:
     sim.add_argument("--ticks", type=int, default=10_000)
     sim.add_argument("--seed", type=int, default=0)
     sim.set_defaults(func=cmd_simulate)
+
+    live = sub.add_parser(
+        "record-live", help="record real ticks from a live site (layer 1 — observes, trades nothing)"
+    )
+    live.add_argument("out")
+    live.add_argument("--url", default="https://cryptonichub.pro/trade")
+    live.add_argument("--profile-dir", help="persistent browser profile dir (default: ~/.clicktrader/browser-profile)")
+    live.add_argument("--ticks", type=int, help="stop after this many ticks (default: run until Ctrl+C)")
+    live.set_defaults(func=cmd_record_live)
 
     args = parser.parse_args(argv)
     return args.func(args)

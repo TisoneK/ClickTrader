@@ -9,6 +9,7 @@ dependencies = []
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
+browser = ["playwright>=1.45"]
 
 [project.scripts]
 clicktrader = "clicktrader.cli:main"
