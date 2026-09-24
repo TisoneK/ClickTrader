@@ -100,6 +100,53 @@ def cmd_record_deriv(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_run_deriv(args: argparse.Namespace) -> int:
+    import os
+
+    import websocket
+
+    from .api.deriv import get_otp_url, stream_ticks
+    from .executor import run
+    from .limits import RiskGuard, RiskLimits
+
+    missing = [name for name in ("DERIV_API_TOKEN", "DERIV_APP_ID", "DERIV_DEMO_ACCOUNT_ID") if not os.environ.get(name)]
+    if missing:
+        print(f"missing from the environment: {', '.join(missing)} — run `set -a && source .env && set +a` first")
+        return 2
+
+    token = os.environ["DERIV_API_TOKEN"]
+    app_id = os.environ["DERIV_APP_ID"]
+    account_id = os.environ["DERIV_DEMO_ACCOUNT_ID"]
+
+    strategy = REGISTRY[args.strategy]()
+    risk = RiskGuard(RiskLimits(args.max_stake, args.max_session_loss, args.max_consecutive_losses))
+
+    print(f"requesting an OTP session for {account_id} (demo only — this refuses a real-money URL)...")
+    otp_url = get_otp_url(account_id, token, app_id, require_demo=True)
+    trade_ws = websocket.create_connection(otp_url)
+    ledger = DecisionLedger(args.ledger) if args.ledger else None
+    print(f"running {strategy.name} live on {args.symbol} — Ctrl+C to stop")
+    try:
+        run(
+            strategy,
+            stream_ticks(args.symbol),
+            trade_ws,
+            symbol=args.symbol,
+            currency=args.currency,
+            risk=risk,
+            min_stake=args.min_stake,
+            ledger=ledger,
+        )
+    except KeyboardInterrupt:
+        pass
+    finally:
+        trade_ws.close()
+        if ledger is not None:
+            ledger.close()
+    print(f"stopped — {risk.trades} trades, session P/L {risk.session_pnl:+.2f}, halted: {risk.halted_reason or 'no'}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="clicktrader", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -140,6 +187,20 @@ def main(argv: list[str] | None = None) -> int:
     deriv.add_argument("--app-id", type=int, help="default: Deriv's shared public test app_id (1089)")
     deriv.add_argument("--ticks", type=int, help="stop after this many ticks (default: run until Ctrl+C)")
     deriv.set_defaults(func=cmd_record_deriv)
+
+    run_deriv = sub.add_parser(
+        "run-deriv",
+        help="layer 3: watch live Deriv ticks and place real contracts on the DEMO account, gated by RiskGuard on every trade",
+    )
+    run_deriv.add_argument("--strategy", choices=sorted(REGISTRY), default="low-digit-over")
+    run_deriv.add_argument("--symbol", default="1HZ10V")
+    run_deriv.add_argument("--currency", default="USD")
+    run_deriv.add_argument("--min-stake", type=float, default=0.35, help="broker minimum for this contract/symbol/duration")
+    run_deriv.add_argument("--max-stake", type=float, required=True)
+    run_deriv.add_argument("--max-session-loss", type=float, required=True)
+    run_deriv.add_argument("--max-consecutive-losses", type=int, required=True)
+    run_deriv.add_argument("--ledger", help="append every decision to this JSONL file")
+    run_deriv.set_defaults(func=cmd_run_deriv)
 
     args = parser.parse_args(argv)
     return args.func(args)
