@@ -28,3 +28,11 @@ block (and its "last verified" date) every time you run on it again.
 - **Verified commands:** <install / test / lint / typecheck / dev-server commands that actually worked here, with cwd if it matters>
 - **Quirks:** <e.g., "no psql installed", "port 3000 usually taken", "system Python locked down">
 -->
+
+---
+## bao's Mac (last verified 2026-09-24)
+- **Identify by:** macOS (darwin 24.6.0, x86_64), checkout at `/Users/bao/Code/ClickTrader`
+- **OS:** macOS; bash
+- **Runtimes:** system `python3` is 3.9.6 — too old (`requires-python >=3.11`) and there is no bare `python`; uv at `~/.local/bin/uv` with CPython 3.10–3.13 managed. Repo venv: `uv venv --python 3.12 .venv && uv pip install -e '.[dev]' --python .venv/bin/python`
+- **Verified commands:** `.venv/bin/python -m pytest -q` (45 passed) · `.venv/bin/clicktrader simulate|check|replay`
+- **Quirks:** `ledger-gates` auto-discovers `python -m pytest`, which fails here (no `python`) — explicit gates are registered in `workflows/gates.conf`. `git push` from an agent session in the Claude desktop app was blocked by its auto-mode classifier (2026-09-24). The context-ledger package clone lives at `~/Code/context` (not `~/Code/context-ledger` as the package QUICKSTART says).

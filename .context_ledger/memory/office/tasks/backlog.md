@@ -64,11 +64,14 @@ Full spec: `.context_ledger/core/schemas/ledger-schema.md` →
 
 | ID | Summary |
 |----|---------|
+| B-2026-09-24-1 | Write the recorder's live adapter once P-2026-09-24-1 is answered — WebSocket feed if one exists, Playwright DOM read otherwise; must emit `TickRecord`s into `clicktrader.recording.Recorder` |
 
 ### Medium Priority
 
 | ID | Summary |
 |----|---------|
+| B-2026-09-24-2 | Replay with `RiskGuard` in the loop: session-by-session replay showing how the limits bound drawdown (the discipline argument, measured) |
+| B-2026-09-24-3 | Harness: parameter sweeps tuned on in-sample only, with a multiple-comparisons correction on the out-of-sample verdict |
 
 ### Low Priority
 

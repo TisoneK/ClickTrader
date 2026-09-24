@@ -52,7 +52,7 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
-| Wanjiru | S001 | claude-opus-5-5 | bootstrap ledger, then build layer 1 (recorder) + core | Working | Phase 2 — checked in at bootstrap |
+| Wanjiru | S001 | claude-opus-5-5 | bootstrap ledger, then build layer 1 (recorder) + core | Blocked | core shipped locally (f6fb973); waiting on the user to push, and to name the target platform (P-2026-09-24-1) |
 
 **Keep your Status cells current — that is what the board is for.** The
 next live worker reads it to know at a glance what a peer has finished,

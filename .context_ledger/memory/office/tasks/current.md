@@ -9,9 +9,9 @@ entry and backlog before starting.
 <!-- TEMPLATE — replace everything below this comment:
 - **Session:** YYYY-MM-DD — <agent> / <model>
 - **Task:** <what is being worked on right now>
-- **Status:** in-progress | done | blocked (<blocker>)
+- **Status:** blocked (push not permitted from this session; target platform unknown — P-2026-09-24-1) | done | blocked (<blocker>)
 -->
 
 - **Session:** 2026-09-24 — Wanjiru / claude-opus-5-5
 - **Task:** bootstrap .context_ledger/, then start building DESIGN.md layer 1 (recorder) and the platform-agnostic core
-- **Status:** in-progress
+- **Status:** blocked (push not permitted from this session; target platform unknown — P-2026-09-24-1)

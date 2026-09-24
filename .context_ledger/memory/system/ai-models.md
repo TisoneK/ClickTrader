@@ -22,6 +22,7 @@ its work accordingly).
 
 | Agent | Model | First seen | Last seen | Sessions |
 |---|---|---|---|---|
+| Wanjiru (Claude Code, desktop app) | claude-opus-5-5 | 2026-09-24 | 2026-09-24 | 1 |
 
 ## Observations
 

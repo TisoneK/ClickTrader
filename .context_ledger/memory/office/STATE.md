@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-09-24T13:50:50Z_
+_Regenerated: 2026-09-24T13:56:32Z_
 
 ## Standing params
 - **Core:** 2.0.3 (locked, verified 2026-09-24)
@@ -15,20 +15,20 @@ _Regenerated: 2026-09-24T13:50:50Z_
 - Full params: `memory/workflows/active.md`
 
 ## Office — who's in, right now
-- **Wanjiru** (S001) — Working — bootstrap ledger, then build layer 1 (recorder) + core
+- **Wanjiru** (S001) — Blocked — bootstrap ledger, then build layer 1 (recorder) + core
 
 ## Current task
-- **2026-09-24 — Wanjiru / claude-opus-5-5** — bootstrap .context_ledger/, then start building DESIGN.md layer 1 (recorder) and the platform-agnostic core — *in-progress*
+- **2026-09-24 — Wanjiru / claude-opus-5-5** — bootstrap .context_ledger/, then start building DESIGN.md layer 1 (recorder) and the platform-agnostic core — *blocked (push not permitted from this session; target platform unknown — P-2026-09-24-1)*
 
 ## Backlog — High priority (the top of the queue)
-(none)
+| B-2026-09-24-1 | Write the recorder's live adapter once P-2026-09-24-1 is answered — WebSocket feed if one exists, Playwright DOM read otherwise; must emit `TickRecord`s into `clicktrader.recording.Recorder` |
 
-_0 medium, 0 low priority row(s) — see tasks/backlog.md_
+_2 medium, 0 low priority row(s) — see tasks/backlog.md_
 
 ## Logs at a glance — open only if your task touches these
 - flaws/log.md (protocol/.context_ledger friction): 0 entries
 - inefficiencies/log.md (project code/env friction): 0 entries
-- plans/decisions.md (ADRs in force — respected, not relitigated): 0 entries
+- plans/decisions.md (ADRs in force — respected, not relitigated): 1 entry, last added 2026-09-24
 
 ## Collaboration
 (no collaboration/events — collaboration never used)
