@@ -52,7 +52,7 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
-| Amara | S002 | claude-sonnet-5 | CryptonicHub proved out (no edge found, as predicted); now building the Deriv API adapter for a cross-platform comparison | Blocked | Deriv adapter shipped + unit-tested (d340856); blocked on Deriv's own WS outage (external, confirmed not our issue) before a live smoke test is possible |
+| Amara | S002 | claude-sonnet-5 | Both platforms' layer 1 proven end-to-end (no edge found on CryptonicHub, as predicted); Deriv live and working after tracking down a retired API URL | Working | 6f171d5 fixed the real Deriv WS endpoint; next: a real ~8k-tick Deriv recording for a cross-platform check+replay comparison, on the user's go-ahead |
 
 **Keep your Status cells current — that is what the board is for.** The
 next live worker reads it to know at a glance what a peer has finished,

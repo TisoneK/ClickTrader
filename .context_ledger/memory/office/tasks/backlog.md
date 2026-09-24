@@ -64,7 +64,7 @@ Full spec: `.context_ledger/core/schemas/ledger-schema.md` →
 
 | ID | Summary |
 |----|---------|
-| B-2026-09-24-4 | Verify the Deriv adapter (`clicktrader/api/deriv.py`) against a live tick once Deriv's WS backend recovers from its current outage: `pip install -e ".[deriv]"`, `clicktrader record-deriv recordings/live-deriv.jsonl --symbol 1HZ10V`. Message parsing is unit-tested (8 passing) against the documented shape; the actual live success path is unverified |
+| B-2026-09-24-5 | Run a real ~8,000-tick Deriv recording (`clicktrader record-deriv recordings/live-deriv.jsonl --symbol 1HZ10V --ticks 8000`) and run it through `check` + `replay --strategy low-digit-over`, for a cross-platform comparison against the CryptonicHub result already in hand |
 
 ### Medium Priority
 
