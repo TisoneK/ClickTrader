@@ -32,6 +32,11 @@ class SegmentResult:
     longest_losing_streak: int = 0
     returns: list[float] = field(default_factory=list, repr=False)
     """P/L per unit staked, one per bet."""
+    z: float = 1.96
+    """Interval half-width multiplier. The 1.96 default is an ordinary 95% interval for testing one
+    strategy alone; pass a wider one (`stats.bonferroni_z(num_comparisons)`) when several strategies are
+    being tested together, so a batch verdict is exactly as hostile to a false positive as a single
+    verdict is meant to be — see `replay`'s own `z` parameter."""
 
     @property
     def hit_rate(self) -> float:
@@ -43,12 +48,12 @@ class SegmentResult:
 
     @property
     def hit_rate_interval(self) -> tuple[float, float]:
-        return wilson_interval(self.wins, self.bets)
+        return wilson_interval(self.wins, self.bets, z=self.z)
 
     @property
     def return_per_stake(self) -> tuple[float, float, float]:
         """(mean, low, high) P/L per unit staked. The pricing says the mean is -0.05."""
-        return mean_interval(self.returns)
+        return mean_interval(self.returns, z=self.z)
 
 
 @dataclass
@@ -90,11 +95,12 @@ class ReplayResult:
         for seg in (self.in_sample, self.out_of_sample, self.control):
             lo, hi = seg.hit_rate_interval
             mean, rlo, rhi = seg.return_per_stake
+            ci_label = "95% CI" if seg.z == 1.96 else f"CI(z={seg.z:.2f})"
             lines += [
                 f"[{seg.label}] {seg.ticks} ticks, {seg.bets} bets",
-                f"  hit rate   {seg.hit_rate:.3f}  (95% CI {lo:.3f}–{hi:.3f}; uniform digits give {seg.expected_hit_rate:.3f})",
+                f"  hit rate   {seg.hit_rate:.3f}  ({ci_label} {lo:.3f}–{hi:.3f}; uniform digits give {seg.expected_hit_rate:.3f})",
                 f"  P/L        {seg.pnl:+.2f} on {seg.staked:.2f} staked",
-                f"  per stake  {mean:+.4f}  (95% CI {rlo:+.4f} to {rhi:+.4f}; pricing gives {-HOUSE_EDGE:+.4f})",
+                f"  per stake  {mean:+.4f}  ({ci_label} {rlo:+.4f} to {rhi:+.4f}; pricing gives {-HOUSE_EDGE:+.4f})",
                 f"  drawdown   {seg.max_drawdown:.2f}   longest losing streak {seg.longest_losing_streak}",
             ]
         lines += ["", f"verdict (out-of-sample only): {self.verdict}"]
@@ -109,8 +115,9 @@ def _run_segment(
     label: str,
     ledger: DecisionLedger | None,
     log_skips: bool,
+    z: float = 1.96,
 ) -> SegmentResult:
-    seg = SegmentResult(label=label, ticks=stop - start)
+    seg = SegmentResult(label=label, ticks=stop - start, z=z)
     balance = peak = 0.0
     streak = 0
     # The last tick of the segment has no settling tick inside it, so decisions stop one short.
@@ -155,17 +162,26 @@ def replay(
     control: Strategy | None = None,
     ledger: DecisionLedger | None = None,
     log_skips: bool = False,
+    z: float = 1.96,
 ) -> ReplayResult:
     """Replay ``strategy`` over ``ticks``: the first ``split`` fraction is in-sample, the rest is the
     out-of-sample half the verdict is drawn from. The control defaults to a seeded random strategy that
-    bets as often as ``strategy`` did out-of-sample, so the two are compared on equal footing."""
+    bets as often as ``strategy`` did out-of-sample, so the two are compared on equal footing.
+
+    ``z`` is the confidence interval's half-width multiplier — 1.96 (an ordinary 95% interval) is right
+    for testing this one strategy in isolation. Testing several strategies together and asking "did any
+    of them show an edge" is a different, harder question: at the default interval, running 8 strategies
+    gives roughly a 1-in-3 chance at least one looks significant from noise alone, not the 5% its own
+    label implies. Pass ``stats.bonferroni_z(num_comparisons)`` in that case so the batch verdict stays
+    as hostile to a false positive as a single verdict is meant to be.
+    """
     if not 0 < split < 1:
         raise ValueError("split must be strictly between 0 and 1 — an out-of-sample half is not optional")
     cut = int(len(ticks) * split)
-    ins = _run_segment(strategy, ticks, 0, cut, "in-sample", ledger, log_skips)
-    oos = _run_segment(strategy, ticks, cut, len(ticks), "out-of-sample", ledger, log_skips)
+    ins = _run_segment(strategy, ticks, 0, cut, "in-sample", ledger, log_skips, z)
+    oos = _run_segment(strategy, ticks, cut, len(ticks), "out-of-sample", ledger, log_skips, z)
     if control is None:
         opportunities = max(1, len(ticks) - cut - 1)
         control = RandomControl(seed=12345, bet_probability=min(1.0, oos.bets / opportunities) or 1.0)
-    ctl = _run_segment(control, ticks, cut, len(ticks), f"control: {control.name}", None, False)
+    ctl = _run_segment(control, ticks, cut, len(ticks), f"control: {control.name}", None, False, z)
     return ReplayResult(strategy.name, ins, oos, ctl)

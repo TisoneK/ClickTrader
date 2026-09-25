@@ -130,6 +130,35 @@ def wilson_interval(successes: int, n: int, z: float = 1.96) -> tuple[float, flo
     return (max(0.0, centre - half), min(1.0, centre + half))
 
 
+def _norm_cdf(x: float) -> float:
+    return 0.5 * (1 + math.erf(x / math.sqrt(2)))
+
+
+def bonferroni_z(num_comparisons: int, alpha: float = 0.05) -> float:
+    """The two-sided z-score `wilson_interval`/`mean_interval` should use so that, across
+    `num_comparisons` strategies tested together, the chance that ANY of them looks "significant" by
+    pure chance stays near `alpha` overall — not `alpha` per strategy.
+
+    Testing 8 strategies at the default 95% interval (z=1.96) each gives roughly a
+    ``1 - 0.95**8 ≈ 34%`` chance at least one looks significant from noise alone, not the 5% each
+    interval's own label implies. This widens the interval per strategy (Bonferroni: target alpha
+    becomes ``alpha / num_comparisons``) so a batch verdict is exactly as hostile to a false positive
+    as a single one is meant to be — this project's harness has already caught exactly this failure
+    mode once, on a real batch of 8 (see chat/commit history, not yet in DESIGN.md).
+    """
+    if num_comparisons < 1:
+        raise ValueError("num_comparisons must be at least 1")
+    target = 1 - alpha / (2 * num_comparisons)
+    lo, hi = 0.0, 15.0
+    for _ in range(100):
+        mid = (lo + hi) / 2
+        if _norm_cdf(mid) < target:
+            lo = mid
+        else:
+            hi = mid
+    return (lo + hi) / 2
+
+
 def mean_interval(values: Iterable[float], z: float = 1.96) -> tuple[float, float, float]:
     """(mean, low, high) — normal-approximation interval for a mean."""
     xs = list(values)

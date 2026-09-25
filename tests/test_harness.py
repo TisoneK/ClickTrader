@@ -3,6 +3,7 @@ import pytest
 from clicktrader.harness import replay
 from clicktrader.ledger import DecisionLedger, read_ledger
 from clicktrader.model import Contract, Side, Tick
+from clicktrader.stats import bonferroni_z
 from clicktrader.strategies import FixedContract, History, LowDigitOver, RandomControl, StreakReversal
 from clicktrader.synthetic import synthetic_ticks
 
@@ -101,3 +102,37 @@ def test_ledger_rows_account_for_every_bet(tmp_path):
     assert len(rows) == len(ticks) - 2  # one decision per tick that has a settling tick in its segment
     assert sum(r.pnl for r in bets) == pytest.approx(result.in_sample.pnl + result.out_of_sample.pnl)
     assert all(r.reason for r in rows)
+
+
+def test_z_defaults_to_an_ordinary_95_percent_interval():
+    result = replay(StreakReversal(run=3), list(synthetic_ticks(20_000, seed=1)))
+    assert result.out_of_sample.z == 1.96
+    assert "95% CI" in result.report()
+
+
+def test_a_wider_z_widens_every_segments_interval_and_is_labelled():
+    ticks = list(synthetic_ticks(20_000, seed=1))
+    narrow = replay(StreakReversal(run=3), ticks, z=1.96)
+    wide = replay(StreakReversal(run=3), ticks, z=bonferroni_z(8))
+
+    for seg_name in ("in_sample", "out_of_sample", "control"):
+        narrow_seg = getattr(narrow, seg_name)
+        wide_seg = getattr(wide, seg_name)
+        n_lo, n_hi = narrow_seg.hit_rate_interval
+        w_lo, w_hi = wide_seg.hit_rate_interval
+        assert w_hi - w_lo > n_hi - n_lo  # wider z -> wider interval, same underlying bets
+
+    assert "CI(z=" in wide.report()
+    assert "95% CI" not in wide.report()
+
+
+def test_a_wide_enough_z_can_turn_a_no_edge_verdict_into_no_verdict_worthy_data():
+    # Not literally checking MIN_BETS_REPORT here -- checking that the *interval itself* widens enough,
+    # at a large batch size, to swallow a result that looked clean-cut at the ordinary single-test width.
+    ticks = list(synthetic_ticks(60_000, seed=7))
+    strategy = StreakReversal(run=3)
+    narrow = replay(strategy, ticks, z=1.96)
+    wide = replay(strategy, ticks, z=bonferroni_z(50))
+    n_lo, n_hi = narrow.out_of_sample.hit_rate_interval
+    w_lo, w_hi = wide.out_of_sample.hit_rate_interval
+    assert (w_hi - w_lo) > 1.3 * (n_hi - n_lo)

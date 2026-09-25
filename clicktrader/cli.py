@@ -49,6 +49,31 @@ def cmd_replay(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_replay_all(args: argparse.Namespace) -> int:
+    from .stats import bonferroni_z
+
+    ticks = _load(args.recording)
+    names = args.strategies or sorted(REGISTRY)
+    z = bonferroni_z(len(names), alpha=args.alpha)
+    print(
+        f"testing {len(names)} strategies together — interval widened to z={z:.2f} "
+        f"(family-wise alpha={args.alpha:g}, vs. z=1.96 for one strategy alone) so a false positive from "
+        f"testing this many at once stays about as unlikely as testing one alone\n"
+    )
+    of_note = []
+    for name in names:
+        result = replay(REGISTRY[name](), ticks, split=args.split, z=z)
+        print(result.report())
+        print()
+        if not result.verdict.startswith(("No edge", "NO VERDICT")):
+            of_note.append(name)
+    if of_note:
+        print(f"worth a second look (verdict was neither 'No edge' nor 'NO VERDICT'): {', '.join(of_note)}")
+    else:
+        print(f"all {len(names)} strategies: 'No edge' or 'NO VERDICT' even at the corrected interval width")
+    return 0
+
+
 def cmd_simulate(args: argparse.Namespace) -> int:
     with Recorder(args.out, fsync=False) as recorder:
         for record in synthetic_records(args.ticks, seed=args.seed):
@@ -185,6 +210,16 @@ def main(argv: list[str] | None = None) -> int:
     rep.add_argument("--ledger", help="append every decision to this JSONL file")
     rep.add_argument("--log-skips", action="store_true", help="also log ticks where the strategy passed")
     rep.set_defaults(func=cmd_replay)
+
+    rep_all = sub.add_parser(
+        "replay-all",
+        help="replay several strategies together, with the confidence interval widened for multiple comparisons",
+    )
+    rep_all.add_argument("recording")
+    rep_all.add_argument("--strategies", nargs="*", choices=sorted(REGISTRY), help="default: every registered strategy")
+    rep_all.add_argument("--split", type=float, default=0.5, help="in-sample fraction (default 0.5)")
+    rep_all.add_argument("--alpha", type=float, default=0.05, help="family-wise false-positive rate to hold across the whole batch (default 0.05)")
+    rep_all.set_defaults(func=cmd_replay_all)
 
     sim = sub.add_parser("simulate", help="write a SYNTHETIC uniform recording (pipeline testing only)")
     sim.add_argument("out")
