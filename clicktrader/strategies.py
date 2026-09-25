@@ -40,6 +40,11 @@ class History(Sequence[Tick]):
     def last_digits(self, count: int) -> list[int]:
         return [self._ticks[i].digit for i in range(max(0, self._end - count), self._end)]
 
+    def last_prices(self, count: int) -> list[float]:
+        """Recent prices as floats — for strategies that care about the value, not the last digit
+        (moving averages and the like; forex strategies use this, digit strategies use `last_digits`)."""
+        return [float(self._ticks[i].price) for i in range(max(0, self._end - count), self._end)]
+
 
 @dataclass(frozen=True)
 class Decision:

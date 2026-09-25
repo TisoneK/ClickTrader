@@ -17,6 +17,13 @@ def test_history_cannot_see_the_future():
         h[3]
 
 
+def test_history_last_prices():
+    ticks = [Tick(i, f"1.1{i}") for i in range(5)]
+    h = History(ticks, 4)
+    assert h.last_prices(2) == [1.12, 1.13]
+    assert h.last_prices(10) == [1.10, 1.11, 1.12, 1.13]  # capped at what's actually available
+
+
 class Peeker:
     """Tries to cheat by reading the settling tick — the harness must make that impossible."""
     name = "peeker"

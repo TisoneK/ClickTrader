@@ -5,6 +5,9 @@ from __future__ import annotations
 import argparse
 import sys
 
+from .forex.harness import replay as forex_replay
+from .forex.strategies import REGISTRY as FOREX_REGISTRY
+from .forex.synthetic import synthetic_price_records
 from .harness import replay
 from .ledger import DecisionLedger
 from .recording import Recorder, read_recording
@@ -71,6 +74,21 @@ def cmd_replay_all(args: argparse.Namespace) -> int:
         print(f"worth a second look (verdict was neither 'No edge' nor 'NO VERDICT'): {', '.join(of_note)}")
     else:
         print(f"all {len(names)} strategies: 'No edge' or 'NO VERDICT' even at the corrected interval width")
+    return 0
+
+
+def cmd_forex_replay(args: argparse.Namespace) -> int:
+    ticks = _load(args.recording)
+    result = forex_replay(FOREX_REGISTRY[args.strategy](), ticks, split=args.split)
+    print(result.report())
+    return 0
+
+
+def cmd_forex_simulate(args: argparse.Namespace) -> int:
+    with Recorder(args.out, fsync=False) as recorder:
+        for record in synthetic_price_records(args.ticks, seed=args.seed, drift=args.drift):
+            recorder.write(record)
+    print(f"wrote {recorder.count} synthetic price ticks to {args.out}")
     return 0
 
 
@@ -227,6 +245,19 @@ def main(argv: list[str] | None = None) -> int:
     sim.add_argument("--ticks", type=int, default=10_000)
     sim.add_argument("--seed", type=int, default=0)
     sim.set_defaults(func=cmd_simulate)
+
+    fx_rep = sub.add_parser("forex-replay", help="replay a forex directional strategy over a recording, horizon-based settlement")
+    fx_rep.add_argument("recording")
+    fx_rep.add_argument("--strategy", choices=sorted(FOREX_REGISTRY), default="random-direction")
+    fx_rep.add_argument("--split", type=float, default=0.5, help="in-sample fraction (default 0.5)")
+    fx_rep.set_defaults(func=cmd_forex_replay)
+
+    fx_sim = sub.add_parser("forex-simulate", help="write a SYNTHETIC driftless random-walk price recording (pipeline testing only)")
+    fx_sim.add_argument("out")
+    fx_sim.add_argument("--ticks", type=int, default=10_000)
+    fx_sim.add_argument("--seed", type=int, default=0)
+    fx_sim.add_argument("--drift", type=float, default=0.0, help="per-tick price drift (default 0.0 -- driftless is the null hypothesis)")
+    fx_sim.set_defaults(func=cmd_forex_simulate)
 
     live = sub.add_parser(
         "record-live", help="record real ticks from a live site (layer 1 — observes, trades nothing)"
