@@ -193,6 +193,18 @@ not from anything about the strategy. The harness now accepts a widened interval
 (`stats.bonferroni_z(num_comparisons)`) for exactly this case, and `clicktrader replay-all` applies it
 automatically across whatever batch is run.
 
+**Forex found a different bug the same way — by actually running real data, not just synthetic.** The
+first replay against a real ~27,500-tick EUR/USD recording showed every strategy *and the pure random
+control* as "worse than a coin flip." A random control scoring below 50% is architecturally impossible
+for a genuine 50/50 flip, which is exactly the tell that the harness itself was wrong, not the market:
+14.8% of horizon-10 comparisons on that recording were exact ties (real tick prices are sticky — see
+"Two adapters, two different problems"), and `Signal.wins()` counts a tie as a loss for either direction.
+A truly no-skill strategy's expected hit rate on real tick data is `0.5 × (1 − tie_rate)`, not 0.5 — the
+verdict was comparing against the wrong number. Fixed to compare against the random control's own
+*measured* rate instead of an assumed 50%, the same way the digit-contract side compares against an
+analytically known −5% rather than an assumed one. Re-run after the fix, all five testable strategies
+correctly read "No directional edge" against real EUR/USD data.
+
 ## What this is not
 
 - **Not a system that finds an edge.** See the top of this document, and "What's been tested" above.
