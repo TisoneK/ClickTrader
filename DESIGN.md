@@ -27,6 +27,15 @@ construction — one formula with one constant, applied uniformly. It is not a f
 price; on a synthetic index there is no external market. The platform is the counterparty on every
 contract, and that 5% is the revenue model.
 
+Worked out rather than just observed: expected value per unit staked is
+`p·(0.95/p − 1) + (1−p)·(−1) = 0.95 − p − 1 + p = −0.05`. **The `p` cancels — algebraically, not by
+coincidence.** Whatever win probability a barrier has, the formula prices it back to exactly the same
+−5%. This is why layer 2 keeps finding "no edge" no matter which claim it tests (see "What's been
+tested," below): the algebra closes that door before a single tick is recorded. Measuring is there to
+confirm the door stays closed — including the one way it wouldn't (the feed itself not actually being
+uniform and independent, which is exactly what the recorder's chi-square check watches for) — not to go
+looking for a gap in it.
+
 **What follows, and it is not a small thing:** there is no barrier, no side, and no entry timing that is
 priced differently from any other. Digits are generated independently, so a digit running hot tells you
 nothing about the next one — waiting for a pattern changes when you bet, never what you are paid. A
@@ -91,6 +100,12 @@ only under limits defined before the first trade rather than after the first los
 **The limits are not configuration, they are the feature.** An executor without them is a faster way to
 lose money; with them it is the discipline argument above, made real.
 
+Built and live-verified on Deriv (`clicktrader run-deriv`): every trade is checked against the limits
+before it is placed, not after, and a placed contract's win/loss is confirmed from the broker's own
+settlement record rather than assumed from the next tick this project happens to read itself — an
+earlier version did the latter, agreed with the broker in the one run it was checked against, and was
+fixed to actually verify it rather than keep trusting the agreement.
+
 ## Why browser automation, and when it would be wrong
 
 An LLM in the decision loop cannot work here — twenty to forty seconds per decision against a
@@ -106,6 +121,27 @@ with a documented WebSocket feed, that feed beats scraping on every axis: latenc
 breaking when a button is restyled. The recorder in particular is far better fed by a socket than by a
 screen. Check before committing to Playwright.
 
+## Two adapters, two different problems
+
+CryptonicHub has no documented API, so its adapter reads DOM structure (`clicktrader/browser/`): the
+histogram badges pair a bare digit with its percentage inside one small container, structure that
+survives a page restyle better than a CSS class name would. It needed hardening against a failure mode a
+scraper has that an API client doesn't — a page navigation destroying a read mid-flight — and against an
+ordinary parsing mistake (`.textContent` does not insert line breaks between sibling elements the way
+`.innerText` does; that one produced a wrong parse on the very first live run).
+
+Deriv does have a documented API, and "check before committing to Playwright" (above) paid off:
+`clicktrader/api/deriv/` needs no browser at all for layer 1, just a WebSocket and an `app_id`. It also
+demonstrated the opposite failure mode from CryptonicHub's — not a scraping bug, but trusting stale
+documentation. The commonly-cited endpoint (`ws.derivws.com/websockets/v3`) is retired; the live one
+(`api.derivws.com/trading/v1/options/ws/public`) was found by testing a lead rather than assuming a
+well-known URL was current. Layer 3 needed a further correction after that: the shared public `app_id`
+that layer 1 uses freely is rejected for anything account-scoped — a real application has to be
+registered separately from generating a token — and authenticated trading itself goes through a
+one-time-password URL (`POST .../otp` → connect to the *returned* address) rather than a static
+`authorize` message. None of this was known going in; both adapters exist and pass the same recorder and
+harness unmodified either way, which is the actual test of "not tied to one platform" below.
+
 ## Observability: a decision ledger, borrowed deliberately
 
 Every decision is recorded as a row: what the page said, what was decided, why, what the outcome was.
@@ -117,20 +153,55 @@ overnight while nobody can say which rule fired.
 
 A bot you cannot interrogate afterwards is a bot you cannot fix.
 
+## What's been tested, and what always happens
+
+Eight claims have gone through layer 2 so far, sourced from actual strategy videos rather than invented
+to be easy to disprove: last-digit frequency thresholds ("cold tail" claims, at several barriers), a
+reactive low-digit trigger layered on top of one of them, two Even/Odd "wait for two consecutive
+opposite-parity digits" variants differing only in how "dominant" gets decided, and a Martingale staking
+wrapper around one of them. Run against real recorded ticks from both platforms and against synthetic
+uniform data alike, every one settles to "No edge" — indistinguishable from the pricing's −5%, exactly as
+the algebra at the top of this document predicts regardless of which claim it is.
+
+The one number that genuinely varies is drawdown, not return: the Martingale wrapper showed a maximum
+drawdown roughly an order of magnitude larger than fixed-stake strategies at a comparable sample size,
+for the identical expected value. That's the measured version of "the odds are 50/50 but a good strategy
+profits" — false for entry timing, and the only sense in which staking matters is that it can make the
+downside much worse, not better.
+
+**Testing several claims together needed its own fix.** Each interval the harness reports is only as
+trustworthy as its own confidence level implies for *one* test at a time; running eight together and
+reading each one's ordinary 95% interval gives roughly a 1-in-3 chance that at least one looks
+"significant" from noise alone. This happened for real, once — a strategy that came back clean on three
+separate seeds looked "worse than pricing" on a fourth, purely from testing that many strategies at once,
+not from anything about the strategy. The harness now accepts a widened interval
+(`stats.bonferroni_z(num_comparisons)`) for exactly this case, and `clicktrader replay-all` applies it
+automatically across whatever batch is run.
+
 ## What this is not
 
-- **Not a system that finds an edge.** See the top of this document.
+- **Not a system that finds an edge.** See the top of this document, and "What's been tested" above.
 - **Not an AI agent.** No model in the loop, by design.
 - **Not ti-matrix.** That engine searches: it proposes a fan of actions, probes them, scores, retreats.
   This is one decision on one tick, and forcing it into a search would add latency and buy nothing.
 - **Not tied to one platform.** The recorder and harness know about ticks and digits, not about whose
-  page they came from. A second platform should be a new adapter, not a new project.
+  page they came from — see "Two adapters, two different problems": a second platform turned out to be
+  exactly the new adapter this claimed it would be, not a new project.
 
 ## Open questions, recorded rather than assumed
 
-1. Does the platform expose an API, or is it a white-label over one that does?
-2. The interface already shows an **Auto-Trading** control. What does the built-in automation do, and
-   does an external bot duplicate it?
-3. Demo account available? Layer 3 does not go live without one first.
-4. How large a recording before the uniformity test means anything? (Thousands, not hundreds — and the
-   harness should refuse to report on a sample too small rather than print a misleading number.)
+1. ~~Does the platform expose an API...~~ Answered for Deriv: yes, a documented WebSocket API
+   (`api.derivws.com` — not the commonly-cited but retired `ws.derivws.com`; see "Two adapters, two
+   different problems"). CryptonicHub's status is still unconfirmed either way; browser automation was
+   chosen deliberately rather than held for an answer.
+2. The interface shows an **Auto-Trading** control on both platforms. What does the built-in automation
+   do, and does an external bot duplicate it? Still open.
+3. ~~Demo account available?~~ Answered: yes, on Deriv, and layer 3 has placed a real contract on it
+   live. No barrier remains to testing further.
+4. ~~How large a recording before the uniformity test means anything?~~ Answered by construction:
+   `stats.MIN_TICKS_UNIFORMITY` refuses a verdict below 2,000 ticks, sized so a real 12%-vs-10% digit
+   bias is caught about half the time (power checked by simulation — see `tests/test_stats.py`).
+5. What stake should a live-runner actually use? The strategies' own backtest stakes (e.g. $0.10) are
+   arbitrary and can sit below a real contract's minimum (Deriv's is $0.35 for the one tested); a fixed
+   constant and reading the minimum off a live price quote are both on the table. Deliberately undecided,
+   pending further stake-sizing strategy research.
