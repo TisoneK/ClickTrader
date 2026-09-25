@@ -129,6 +129,19 @@ def test_a_losing_streak_trips_the_kill_switch_mid_run():
     assert len([r for r in ledger.rows if r.action == "bet"]) == 2
 
 
+def test_on_row_fires_for_every_row_even_without_a_ledger():
+    seen_rows = []
+    ticks = [_record(0, 9), _record(1, 2)]
+
+    run(
+        AlwaysBetOver4(), ticks, FakeTradeWS(), symbol="1HZ10V", currency="USD",
+        risk=_risk(), min_stake=0.10, on_row=seen_rows.append,
+    )
+
+    actions = [r.action for r in seen_rows]
+    assert actions == ["bet"]  # only the settled first bet produces a row within 2 ticks
+
+
 def test_skip_is_logged_when_the_strategy_passes():
     ledger = DecisionLedger()
     ticks = [_record(0, 5), _record(1, 5)]

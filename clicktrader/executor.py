@@ -19,7 +19,7 @@ building `proposal_open_contract` support before trusting this for anything beyo
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable
+from typing import Callable, Iterable
 
 import websocket
 
@@ -51,14 +51,26 @@ def run(
     risk: RiskGuard,
     min_stake: float,
     ledger: DecisionLedger | None = None,
+    on_row: Callable[[LedgerRow], None] | None = None,
 ) -> None:
     """Consume `tick_source` (e.g. `clicktrader.api.deriv.stream_ticks(symbol)`) until it ends, the
     caller's `KeyboardInterrupt` bubbles up, or nothing stops it — the caller decides when to stop by
     how long `tick_source` runs. `trade_ws` must already be an OTP-authenticated connection (see
     `get_otp_url`); this function only reads and writes on it, it never opens or closes it.
+
+    `on_row`, if given, is called with every `LedgerRow` the instant it's produced — including "skip"
+    rows, which are most of them on a selective strategy. There is no console output otherwise: a long
+    run with nothing printed looks identical to a frozen one, so a caller that wants to watch this live
+    should pass something here (the CLI does), not rely on a default.
     """
     ticks: list[Tick] = []
     pending: _PendingBet | None = None
+
+    def emit(row: LedgerRow) -> None:
+        if ledger is not None:
+            ledger.append(row)
+        if on_row is not None:
+            on_row(row)
 
     for record in tick_source:
         ticks.append(record.tick)
@@ -71,23 +83,22 @@ def run(
             pnl = pending.contract.settle(pending.stake, settle_digit)
             won = pnl > 0
             risk.record(pnl)
-            if ledger is not None:
-                ledger.append(
-                    LedgerRow(
-                        pending.decision_ts,
-                        pending.decision_tick_index,
-                        pending.decision_digit,
-                        strategy.name,
-                        "bet",
-                        pending.reason,
-                        contract=str(pending.contract),
-                        stake=pending.stake,
-                        settle_digit=settle_digit,
-                        won=won,
-                        pnl=pnl,
-                        balance=risk.session_pnl,
-                    )
+            emit(
+                LedgerRow(
+                    pending.decision_ts,
+                    pending.decision_tick_index,
+                    pending.decision_digit,
+                    strategy.name,
+                    "bet",
+                    pending.reason,
+                    contract=str(pending.contract),
+                    stake=pending.stake,
+                    settle_digit=settle_digit,
+                    won=won,
+                    pnl=pnl,
+                    balance=risk.session_pnl,
                 )
+            )
             pending = None
 
         if risk.halted:
@@ -95,20 +106,18 @@ def run(
 
         decision = strategy.decide(history)
         if decision is None:
-            if ledger is not None:
-                ledger.append(LedgerRow(seen.ts, index, seen.digit, strategy.name, "skip", "no signal", balance=risk.session_pnl))
+            emit(LedgerRow(seen.ts, index, seen.digit, strategy.name, "skip", "no signal", balance=risk.session_pnl))
             continue
 
         stake = max(decision.stake, min_stake)
         refusal = risk.check(stake)
         if refusal is not None:
-            if ledger is not None:
-                ledger.append(
-                    LedgerRow(
-                        seen.ts, index, seen.digit, strategy.name, "blocked", refusal,
-                        contract=str(decision.contract), stake=stake, balance=risk.session_pnl,
-                    )
+            emit(
+                LedgerRow(
+                    seen.ts, index, seen.digit, strategy.name, "blocked", refusal,
+                    contract=str(decision.contract), stake=stake, balance=risk.session_pnl,
                 )
+            )
             continue
 
         place_digit_contract(trade_ws, decision.contract, symbol=symbol, stake=stake, currency=currency)

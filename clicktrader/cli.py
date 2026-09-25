@@ -100,6 +100,18 @@ def cmd_record_deriv(args: argparse.Namespace) -> int:
     return 0
 
 
+def _print_live_row(row) -> None:
+    if row.action == "skip":
+        print(".", end="", flush=True)
+        return
+    print()  # end the run of dots before a real event gets its own line
+    if row.action == "bet":
+        outcome = "WIN" if row.won else "LOSS"
+        print(f"  {row.contract}  stake={row.stake:.2f}  -> {outcome}  pnl={row.pnl:+.2f}  session={row.balance:+.2f}")
+    elif row.action == "blocked":
+        print(f"  BLOCKED  {row.contract}  stake={row.stake:.2f}  — {row.reason}")
+
+
 def cmd_run_deriv(args: argparse.Namespace) -> int:
     import os
 
@@ -136,6 +148,7 @@ def cmd_run_deriv(args: argparse.Namespace) -> int:
             risk=risk,
             min_stake=args.min_stake,
             ledger=ledger,
+            on_row=_print_live_row,
         )
     except KeyboardInterrupt:
         pass
