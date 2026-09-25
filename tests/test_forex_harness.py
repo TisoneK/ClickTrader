@@ -92,3 +92,20 @@ def test_report_includes_the_verdict_and_all_three_segments():
     report = replay(RandomDirection(seed=1), ticks).report()
     assert "in-sample" in report and "out-of-sample" in report and "control:" in report
     assert "verdict" in report
+
+
+def test_verdict_uses_the_measured_control_baseline_not_a_fixed_50_percent():
+    # coarse rounding creates real, non-degenerate ties (not aliased with the horizon), the same
+    # mechanism that dragged a real EUR/USD recording's random control down to ~43% instead of 50%.
+    raw = list(synthetic_price_ticks(20_000, seed=11, step_std=0.0003))
+    coarse = [Tick(t.ts, f"{round(float(t.price), 3):.3f}", t.symbol) for t in raw]
+
+    result = replay(RandomDirection(seed=1, horizon_ticks=5), coarse, control=RandomDirection(seed=99, horizon_ticks=5))
+
+    baseline = result.control.hit_rate
+    assert baseline < 0.48  # meaningfully depressed below a naive 50% by real ties
+    # the strategy under test is itself just a differently-seeded coin flip -- genuinely no-skill --
+    # so it should read as "no edge" relative to the depressed baseline, not get falsely flagged as
+    # "worse than a coin flip" the way the old fixed-0.5 comparison would have.
+    assert result.verdict.startswith("No directional edge")
+    assert not result.verdict.startswith("Worse than")
