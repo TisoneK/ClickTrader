@@ -62,17 +62,14 @@ Full spec: `.context_ledger/core/schemas/ledger-schema.md` →
 
 ### High Priority
 
-| ID | Summary |
-|----|---------|
-| B-2026-09-24-5 | Run a real ~8,000-tick Deriv recording (`clicktrader record-deriv recordings/live-deriv.jsonl --symbol 1HZ10V --ticks 8000`) and run it through `check` + `replay --strategy low-digit-over`, for a cross-platform comparison against the CryptonicHub result already in hand |
+*(none currently)*
 
 ### Medium Priority
 
 | ID | Summary |
 |----|---------|
 | B-2026-09-24-2 | Replay with `RiskGuard` in the loop: session-by-session replay showing how the limits bound drawdown (the discipline argument, measured) |
-| B-2026-09-24-3 | Harness: parameter sweeps tuned on in-sample only, with a multiple-comparisons correction on the out-of-sample verdict |
-| B-2026-09-24-6 | Fold into DESIGN.md: the -5% EV proof (p cancels out algebraically in `Contract.profit_ratio`, so no barrier/side/timing choice ever changes the edge — currently only in chat/commit history), and the Deriv account setup facts (app registration required, real app_id, account IDs, $0.35 min stake) currently living only in `current.md` |
+| B-2026-09-25-1 | Harness: parameter sweeps tuned on in-sample only (e.g. trying several `window`/`threshold` values for `ColdTailOverUnder`/`ParityCounterTrend` and picking the best on in-sample before an out-of-sample check) — half of the original B-2026-09-24-3; the multiple-comparisons half is done (`stats.bonferroni_z`, `replay-all`, 99d03d9) |
 
 ### Low Priority
 

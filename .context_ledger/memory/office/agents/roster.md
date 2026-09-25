@@ -52,7 +52,7 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
-| Amara | S002 | claude-sonnet-5 | All 3 layers live-verified on Deriv end to end (first live run: 45 trades, correctly treated as too small to mean anything) | Working | b0b15e0 fixed run-deriv's silent-looking console output; 105 tests; next up to the user — more strategies, a longer live run, or the documentation/rigor follow-ups in current.md |
+| Amara | S002 | claude-sonnet-5 | All 3 rigor/documentation follow-ups shipped one at a time (multiple-comparisons fix, broker-verified settlement, DESIGN.md pass) | Working | b0f899d; 123 tests; waiting on user's stake-sizing research videos before the next build |
 
 **Keep your Status cells current — that is what the board is for.** The
 next live worker reads it to know at a glance what a peer has finished,
