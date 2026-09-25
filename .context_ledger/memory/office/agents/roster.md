@@ -52,7 +52,7 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
-| Amara | S002 | claude-sonnet-5 | Digit-contract side stable/done for now; new active thread is forex (Rise/Fall style, not leveraged CFD — user's deliberate choice) | Working | 1323c84 shipped `clicktrader/forex/` (145 tests); real EUR/USD recording running in background; next: replay against real data once enough accumulates |
+| Amara | S002 | claude-sonnet-5 | Forex: 6 strategies now registered; `run-deriv` gained `--account demo\|real` at user's request | Working | 045a72a (165 tests); real EUR/USD recording ~5.4k ticks, still below verdict threshold; caught+fixed a cross-project reference slip (428de1e) |
 
 **Keep your Status cells current — that is what the board is for.** The
 next live worker reads it to know at a glance what a peer has finished,
