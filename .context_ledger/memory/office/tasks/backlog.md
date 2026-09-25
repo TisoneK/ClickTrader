@@ -68,7 +68,6 @@ Full spec: `.context_ledger/core/schemas/ledger-schema.md` →
 
 | ID | Summary |
 |----|---------|
-| B-2026-09-24-2 | Replay with `RiskGuard` in the loop: session-by-session replay showing how the limits bound drawdown (the discipline argument, measured) |
 | B-2026-09-25-1 | Harness: parameter sweeps tuned on in-sample only (e.g. trying several `window`/`threshold` values for `ColdTailOverUnder`/`ParityCounterTrend` and picking the best on in-sample before an out-of-sample check) — half of the original B-2026-09-24-3; the multiple-comparisons half is done (`stats.bonferroni_z`, `replay-all`, 99d03d9) |
 
 ### Low Priority
