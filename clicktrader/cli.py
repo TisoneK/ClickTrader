@@ -165,20 +165,34 @@ def cmd_run_deriv(args: argparse.Namespace) -> int:
     from .executor import run
     from .limits import RiskGuard, RiskLimits
 
-    missing = [name for name in ("DERIV_API_TOKEN", "DERIV_APP_ID", "DERIV_DEMO_ACCOUNT_ID") if not os.environ.get(name)]
+    is_real = args.account == "real"
+    account_env_var = "DERIV_REAL_ACCOUNT_ID" if is_real else "DERIV_DEMO_ACCOUNT_ID"
+
+    missing = [name for name in ("DERIV_API_TOKEN", "DERIV_APP_ID", account_env_var) if not os.environ.get(name)]
     if missing:
         print(f"missing from the environment: {', '.join(missing)} — run `set -a && source .env && set +a` first")
+        if is_real and account_env_var in missing:
+            print(
+                "note: DERIV_REAL_ACCOUNT_ID is separate from DERIV_DEMO_ACCOUNT_ID on purpose — "
+                "switching to --account real never silently reuses the demo account's ID."
+            )
         return 2
 
     token = os.environ["DERIV_API_TOKEN"]
     app_id = os.environ["DERIV_APP_ID"]
-    account_id = os.environ["DERIV_DEMO_ACCOUNT_ID"]
+    account_id = os.environ[account_env_var]
 
     strategy = REGISTRY[args.strategy]()
     risk = RiskGuard(RiskLimits(args.max_stake, args.max_session_loss, args.max_consecutive_losses))
 
-    print(f"requesting an OTP session for {account_id} (demo only — this refuses a real-money URL)...")
-    otp_url = get_otp_url(account_id, token, app_id, require_demo=True)
+    if is_real:
+        print("=" * 60)
+        print("REAL-MONEY ACCOUNT SELECTED (--account real). Trades placed")
+        print("from here use actual funds, not demo credit. Ctrl+C now to")
+        print("back out if this wasn't intentional.")
+        print("=" * 60)
+    print(f"requesting an OTP session for {account_id} ({'REAL' if is_real else 'demo'})...")
+    otp_url = get_otp_url(account_id, token, app_id, require_demo=not is_real)
     trade_ws = websocket.create_connection(otp_url)
     ledger = DecisionLedger(args.ledger) if args.ledger else None
     print(f"running {strategy.name} live on {args.symbol} — Ctrl+C to stop")
@@ -279,7 +293,11 @@ def main(argv: list[str] | None = None) -> int:
 
     run_deriv = sub.add_parser(
         "run-deriv",
-        help="layer 3: watch live Deriv ticks and place real contracts on the DEMO account, gated by RiskGuard on every trade",
+        help="layer 3: watch live Deriv ticks and place contracts (demo by default, --account real for live funds), gated by RiskGuard on every trade",
+    )
+    run_deriv.add_argument(
+        "--account", choices=("demo", "real"), default="demo",
+        help="demo (default) uses DERIV_DEMO_ACCOUNT_ID; real uses the separate DERIV_REAL_ACCOUNT_ID and places live trades",
     )
     run_deriv.add_argument("--strategy", choices=sorted(REGISTRY), default="low-digit-over")
     run_deriv.add_argument("--symbol", default="1HZ10V")

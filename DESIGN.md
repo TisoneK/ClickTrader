@@ -106,6 +106,11 @@ settlement record rather than assumed from the next tick this project happens to
 earlier version did the latter, agreed with the broker in the one run it was checked against, and was
 fixed to actually verify it rather than keep trusting the agreement.
 
+"Until explicitly moved" is a real switch, not just a stated intention: `--account demo` (the default)
+and `--account real` are both supported, but real trading needs its own separately-configured account ID
+(`DERIV_REAL_ACCOUNT_ID`, distinct from the demo one) — there is no flag that reuses demo credentials
+against a real account, and no default that lands there by omission.
+
 ## Why browser automation, and when it would be wrong
 
 An LLM in the decision loop cannot work here — twenty to forty seconds per decision against a

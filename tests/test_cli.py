@@ -1,4 +1,32 @@
+import pytest
+
 from clicktrader.cli import main
+
+_RUN_DERIV_LIMITS = ["--max-stake", "1", "--max-session-loss", "5", "--max-consecutive-losses", "5"]
+
+
+@pytest.fixture(autouse=True)
+def _clear_deriv_env(monkeypatch):
+    """Isolate these tests from whatever the real shell has sourced from .env — a developer running
+    the suite after `source .env` shouldn't get a different (or worse, network-attempting) result."""
+    for name in ("DERIV_API_TOKEN", "DERIV_APP_ID", "DERIV_DEMO_ACCOUNT_ID", "DERIV_REAL_ACCOUNT_ID"):
+        monkeypatch.delenv(name, raising=False)
+
+
+def test_run_deriv_defaults_to_demo_and_reports_the_demo_var_missing(capsys):
+    assert main(["run-deriv", *_RUN_DERIV_LIMITS]) == 2
+    out = capsys.readouterr().out
+    assert "DERIV_DEMO_ACCOUNT_ID" in out
+    assert "DERIV_REAL_ACCOUNT_ID" not in out  # demo path never even looks for the real var
+
+
+def test_run_deriv_real_account_needs_its_own_separate_id(monkeypatch, capsys):
+    # even with a demo ID present, --account real must not fall back to it
+    monkeypatch.setenv("DERIV_DEMO_ACCOUNT_ID", "DOT00000000")
+    assert main(["run-deriv", "--account", "real", *_RUN_DERIV_LIMITS]) == 2
+    out = capsys.readouterr().out
+    assert "DERIV_REAL_ACCOUNT_ID" in out
+    assert "never silently reuses the demo account" in out
 
 
 def test_simulate_check_replay(tmp_path, capsys):
