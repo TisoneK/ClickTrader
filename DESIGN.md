@@ -113,10 +113,20 @@ against a real account, and no default that lands there by omission.
 
 ## Why browser automation, and when it would be wrong
 
-An LLM in the decision loop cannot work here — twenty to forty seconds per decision against a
-one-second tick means every decision is made about a world that no longer exists. There is no AI in this
-loop, and that is a design decision rather than a limitation: a DOM read plus a click is 50–150ms, which
-is fast enough.
+An LLM in the decision loop cannot work on the digit-contract side specifically: twenty to forty seconds
+per decision against a one-second, memoryless tick means every decision is made about a world that no
+longer exists by the time it's rendered. **That is a timing argument, and it is scoped to that one-second
+game** — it does not hold the same way on the forex side (`clicktrader/forex/`), where a signal persists
+over many ticks and a strategy fires rarely, so a slower decision would not necessarily be stale.
+
+AI stays out of the decision loop on both sides regardless, but not for the timing reason on forex: a
+strategy has to stay a pure, reproducible function of its own history for backtesting, the in-sample/
+out-of-sample split, and the harness's hostility to false positives to mean anything at all — an LLM call
+is not guaranteed to answer the same way twice on the same data. Every decision also needs the kind of
+legible reason the ledger records (`"RSI(14)=22.3 entered long zone"`), not an opaque judgment call. Both
+of those hold no matter how much time a decision is given. On the digit-contract side specifically, a DOM
+read plus a click is 50–150ms, which is fast enough for that one-second game — that speed is what an AI
+decision-maker could never have matched there, timing aside from everything else.
 
 Everything needed is DOM text — the histogram, the payouts, the percentages, the session P/L. Only the
 price chart is a canvas drawing, and nothing here needs it.
@@ -186,7 +196,9 @@ automatically across whatever batch is run.
 ## What this is not
 
 - **Not a system that finds an edge.** See the top of this document, and "What's been tested" above.
-- **Not an AI agent.** No model in the loop, by design.
+- **Not an AI agent.** No model in the decision loop, on either the digit-contract or forex side —
+  reproducibility and a legible reason per decision, not just speed (see "Why browser automation, and
+  when it would be wrong").
 - **Not ti-matrix.** That engine searches: it proposes a fan of actions, probes them, scores, retreats.
   This is one decision on one tick, and forcing it into a search would add latency and buy nothing.
 - **Not tied to one platform.** The recorder and harness know about ticks and digits, not about whose
