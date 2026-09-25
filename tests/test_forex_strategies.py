@@ -1,7 +1,15 @@
 import pytest
 
 from clicktrader.forex.model import Direction
-from clicktrader.forex.strategies import MovingAverageCrossover, RandomDirection
+from clicktrader.forex.strategies import (
+    REGISTRY,
+    BollingerMeanReversion,
+    EMATrendFollowing,
+    MACDMomentum,
+    MovingAverageCrossover,
+    RandomDirection,
+    RSIMeanReversion,
+)
 from clicktrader.model import Tick
 from clicktrader.strategies import History
 
@@ -63,3 +71,87 @@ def test_random_direction_is_deterministic_per_seed():
 def test_random_direction_can_pass():
     strategy = RandomDirection(seed=1, bet_probability=0.0)
     assert strategy.decide(_history([1.0])) is None
+
+
+# --- RSIMeanReversion -------------------------------------------------------
+
+
+def test_rsi_fires_up_once_on_a_falling_series_then_holds_quiet():
+    strategy = RSIMeanReversion(period=5, window=50)
+    prices = [100.0 - i for i in range(40)]  # strictly falling -> RSI pinned near 0 once past warmup
+    decisions = [strategy.decide(_history(prices[: i + 1])) for i in range(len(prices))]
+    fired = [d is not None for d in decisions]
+    assert fired.count(True) == 1  # one transition into "long", then it just holds
+    first = next(d for d in decisions if d is not None)
+    assert first.signal.direction is Direction.UP
+
+
+def test_rsi_fires_down_on_a_rising_series():
+    strategy = RSIMeanReversion(period=5, window=50)
+    prices = [1.0 + i for i in range(40)]  # strictly rising -> RSI pinned near 100
+    decisions = [strategy.decide(_history(prices[: i + 1])) for i in range(len(prices))]
+    first = next(d for d in decisions if d is not None)
+    assert first.signal.direction is Direction.DOWN
+
+
+def test_rsi_no_signal_without_enough_history():
+    strategy = RSIMeanReversion(period=14)
+    assert strategy.decide(_history([1.0] * 10)) is None
+
+
+# --- MACDMomentum ------------------------------------------------------------
+
+
+def test_macd_fires_on_a_clear_trend():
+    strategy = MACDMomentum(fast=3, slow=6, signal_period=3, window=60)
+    prices = [1.0 + i * 0.01 for i in range(50)]  # a clean, steady uptrend
+    decisions = [strategy.decide(_history(prices[: i + 1])) for i in range(len(prices))]
+    fired = [d for d in decisions if d is not None]
+    assert fired  # at least one bullish signal on a clean uptrend
+    assert fired[0].signal.direction is Direction.UP
+
+
+def test_macd_no_signal_without_enough_history():
+    strategy = MACDMomentum()
+    assert strategy.decide(_history([1.0] * 10)) is None
+
+
+# --- BollingerMeanReversion --------------------------------------------------
+
+
+def test_bollinger_fires_up_when_price_drops_below_the_lower_band():
+    strategy = BollingerMeanReversion(period=10, window=30)
+    prices = [1.0] * 15 + [0.5]  # a flat run then a sharp one-tick drop
+    decisions = [strategy.decide(_history(prices[: i + 1])) for i in range(len(prices))]
+    assert decisions[-1] is not None
+    assert decisions[-1].signal.direction is Direction.UP
+
+
+def test_bollinger_no_signal_inside_the_bands():
+    strategy = BollingerMeanReversion(period=10, window=30)
+    assert strategy.decide(_history([1.0] * 15)) is None  # flat series, no variance, price == middle
+
+
+# --- EMATrendFollowing -------------------------------------------------------
+
+
+def test_ema_trend_fires_on_the_first_valid_side_then_holds_quiet():
+    strategy = EMATrendFollowing(fast=3, slow=6, window=30)
+    prices = [1.0 + i * 0.1 for i in range(20)]  # steadily rising -> fast EMA stays above slow EMA
+    decisions = [strategy.decide(_history(prices[: i + 1])) for i in range(len(prices))]
+    fired = [d is not None for d in decisions]
+    assert fired.count(True) == 1  # fires once (first valid side), then holds without re-firing
+    first = next(d for d in decisions if d is not None)
+    assert first.signal.direction is Direction.UP
+
+
+def test_ema_trend_no_signal_without_enough_history():
+    strategy = EMATrendFollowing(fast=3, slow=6)
+    assert strategy.decide(_history([1.0] * 4)) is None
+
+
+def test_forex_registry_has_all_six_strategies():
+    assert set(REGISTRY) == {
+        "random-direction", "ma-crossover", "rsi-mean-reversion", "macd-momentum",
+        "bollinger-mean-reversion", "ema-trend",
+    }
