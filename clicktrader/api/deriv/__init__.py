@@ -15,7 +15,16 @@ Split by concern:
 
 from .connection import DEFAULT_APP_ID, WS_URL_TEMPLATE, DerivAPIError, connect
 from .ticks import iter_ticks, stream_ticks, tick_record_from_message
-from .trading import BuyResult, DemoGateError, get_balance, get_otp_url, place_digit_contract
+from .trading import (
+    BuyResult,
+    DemoGateError,
+    SettlementResult,
+    get_balance,
+    get_contract_status,
+    get_otp_url,
+    place_digit_contract,
+    wait_for_settlement,
+)
 
 __all__ = [
     "DEFAULT_APP_ID",
@@ -27,7 +36,10 @@ __all__ = [
     "tick_record_from_message",
     "BuyResult",
     "DemoGateError",
+    "SettlementResult",
     "get_balance",
+    "get_contract_status",
     "get_otp_url",
     "place_digit_contract",
+    "wait_for_settlement",
 ]

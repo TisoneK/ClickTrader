@@ -175,6 +175,7 @@ def cmd_run_deriv(args: argparse.Namespace) -> int:
             min_stake=args.min_stake,
             ledger=ledger,
             on_row=_print_live_row,
+            settle_timeout=args.settle_timeout,
         )
     except KeyboardInterrupt:
         pass
@@ -257,6 +258,7 @@ def main(argv: list[str] | None = None) -> int:
     run_deriv.add_argument("--max-session-loss", type=float, required=True)
     run_deriv.add_argument("--max-consecutive-losses", type=int, required=True)
     run_deriv.add_argument("--ledger", help="append every decision to this JSONL file")
+    run_deriv.add_argument("--settle-timeout", type=float, default=10.0, help="seconds to wait for the broker's own settlement before raising (default 10)")
     run_deriv.set_defaults(func=cmd_run_deriv)
 
     args = parser.parse_args(argv)

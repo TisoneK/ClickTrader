@@ -150,3 +150,65 @@ def test_place_digit_contract_raises_on_buy_error():
     )
     with pytest.raises(trading.DerivAPIError, match="not enough funds"):
         trading.place_digit_contract(ws, Contract(Side.OVER, 1), symbol="1HZ10V", stake=10, currency="USD")
+
+
+def test_get_contract_status_sends_the_contract_id_and_no_subscribe():
+    ws = FakeWS([{"proposal_open_contract": {"contract_id": 42, "status": "open"}}])
+    status = trading.get_contract_status(ws, 42)
+    assert status == {"contract_id": 42, "status": "open"}
+    sent = json.loads(ws.sent[0])
+    assert sent == {"proposal_open_contract": 1, "contract_id": 42}  # no "subscribe" key
+
+
+@pytest.fixture(autouse=True)
+def _no_real_sleep(monkeypatch):
+    monkeypatch.setattr(trading.time, "sleep", lambda _seconds: None)
+
+
+def test_wait_for_settlement_polls_until_won_or_lost():
+    ws = FakeWS(
+        [
+            {"proposal_open_contract": {"contract_id": 42, "status": "open"}},
+            {"proposal_open_contract": {"contract_id": 42, "status": "open"}},
+            {
+                "proposal_open_contract": {
+                    "contract_id": 42, "status": "won", "profit": "0.41", "exit_spot": "9530.98", "sell_price": "0.76",
+                }
+            },
+        ]
+    )
+    result = trading.wait_for_settlement(ws, 42, timeout=5.0, poll_interval=0)
+    assert result.status == "won"
+    assert result.profit == pytest.approx(0.41)
+    assert result.exit_spot == "9530.98"
+    assert result.sell_price == pytest.approx(0.76)
+    assert len(ws.sent) == 3  # polled twice before the settled response
+
+
+def test_wait_for_settlement_handles_a_missing_sell_price():
+    ws = FakeWS([{"proposal_open_contract": {"contract_id": 1, "status": "lost", "profit": "-0.35", "exit_spot": None, "sell_price": None}}])
+    result = trading.wait_for_settlement(ws, 1, timeout=5.0, poll_interval=0)
+    assert result.status == "lost"
+    assert result.profit == pytest.approx(-0.35)
+    assert result.sell_price is None
+
+
+def test_wait_for_settlement_times_out_rather_than_waiting_forever():
+    class NeverSettles:
+        def __init__(self):
+            self.sent = []
+
+        def send(self, payload):
+            self.sent.append(payload)
+
+        def recv(self):
+            return json.dumps({"proposal_open_contract": {"contract_id": 1, "status": "open"}})
+
+    with pytest.raises(TimeoutError, match="did not settle"):
+        trading.wait_for_settlement(NeverSettles(), 1, timeout=0.05, poll_interval=0.01)
+
+
+def test_wait_for_settlement_raises_on_api_error():
+    ws = FakeWS([{"error": {"code": "InvalidContract", "message": "no such contract"}}])
+    with pytest.raises(trading.DerivAPIError, match="no such contract"):
+        trading.wait_for_settlement(ws, 999, timeout=5.0, poll_interval=0)

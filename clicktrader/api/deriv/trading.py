@@ -19,6 +19,7 @@ is fine for replay but too low to actually place; a live-trading caller needs to
 from __future__ import annotations
 
 import json
+import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -112,6 +113,56 @@ def place_digit_contract(
         balance_after=bought["balance_after"],
         purchase_time=float(bought["purchase_time"]),
     )
+
+
+@dataclass(frozen=True)
+class SettlementResult:
+    contract_id: int
+    status: str
+    """``"won"`` or ``"lost"`` — `wait_for_settlement` only ever returns once one of those is reached."""
+    profit: float
+    exit_spot: str | None
+    """The broker's own exit price, kept as a string like `model.Tick.price` — a trailing zero is a
+    real digit. `None` if the broker didn't report one (shouldn't happen for a plain digit contract,
+    but nothing here assumes it can't)."""
+    sell_price: float | None
+
+
+def get_contract_status(ws: websocket.WebSocket, contract_id: int) -> dict[str, Any]:
+    """A one-off (non-subscribed) ``proposal_open_contract`` lookup for one contract's current state.
+    Same reasoning as `get_balance`: a plain request-response, not `subscribe: 1`, to avoid interleaving
+    unsolicited pushes with another call's own send-then-immediately-recv assumption."""
+    ws.send(json.dumps({"proposal_open_contract": 1, "contract_id": contract_id}))
+    return _recv_or_raise(ws)["proposal_open_contract"]
+
+
+def wait_for_settlement(
+    ws: websocket.WebSocket, contract_id: int, *, timeout: float = 10.0, poll_interval: float = 0.3
+) -> SettlementResult:
+    """Poll `get_contract_status` until the broker itself reports this contract ``"won"`` or ``"lost"``,
+    rather than assuming an outcome from a tick read off a separate connection. This is *the* fix for
+    what was previously a self-graded, unverified settlement (see `executor.py`'s git history).
+
+    A 1-tick contract on a ~1-second-cadence symbol should settle within a poll or two; taking the full
+    `timeout` means something is actually wrong (a stalled connection, an unexpected contract type),
+    not just slow — this raises `TimeoutError` rather than waiting forever or guessing.
+    """
+    deadline = time.monotonic() + timeout
+    while True:
+        contract = get_contract_status(ws, contract_id)
+        status = contract.get("status")
+        if status in ("won", "lost"):
+            sell_price = contract.get("sell_price")
+            return SettlementResult(
+                contract_id=contract_id,
+                status=status,
+                profit=float(contract["profit"]),
+                exit_spot=contract.get("exit_spot"),
+                sell_price=float(sell_price) if sell_price is not None else None,
+            )
+        if time.monotonic() >= deadline:
+            raise TimeoutError(f"contract {contract_id} did not settle within {timeout:.0f}s (status={status!r})")
+        time.sleep(poll_interval)
 
 
 def get_balance(ws: websocket.WebSocket) -> tuple[float, str]:

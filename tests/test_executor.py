@@ -15,23 +15,38 @@ def _record(i: int, digit: int) -> TickRecord:
 
 
 class FakeTradeWS:
-    """Answers any proposal/buy pair generically -- executor.py never reads BuyResult's fields, so the
-    exact numbers here don't matter, only that a well-formed response comes back."""
+    """Answers proposal -> buy -> proposal_open_contract (already settled) -> balance, generically.
 
-    def __init__(self) -> None:
+    `outcomes` is one (status, profit, exit_spot) tuple per trade this fake will ever price, consumed in
+    order as each new proposal locks in that trade's eventual settlement -- so a test can script exactly
+    what each successive trade does (win, lose, ...) without needing a second tick for anything, since
+    settlement is synchronous now.
+    """
+
+    def __init__(self, outcomes: list[tuple[str, float, str]] | None = None) -> None:
         self.sent: list[dict] = []
+        self._outcomes = iter(outcomes if outcomes is not None else [("won", 0.0625, "1.9")] * 1000)
+        self._current: tuple[str, float, str] | None = None
         self._n = 0
 
     def send(self, payload: str) -> None:
-        self.sent.append(json.loads(payload))
+        msg = json.loads(payload)
+        self.sent.append(msg)
+        if "proposal" in msg and "contract_type" in msg:
+            self._current = next(self._outcomes)
 
     def recv(self) -> str:
         self._n += 1
         last = self.sent[-1]
+        if "proposal_open_contract" in last:
+            status, profit, exit_spot = self._current
+            return json.dumps(
+                {"proposal_open_contract": {"contract_id": last["contract_id"], "status": status, "profit": str(profit), "exit_spot": exit_spot, "sell_price": None}}
+            )
+        if "balance" in last:
+            return json.dumps({"balance": {"balance": 999.0, "currency": "USD", "loginid": "X"}})
         if "proposal" in last:
             return json.dumps({"proposal": {"id": f"prop-{self._n}", "ask_price": last["amount"]}})
-        if "balance" in last:
-            return json.dumps({"balance": {"balance": 999.0, "currency": "USD", "loginid": "DOT91205289"}})
         return json.dumps(
             {"buy": {"contract_id": self._n, "transaction_id": self._n, "buy_price": last["price"], "payout": last["price"] * 1.5, "balance_after": 999.0, "purchase_time": 1}}
         )
@@ -57,48 +72,56 @@ def _risk(**overrides) -> RiskGuard:
     return RiskGuard(RiskLimits(**defaults))
 
 
-def test_places_a_contract_and_settles_it_next_tick():
-    ws = FakeTradeWS()
+def test_places_a_contract_and_settles_it_from_the_brokers_own_response():
+    ws = FakeTradeWS(outcomes=[("lost", -0.10, "1.2")])
     risk = _risk()
     ledger = DecisionLedger()
-    ticks = [_record(0, 9), _record(1, 2)]  # decide on digit 9, settle against digit 2 -> Over(4) loses
 
-    run(AlwaysBetOver4(), ticks, ws, symbol="1HZ10V", currency="USD", risk=risk, min_stake=0.10, ledger=ledger)
+    run(AlwaysBetOver4(), [_record(0, 9)], ws, symbol="1HZ10V", currency="USD", risk=risk, min_stake=0.10, ledger=ledger)
 
-    # AlwaysBetOver4 fires unconditionally, so the second tick both settles the first bet (proposal, buy,
-    # balance) AND places a new one (still pending, unsettled, since there's no third tick) -- 5 sends.
-    assert len(ws.sent) == 5
-    assert ws.sent[0]["contract_type"] == "DIGITOVER"
-    assert ws.sent[0]["amount"] == 0.10
+    assert "proposal" in ws.sent[0] and ws.sent[0]["contract_type"] == "DIGITOVER"
+    assert "buy" in ws.sent[1]
+    assert "proposal_open_contract" in ws.sent[2]
+    assert "balance" in ws.sent[3]
 
     bets = [r for r in ledger.rows if r.action == "bet"]
-    assert len(bets) == 1  # only the first trade had a following tick to settle against
-    assert bets[0].account_balance == 999.0  # the broker's own number, from FakeTradeWS
+    assert len(bets) == 1
     assert bets[0].won is False
-    assert bets[0].settle_digit == 2
+    assert bets[0].pnl == pytest.approx(-0.10)
+    assert bets[0].settle_digit == 2  # from the broker's own exit_spot "1.2", not our own tick reading
+    assert bets[0].account_balance == 999.0
     assert bets[0].digit_seen == 9
     assert risk.trades == 1
     assert risk.session_pnl == pytest.approx(-0.10)
 
 
-def test_min_stake_overrides_a_strategy_stake_that_is_too_low():
-    ws = FakeTradeWS()
-    risk = _risk()
-    ticks = [_record(0, 9), _record(1, 9)]  # Over(4) wins on 9
+def test_a_winning_trade_is_recorded_as_such():
+    ws = FakeTradeWS(outcomes=[("won", 0.0656, "1.9")])
+    ledger = DecisionLedger()
 
-    run(AlwaysBetOver4(), ticks, ws, symbol="1HZ10V", currency="USD", risk=risk, min_stake=0.35)
+    run(AlwaysBetOver4(), [_record(0, 5)], ws, symbol="1HZ10V", currency="USD", risk=_risk(), min_stake=0.10, ledger=ledger)
+
+    bet = next(r for r in ledger.rows if r.action == "bet")
+    assert bet.won is True
+    assert bet.pnl == pytest.approx(0.0656)
+    assert bet.settle_digit == 9
+
+
+def test_min_stake_overrides_a_strategy_stake_that_is_too_low():
+    ws = FakeTradeWS(outcomes=[("won", 0.315, "1.9")])
+    risk = _risk()
+
+    run(AlwaysBetOver4(), [_record(0, 9)], ws, symbol="1HZ10V", currency="USD", risk=risk, min_stake=0.35)
 
     assert ws.sent[0]["amount"] == 0.35  # raised from the strategy's own 0.10
-    assert risk.session_pnl > 0  # won, and graded using the raised stake
 
 
 def test_risk_guard_blocks_an_oversized_stake_without_placing_anything():
     ws = FakeTradeWS()
     risk = _risk(max_stake=0.05)  # below min_stake, so the decision gets blocked
     ledger = DecisionLedger()
-    ticks = [_record(0, 9)]
 
-    run(AlwaysBetOver4(), ticks, ws, symbol="1HZ10V", currency="USD", risk=risk, min_stake=0.10, ledger=ledger)
+    run(AlwaysBetOver4(), [_record(0, 9)], ws, symbol="1HZ10V", currency="USD", risk=risk, min_stake=0.10, ledger=ledger)
 
     assert ws.sent == []
     blocked = [r for r in ledger.rows if r.action == "blocked"]
@@ -110,26 +133,34 @@ def test_halted_guard_stops_new_trades_but_nothing_crashes():
     ws = FakeTradeWS()
     risk = _risk()
     risk.kill("manual test halt")
-    ticks = [_record(0, 9), _record(1, 9), _record(2, 9)]
 
-    run(AlwaysBetOver4(), ticks, ws, symbol="1HZ10V", currency="USD", risk=risk, min_stake=0.10)
+    run(AlwaysBetOver4(), [_record(0, 9), _record(1, 9), _record(2, 9)], ws, symbol="1HZ10V", currency="USD", risk=risk, min_stake=0.10)
 
     assert ws.sent == []
     assert risk.trades == 0
 
 
 def test_a_losing_streak_trips_the_kill_switch_mid_run():
-    ws = FakeTradeWS()
+    ws = FakeTradeWS(outcomes=[("lost", -0.10, "1.2"), ("lost", -0.10, "1.1"), ("won", 0.0656, "1.9")])
     risk = _risk(max_consecutive_losses=2)
     ledger = DecisionLedger()
-    # digits: decide@9(loss vs 2), decide@2(loss vs 1) trips the switch, decide@1 must be skipped
-    ticks = [_record(0, 9), _record(1, 2), _record(2, 1), _record(3, 9)]
+    ticks = [_record(0, 9), _record(1, 9), _record(2, 9)]
 
     run(AlwaysBetOver4(), ticks, ws, symbol="1HZ10V", currency="USD", risk=risk, min_stake=0.10, ledger=ledger)
 
     assert risk.halted
     assert risk.trades == 2  # the third tick's decision was never placed once halted
     assert len([r for r in ledger.rows if r.action == "bet"]) == 2
+
+
+def test_skip_is_logged_when_the_strategy_passes():
+    ledger = DecisionLedger()
+    ticks = [_record(0, 5), _record(1, 5)]
+
+    run(NeverBets(), ticks, FakeTradeWS(), symbol="1HZ10V", currency="USD", risk=_risk(), min_stake=0.10, ledger=ledger)
+
+    assert all(r.action == "skip" for r in ledger.rows)
+    assert len(ledger.rows) == 2
 
 
 def test_a_caught_balance_lookup_failure_leaves_it_none_and_keeps_trading():
@@ -141,11 +172,10 @@ def test_a_caught_balance_lookup_failure_leaves_it_none_and_keeps_trading():
                 raise DerivAPIError("session expired")
             return super().recv()
 
-    ws = FlakyBalanceWS()
+    ws = FlakyBalanceWS(outcomes=[("lost", -0.10, "1.2")])
     ledger = DecisionLedger()
-    ticks = [_record(0, 9), _record(1, 2)]
 
-    run(AlwaysBetOver4(), ticks, ws, symbol="1HZ10V", currency="USD", risk=_risk(), min_stake=0.10, ledger=ledger)
+    run(AlwaysBetOver4(), [_record(0, 9)], ws, symbol="1HZ10V", currency="USD", risk=_risk(), min_stake=0.10, ledger=ledger)
 
     bets = [r for r in ledger.rows if r.action == "bet"]
     assert len(bets) == 1
@@ -160,33 +190,39 @@ def test_an_uncaught_balance_lookup_error_propagates():
                 raise ConnectionError("connection dropped")
             return super().recv()
 
-    ws = FlakyBalanceWS()
-    ticks = [_record(0, 9), _record(1, 2)]
+    ws = FlakyBalanceWS(outcomes=[("lost", -0.10, "1.2")])
 
     with pytest.raises(ConnectionError):
         # a raw ConnectionError isn't one of executor.py's caught balance-lookup exceptions on purpose --
         # only DerivAPIError/WebSocketException/KeyError are treated as "the lookup failed, keep going".
-        run(AlwaysBetOver4(), ticks, ws, symbol="1HZ10V", currency="USD", risk=_risk(), min_stake=0.10)
+        run(AlwaysBetOver4(), [_record(0, 9)], ws, symbol="1HZ10V", currency="USD", risk=_risk(), min_stake=0.10)
+
+
+def test_settlement_timeout_propagates(monkeypatch):
+    from clicktrader.api.deriv import trading
+
+    monkeypatch.setattr(trading.time, "sleep", lambda _seconds: None)
+
+    class NeverSettlesWS(FakeTradeWS):
+        def recv(self) -> str:
+            last = self.sent[-1]
+            if "proposal_open_contract" in last:
+                return json.dumps({"proposal_open_contract": {"contract_id": last["contract_id"], "status": "open"}})
+            return super().recv()
+
+    with pytest.raises(TimeoutError):
+        run(
+            AlwaysBetOver4(), [_record(0, 9)], NeverSettlesWS(), symbol="1HZ10V", currency="USD",
+            risk=_risk(), min_stake=0.10, settle_timeout=0.05,
+        )
 
 
 def test_on_row_fires_for_every_row_even_without_a_ledger():
     seen_rows = []
-    ticks = [_record(0, 9), _record(1, 2)]
 
     run(
-        AlwaysBetOver4(), ticks, FakeTradeWS(), symbol="1HZ10V", currency="USD",
-        risk=_risk(), min_stake=0.10, on_row=seen_rows.append,
+        AlwaysBetOver4(), [_record(0, 9)], FakeTradeWS(outcomes=[("won", 0.0656, "1.9")]), symbol="1HZ10V",
+        currency="USD", risk=_risk(), min_stake=0.10, on_row=seen_rows.append,
     )
 
-    actions = [r.action for r in seen_rows]
-    assert actions == ["bet"]  # only the settled first bet produces a row within 2 ticks
-
-
-def test_skip_is_logged_when_the_strategy_passes():
-    ledger = DecisionLedger()
-    ticks = [_record(0, 5), _record(1, 5)]
-
-    run(NeverBets(), ticks, FakeTradeWS(), symbol="1HZ10V", currency="USD", risk=_risk(), min_stake=0.10, ledger=ledger)
-
-    assert all(r.action == "skip" for r in ledger.rows)
-    assert len(ledger.rows) == 2
+    assert [r.action for r in seen_rows] == ["bet"]
