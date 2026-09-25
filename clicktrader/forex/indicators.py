@@ -92,7 +92,7 @@ def bollinger_bands(
     prices: list[float], period: int = 20, std_dev_mult: float = 2.0
 ) -> tuple[list[float | None], list[float | None], list[float | None]]:
     """(middle, upper, lower) — middle is the SMA; upper/lower are ± `std_dev_mult` population
-    standard deviations (divide by `period`, not `period - 1` — matches Proxigrid exactly)."""
+    standard deviations (divide by `period`, not `period - 1`)."""
     middle = sma(prices, period)
     upper: list[float | None] = []
     lower: list[float | None] = []
