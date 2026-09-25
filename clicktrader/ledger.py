@@ -29,7 +29,10 @@ class LedgerRow:
     won: bool | None = None
     pnl: float | None = None
     balance: float | None = None
-    """Running session P/L after this row."""
+    """Running session P/L after this row — our own tally, not a real account balance."""
+    account_balance: float | None = None
+    """The broker's own reported balance after this row settled. Only the live executor ever sets
+    this (via a real API call); replay has no real account, so it's always None there."""
 
 
 class DecisionLedger:

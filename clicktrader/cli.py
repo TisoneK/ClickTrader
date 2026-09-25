@@ -107,7 +107,8 @@ def _print_live_row(row) -> None:
     print()  # end the run of dots before a real event gets its own line
     if row.action == "bet":
         outcome = "WIN" if row.won else "LOSS"
-        print(f"  {row.contract}  stake={row.stake:.2f}  -> {outcome}  pnl={row.pnl:+.2f}  session={row.balance:+.2f}")
+        balance_note = f"  balance={row.account_balance:.2f}" if row.account_balance is not None else ""
+        print(f"  {row.contract}  stake={row.stake:.2f}  -> {outcome}  pnl={row.pnl:+.2f}  session={row.balance:+.2f}{balance_note}")
     elif row.action == "blocked":
         print(f"  BLOCKED  {row.contract}  stake={row.stake:.2f}  — {row.reason}")
 
@@ -153,10 +154,18 @@ def cmd_run_deriv(args: argparse.Namespace) -> int:
     except KeyboardInterrupt:
         pass
     finally:
+        final_balance_note = ""
+        try:
+            from .api.deriv import get_balance
+
+            balance, currency = get_balance(trade_ws)
+            final_balance_note = f", balance {balance:.2f} {currency}"
+        except Exception:
+            pass  # best-effort -- the connection may already be unusable by the time we get here
         trade_ws.close()
         if ledger is not None:
             ledger.close()
-    print(f"stopped — {risk.trades} trades, session P/L {risk.session_pnl:+.2f}, halted: {risk.halted_reason or 'no'}")
+    print(f"stopped — {risk.trades} trades, session P/L {risk.session_pnl:+.2f}{final_balance_note}, halted: {risk.halted_reason or 'no'}")
     return 0
 
 

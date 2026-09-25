@@ -109,6 +109,21 @@ def test_place_digit_contract_prices_then_buys():
     assert json.loads(ws.sent[1]) == {"buy": "prop-1", "price": 10.5}
 
 
+def test_get_balance_sends_a_one_off_non_subscribed_request():
+    ws = FakeWS([{"msg_type": "balance", "balance": {"balance": 9999.65, "currency": "USD", "loginid": "DOT91205289"}}])
+    balance, currency = trading.get_balance(ws)
+    assert balance == 9999.65
+    assert currency == "USD"
+    sent = json.loads(ws.sent[0])
+    assert sent == {"balance": 1}  # no "subscribe" key -- a one-off request, not a live subscription
+
+
+def test_get_balance_raises_on_error():
+    ws = FakeWS([{"error": {"code": "Unauthorized", "message": "session expired"}}])
+    with pytest.raises(trading.DerivAPIError, match="session expired"):
+        trading.get_balance(ws)
+
+
 def test_place_digit_contract_uses_digitunder_for_under_side():
     ws = FakeWS(
         [

@@ -114,6 +114,19 @@ def place_digit_contract(
     )
 
 
+def get_balance(ws: websocket.WebSocket) -> tuple[float, str]:
+    """A one-off ``{"balance": 1}`` request (no ``subscribe``) — the broker's own current balance and
+    currency, right now. Deliberately not a subscription: `balance`'s docs show ``subscribe: 1`` pushing
+    unsolicited updates on the same connection, which would arrive interleaved with `place_digit_contract`'s
+    own send-then-immediately-recv calls and break its assumption that the next message received is
+    always the response to what it just sent. A plain one-off request avoids that risk entirely, at the
+    cost of one extra round trip whenever the caller wants a fresh number (`executor.py` calls this once
+    per settled trade, not once per tick)."""
+    ws.send(json.dumps({"balance": 1}))
+    balance = _recv_or_raise(ws)["balance"]
+    return balance["balance"], balance["currency"]
+
+
 def _recv_or_raise(ws: websocket.WebSocket) -> dict[str, Any]:
     message = json.loads(ws.recv())
     if "error" in message:

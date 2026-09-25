@@ -30,6 +30,8 @@ class FakeTradeWS:
         last = self.sent[-1]
         if "proposal" in last:
             return json.dumps({"proposal": {"id": f"prop-{self._n}", "ask_price": last["amount"]}})
+        if "balance" in last:
+            return json.dumps({"balance": {"balance": 999.0, "currency": "USD", "loginid": "DOT91205289"}})
         return json.dumps(
             {"buy": {"contract_id": self._n, "transaction_id": self._n, "buy_price": last["price"], "payout": last["price"] * 1.5, "balance_after": 999.0, "purchase_time": 1}}
         )
@@ -63,14 +65,15 @@ def test_places_a_contract_and_settles_it_next_tick():
 
     run(AlwaysBetOver4(), ticks, ws, symbol="1HZ10V", currency="USD", risk=risk, min_stake=0.10, ledger=ledger)
 
-    # AlwaysBetOver4 fires unconditionally, so the second tick both settles the first bet AND places a
-    # new one (still pending, unsettled, since there's no third tick) -- two trades placed in total.
-    assert len(ws.sent) == 4
+    # AlwaysBetOver4 fires unconditionally, so the second tick both settles the first bet (proposal, buy,
+    # balance) AND places a new one (still pending, unsettled, since there's no third tick) -- 5 sends.
+    assert len(ws.sent) == 5
     assert ws.sent[0]["contract_type"] == "DIGITOVER"
     assert ws.sent[0]["amount"] == 0.10
 
     bets = [r for r in ledger.rows if r.action == "bet"]
     assert len(bets) == 1  # only the first trade had a following tick to settle against
+    assert bets[0].account_balance == 999.0  # the broker's own number, from FakeTradeWS
     assert bets[0].won is False
     assert bets[0].settle_digit == 2
     assert bets[0].digit_seen == 9
@@ -127,6 +130,43 @@ def test_a_losing_streak_trips_the_kill_switch_mid_run():
     assert risk.halted
     assert risk.trades == 2  # the third tick's decision was never placed once halted
     assert len([r for r in ledger.rows if r.action == "bet"]) == 2
+
+
+def test_a_caught_balance_lookup_failure_leaves_it_none_and_keeps_trading():
+    from clicktrader.api.deriv.connection import DerivAPIError
+
+    class FlakyBalanceWS(FakeTradeWS):
+        def recv(self) -> str:
+            if "balance" in self.sent[-1]:
+                raise DerivAPIError("session expired")
+            return super().recv()
+
+    ws = FlakyBalanceWS()
+    ledger = DecisionLedger()
+    ticks = [_record(0, 9), _record(1, 2)]
+
+    run(AlwaysBetOver4(), ticks, ws, symbol="1HZ10V", currency="USD", risk=_risk(), min_stake=0.10, ledger=ledger)
+
+    bets = [r for r in ledger.rows if r.action == "bet"]
+    assert len(bets) == 1
+    assert bets[0].account_balance is None  # lookup failed, but the trade itself still settled correctly
+    assert bets[0].won is False
+
+
+def test_an_uncaught_balance_lookup_error_propagates():
+    class FlakyBalanceWS(FakeTradeWS):
+        def recv(self) -> str:
+            if "balance" in self.sent[-1]:
+                raise ConnectionError("connection dropped")
+            return super().recv()
+
+    ws = FlakyBalanceWS()
+    ticks = [_record(0, 9), _record(1, 2)]
+
+    with pytest.raises(ConnectionError):
+        # a raw ConnectionError isn't one of executor.py's caught balance-lookup exceptions on purpose --
+        # only DerivAPIError/WebSocketException/KeyError are treated as "the lookup failed, keep going".
+        run(AlwaysBetOver4(), ticks, ws, symbol="1HZ10V", currency="USD", risk=_risk(), min_stake=0.10)
 
 
 def test_on_row_fires_for_every_row_even_without_a_ledger():

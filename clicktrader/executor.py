@@ -9,11 +9,17 @@ placed, and a strategy's own stake is raised to `min_stake` (a broker minimum, e
 never silently altered otherwise — a caller that wants a different sizing rule wraps the strategy
 (`MartingaleOnLoss` already does this), it doesn't get rewritten here.
 
-Known simplification: a contract's outcome is graded from the next tick this loop itself reads off the
-public market-data stream (`tick_source`), not from Deriv's own authoritative settlement message
+Known simplification: a contract's *win/loss* is graded from the next tick this loop itself reads off
+the public market-data stream (`tick_source`), not from Deriv's own authoritative settlement message
 (`proposal_open_contract`, not subscribed to here). In practice the two should agree — 1-tick duration,
 same symbol — but this is self-grading, not verified against the broker's own settlement record. Worth
 building `proposal_open_contract` support before trusting this for anything beyond demo learning.
+
+The *account balance* shown alongside each settled trade, by contrast, is real: a one-off
+``{"balance": 1}`` request (not a subscription — see `get_balance`'s own docstring for why) right after
+grading, so `LedgerRow.account_balance` is the broker's own number, not a self-computed tally. A failed
+balance lookup is swallowed (`account_balance` comes back `None`) rather than halting trading over what
+is, deliberately, a best-effort display value.
 """
 
 from __future__ import annotations
@@ -23,7 +29,8 @@ from typing import Callable, Iterable
 
 import websocket
 
-from .api.deriv.trading import place_digit_contract
+from .api.deriv.connection import DerivAPIError
+from .api.deriv.trading import get_balance, place_digit_contract
 from .ledger import DecisionLedger, LedgerRow
 from .limits import RiskGuard
 from .model import Contract, Tick
@@ -83,6 +90,10 @@ def run(
             pnl = pending.contract.settle(pending.stake, settle_digit)
             won = pnl > 0
             risk.record(pnl)
+            try:
+                account_balance, _currency = get_balance(trade_ws)
+            except (DerivAPIError, websocket.WebSocketException, KeyError):
+                account_balance = None  # best-effort observability -- a failed lookup doesn't halt trading
             emit(
                 LedgerRow(
                     pending.decision_ts,
@@ -97,6 +108,7 @@ def run(
                     won=won,
                     pnl=pnl,
                     balance=risk.session_pnl,
+                    account_balance=account_balance,
                 )
             )
             pending = None
