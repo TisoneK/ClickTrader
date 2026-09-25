@@ -45,3 +45,17 @@ def test_check_refuses_a_short_recording(tmp_path, capsys):
     main(["simulate", str(rec), "--ticks", "300"])
     assert main(["check", str(rec)]) == 2
     assert "too small" in capsys.readouterr().out
+
+
+def test_risk_replay(tmp_path, capsys):
+    rec = tmp_path / "synthetic.jsonl"
+    main(["simulate", str(rec), "--ticks", "20000", "--seed", "5"])
+    capsys.readouterr()
+    assert main([
+        "risk-replay", str(rec),
+        "--strategy", "martingale-low-digit-over",
+        "--session-ticks", "500",
+        "--max-stake", "10", "--max-session-loss", "10", "--max-consecutive-losses", "10",
+    ]) == 0
+    out = capsys.readouterr().out
+    assert "guard intervened in" in out and "guarded" in out and "unbounded" in out

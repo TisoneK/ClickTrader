@@ -11,6 +11,7 @@ from .forex.synthetic import synthetic_price_records
 from .harness import replay
 from .ledger import DecisionLedger
 from .recording import Recorder, read_recording
+from .risk_replay import replay_sessions
 from .stats import SampleTooSmall, digit_independence, digit_uniformity
 from .strategies import REGISTRY
 from .synthetic import synthetic_records
@@ -74,6 +75,16 @@ def cmd_replay_all(args: argparse.Namespace) -> int:
         print(f"worth a second look (verdict was neither 'No edge' nor 'NO VERDICT'): {', '.join(of_note)}")
     else:
         print(f"all {len(names)} strategies: 'No edge' or 'NO VERDICT' even at the corrected interval width")
+    return 0
+
+
+def cmd_risk_replay(args: argparse.Namespace) -> int:
+    from .limits import RiskLimits
+
+    ticks = _load(args.recording)
+    limits = RiskLimits(args.max_stake, args.max_session_loss, args.max_consecutive_losses)
+    report = replay_sessions(REGISTRY[args.strategy], ticks, limits, session_ticks=args.session_ticks)
+    print(report.report())
     return 0
 
 
@@ -253,6 +264,18 @@ def main(argv: list[str] | None = None) -> int:
     rep_all.add_argument("--split", type=float, default=0.5, help="in-sample fraction (default 0.5)")
     rep_all.add_argument("--alpha", type=float, default=0.05, help="family-wise false-positive rate to hold across the whole batch (default 0.05)")
     rep_all.set_defaults(func=cmd_replay_all)
+
+    risk_rep = sub.add_parser(
+        "risk-replay",
+        help="session-by-session replay: measure how RiskGuard bounds drawdown vs. the same decisions unbounded",
+    )
+    risk_rep.add_argument("recording")
+    risk_rep.add_argument("--strategy", choices=sorted(REGISTRY), default="martingale-low-digit-over")
+    risk_rep.add_argument("--session-ticks", type=int, default=500, help="ticks per simulated session (default 500)")
+    risk_rep.add_argument("--max-stake", type=float, required=True)
+    risk_rep.add_argument("--max-session-loss", type=float, required=True)
+    risk_rep.add_argument("--max-consecutive-losses", type=int, required=True)
+    risk_rep.set_defaults(func=cmd_risk_replay)
 
     sim = sub.add_parser("simulate", help="write a SYNTHETIC uniform recording (pipeline testing only)")
     sim.add_argument("out")

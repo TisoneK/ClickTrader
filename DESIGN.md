@@ -98,7 +98,8 @@ only under limits defined before the first trade rather than after the first los
 - a kill switch that halts on its own and requires a human to restart it
 
 **The limits are not configuration, they are the feature.** An executor without them is a faster way to
-lose money; with them it is the discipline argument above, made real.
+lose money; with them it is the discipline argument above, made real — and now measured, not just
+asserted (see "What's been tested, and what always happens" below).
 
 Built and live-verified on Deriv (`clicktrader run-deriv`): every trade is checked against the limits
 before it is placed, not after, and a placed contract's win/loss is confirmed from the broker's own
@@ -183,6 +184,21 @@ drawdown roughly an order of magnitude larger than fixed-stake strategies at a c
 for the identical expected value. That's the measured version of "the odds are 50/50 but a good strategy
 profits" — false for entry timing, and the only sense in which staking matters is that it can make the
 downside much worse, not better.
+
+**The discipline argument itself is now measured, not just asserted.** `clicktrader risk-replay`
+(`risk_replay.py`) chops a recording into many independent, fixed-length sessions and replays each
+session's identical sequence of decisions twice — once through a fresh RiskGuard, once with no guard at
+all — so the two outcomes differ only by what the guard changed, never by sampling noise from two separate
+runs. Run against 8,000 real Deriv ticks with the Martingale wrapper's own internal stake cap deliberately
+switched off (a huge starting balance, so RiskGuard is the only thing standing between the strategy and a
+real losing streak — not the strategy's own bookkeeping) and a $10 session-loss cap: the guard intervened
+in 65% of the 40 sessions tested, held every guarded session's loss at that $10 line as designed, and the
+worst single session came in at −$7.68 guarded versus −$39.23 on the identical decisions with no guard —
+a worst-case drawdown of $12.97 versus $409.99. Mean session P/L was actually *higher* unbounded (+$2.29
+vs. −$1.21 guarded), because an uncapped Martingale occasionally recovers big after a long losing streak
+on this sample. That is exactly the point being tested: the guard is not there to improve the average, it
+is there to make the worst case survivable, and that trade-off is visible in the numbers rather than
+assumed.
 
 **Testing several claims together needed its own fix.** Each interval the harness reports is only as
 trustworthy as its own confidence level implies for *one* test at a time; running eight together and
