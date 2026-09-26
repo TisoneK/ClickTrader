@@ -6,6 +6,7 @@ from clicktrader.forex.strategies import (
     BollingerMeanReversion,
     EMATrendFollowing,
     EngulfingBar,
+    InsideBar,
     MACDMomentum,
     MovingAverageCrossover,
     PinBar,
@@ -228,8 +229,64 @@ def test_pin_bar_does_not_refire_on_consecutive_matching_shapes():
     assert fired.count(True) == 1
 
 
-def test_forex_registry_has_all_eight_strategies():
+# --- InsideBar ----------------------------------------------------------
+
+
+def test_inside_bar_forms_without_firing():
+    strategy = InsideBar(bar_size=3)
+    prices = [10.0, 12.0, 8.0, 9.0, 11.0, 9.5]  # mother bar, then a bar strictly inside it
+    decisions = [strategy.decide(_history(prices[: i + 1])) for i in range(len(prices))]
+    assert all(d is None for d in decisions)  # formation itself is not a call
+
+
+def test_inside_bar_breakout_up_fires_after_formation():
+    strategy = InsideBar(bar_size=3, horizon_ticks=7, stake=3.0)
+    prices = [10.0, 12.0, 8.0, 9.0, 11.0, 9.5, 11.5]  # ... then price clears the inside bar's high
+    decisions = [strategy.decide(_history(prices[: i + 1])) for i in range(len(prices))]
+    fired = [d for d in decisions if d is not None]
+    assert len(fired) == 1
+    assert fired[0].signal.direction is Direction.UP
+    assert fired[0].signal.horizon_ticks == 7
+    assert fired[0].stake == 3.0
+
+
+def test_inside_bar_breakout_down_fires_after_formation():
+    strategy = InsideBar(bar_size=3)
+    prices = [10.0, 12.0, 8.0, 9.0, 11.0, 9.5, 8.5]  # ... then price clears the inside bar's low
+    decisions = [strategy.decide(_history(prices[: i + 1])) for i in range(len(prices))]
+    fired = [d for d in decisions if d is not None]
+    assert len(fired) == 1
+    assert fired[0].signal.direction is Direction.DOWN
+
+
+def test_inside_bar_no_signal_while_price_stays_within_the_watched_range():
+    strategy = InsideBar(bar_size=3)
+    prices = [10.0, 12.0, 8.0, 9.0, 11.0, 9.5, 10.0, 10.2, 9.8]
+    decisions = [strategy.decide(_history(prices[: i + 1])) for i in range(len(prices))]
+    assert all(d is None for d in decisions)
+
+
+def test_inside_bar_touching_the_edge_does_not_replace_or_break_the_watch():
+    strategy = InsideBar(bar_size=3)
+    prices = [
+        10.0, 12.0, 8.0,  # mother bar
+        9.0, 11.0, 9.5,  # strictly inside -> watch becomes (9, 11)
+        9.0, 11.0, 10.0,  # touches both edges exactly -> not strictly inside, no breakout either
+        11.2,  # now clears the ORIGINAL (9, 11) watch, proving it was never replaced or dropped
+    ]
+    decisions = [strategy.decide(_history(prices[: i + 1])) for i in range(len(prices))]
+    fired = [d for d in decisions if d is not None]
+    assert len(fired) == 1
+    assert fired[0].signal.direction is Direction.UP
+
+
+def test_inside_bar_no_signal_without_a_mother_and_an_inside_bar():
+    strategy = InsideBar(bar_size=3)
+    assert strategy.decide(_history([1.0, 1.1])) is None
+
+
+def test_forex_registry_has_all_nine_strategies():
     assert set(REGISTRY) == {
         "random-direction", "ma-crossover", "rsi-mean-reversion", "macd-momentum",
-        "bollinger-mean-reversion", "ema-trend", "engulfing-bar", "pin-bar",
+        "bollinger-mean-reversion", "ema-trend", "engulfing-bar", "pin-bar", "inside-bar",
     }

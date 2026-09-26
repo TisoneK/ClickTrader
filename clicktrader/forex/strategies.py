@@ -316,6 +316,54 @@ class PinBar(_ZoneEdgeStrategy):
         )
 
 
+class InsideBar:
+    """The Inside Bar breakout claim: a candle whose entire high/low range sits inside the prior
+    candle's range (the "mother bar") reads as a pause, not a reversal by itself — the call only comes
+    once price actually breaks back out of that range.
+
+    A genuinely different shape from `EngulfingBar`/`PinBar`: those call a direction the instant their
+    pattern completes; this one is two stages — spot the pause, then watch every subsequent tick (not
+    just the next bar boundary) for the first one to cross the watched range, and call that direction.
+    Forming a fresh inside bar replaces whichever range was being watched, since a new pause supersedes
+    an old, still-unbroken one; a candle that merely touches (rather than strictly clears) the mother
+    bar's edge is not inside and leaves the current watch alone. Rule per the standard inside-bar /
+    mother-bar breakout definition used across candlestick price-action trading, not any one book's
+    specific wording.
+    """
+
+    def __init__(self, *, bar_size: int = 10, horizon_ticks: int = 10, stake: float = 1.0) -> None:
+        self.name = f"inside-bar(bar_size={bar_size}, horizon={horizon_ticks})"
+        self._builder = CandleBuilder(bar_size)
+        self._horizon = horizon_ticks
+        self._stake = stake
+        self._watch_low: float | None = None
+        self._watch_high: float | None = None
+
+    def decide(self, history: History) -> SignalDecision | None:
+        price = history.last_prices(1)[0]
+        decision: SignalDecision | None = None
+        if self._watch_low is not None and self._watch_high is not None:
+            if price > self._watch_high:
+                decision = SignalDecision(
+                    Signal(Direction.UP, self._horizon), self._stake,
+                    f"inside-bar breakout up through {self._watch_high:.5f}",
+                )
+            elif price < self._watch_low:
+                decision = SignalDecision(
+                    Signal(Direction.DOWN, self._horizon), self._stake,
+                    f"inside-bar breakout down through {self._watch_low:.5f}",
+                )
+            if decision is not None:
+                self._watch_low = self._watch_high = None
+        if self._builder.feed(price):
+            candles = self._builder.last(2)
+            if len(candles) == 2:
+                mother, inside = candles
+                if inside.high < mother.high and inside.low > mother.low:
+                    self._watch_low, self._watch_high = inside.low, inside.high
+        return decision
+
+
 REGISTRY: dict[str, Callable[[], ForexStrategy]] = {
     "random-direction": lambda: RandomDirection(),
     "ma-crossover": lambda: MovingAverageCrossover(),
@@ -325,4 +373,5 @@ REGISTRY: dict[str, Callable[[], ForexStrategy]] = {
     "ema-trend": lambda: EMATrendFollowing(),
     "engulfing-bar": lambda: EngulfingBar(),
     "pin-bar": lambda: PinBar(),
+    "inside-bar": lambda: InsideBar(),
 }
