@@ -72,3 +72,25 @@ names them), and roll-up candidates.
 - **Prevent next time:** keep the documented install recipe and the suite's
   actual top-level imports in sync; `.[dev]` plus unguarded third-party imports
   is a trap that fires on every fresh machine.
+
+---
+## 2026-09-26 — Njeri / deepseek-flash
+- **Problem:** `playwright` could not be installed on this link. Three attempts —
+  `uv pip install -e '.[browser]'` (network timeout at uv's default 30 s), the
+  same with `UV_HTTP_TIMEOUT=900` (an extraction I/O failure, then a stall), and
+  `python -m pip download playwright` (38.6 MB wheel, ~50 KB/s, cut mid-file,
+  killed after ~25 minutes) — none completed, so `tests/test_browser_driver.py`
+  still cannot collect and the gates stay red by those 6 tests.
+- **Cost:** ~25 minutes of retries across two tools plus a stalled background job
+  that had to be killed.
+- **Cause:** link speed, not tooling — measured ~1 MB per 20 s against a 38.6 MB
+  wheel. Worth knowing: uv reports a slow download as `Failed to extract archive
+  ... I/O operation failed during extraction`, which reads like a corrupt wheel
+  and sends you chasing the wrong problem.
+- **Workaround / fix:** handed the user one command to run manually —
+  `uv pip install playwright --python .venv/Scripts/python.exe` (uv venvs ship no
+  `pip`). No browser binaries needed: the module drives a `FakePage`, so the PyPI
+  package alone unblocks the remaining 6 tests and both gates.
+- **Prevent next time:** on a slow link, sample the download rate before retrying
+  a large wheel three ways, and hand the command over instead of burning the
+  session on it.
