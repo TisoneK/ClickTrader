@@ -94,3 +94,43 @@ names them), and roll-up candidates.
   roster template a "last activity" hint so a peer can judge staleness
   without reading git history.
 - **Status:** open
+
+---
+## 2026-09-26 — Njeri / deepseek-flash (Session 5)
+
+- **Flaw:** `git commit <paths>` is **not** a scoped commit — it commits the
+  entire index, so anything staged earlier rides along silently. The protocol's
+  "one logical change per commit" rule is defeated by a sequence it never warns
+  about: stage broadly, then commit with explicit paths, believing those paths
+  scope the commit. The Two Surfaces rule ("`git add .context_ledger/` for
+  memory, explicit paths for project") practically invites the broad `git add`.
+- **Symptom:** this session's `chore(ledger): update core to 2.0.4` commit
+  (`887b353`) also carried the `workflows/gates.conf` registration, a change
+  staged minutes earlier while diagnosing the gate. Nothing failed — no gate,
+  no check, no signal at commit time. It surfaced only because a later
+  `git status` did not list `gates.conf`, which sent the session hunting for its
+  own change through `git log` on the file. The commit message therefore names
+  one of its two changes; the other is invisible to anyone scanning
+  `git log --oneline`.
+- **Root cause:** two rules state the *intent* (one logical change; two surfaces
+  committed separately) but neither names the mechanism that breaks it, and
+  nothing inspects the *shape* of the commit being made. `git commit <paths>` and
+  `git commit --only <paths>` read as synonyms and have opposite effects. Note
+  the trap fires even with a single surface in play — both changes here were
+  ledger memory, so the mixed-surface rule was never violated.
+- **Suggested fix:** (1) *Pitfall for the edition's Git Workflow,* close to
+  verbatim: "`git commit <paths>` commits everything already staged, not just
+  those paths. When the index may hold earlier work, scope the commit with
+  `git commit --only <paths>`, or `git commit -m <msg> -- <paths>`, or reset the
+  index first." (2) *A mechanical check in `ledger-gates run pre-commit`:* warn
+  loudly (fail, in `mode=explicit`) when the staged set spans more than one
+  surface — memory paths and product paths in the same commit — and print the
+  staged file count so an unexpectedly broad index is visible before the commit.
+  That single check covers this flaw and the one logged above it today (the
+  `chore(ledger):` commit that deleted 28 product files and added a secret
+  file); both share one root — the protocol's most dangerous rules are prose the
+  agent must apply correctly at write time, with nothing inspecting the commit
+  it is about to make. (3) Optional and cheaper still: have the exit checklist
+  ask the agent to run `git show --stat HEAD` on each commit it made this
+  session — the packaging slip above would have been caught in one command.
+- **Status:** open
