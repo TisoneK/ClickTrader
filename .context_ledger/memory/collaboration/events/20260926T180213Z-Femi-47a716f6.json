@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260926T180213Z-Femi-47a716f6",
+  "type": "claim",
+  "session": "S003",
+  "agent": "Femi",
+  "created": "2026-09-26T18:02:13Z",
+  "issue": "candlestick-book-notes",
+  "body": "Advisory task: assess a candlestick-pattern trading PDF the user shared and whether/how to fold notes into the ledger. No clicktrader/ code touched.",
+  "paths": [".context_ledger/memory"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
