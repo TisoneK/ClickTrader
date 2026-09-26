@@ -42,27 +42,33 @@ names them), and roll-up candidates.
 
 ---
 ## 2026-09-26 — Njeri / deepseek-flash
-- **Problem:** `workflows/gates.conf` registers its mandatory commands as
-  `.venv/bin/python -m pytest -q` (a POSIX venv path, correct on the Mac
-  that bootstrapped it). On Tison's Windows checkout there is no `.venv/`
-  at all, so `ledger-gates run pre-commit` fails with
-  `sh: line 1: .venv/bin/python: No such file or directory` /
-  `ledger-gates: FAILED (127)` — a *mandatory* gate cannot pass on this
-  machine regardless of the code's health.
-- **Cost:** Manual substitution: run `python -m pytest -q` by hand (177
-  passed) and record the gate failure in the session notes so the red gate
-  isn't mistaken for red tests.
-- **Cause:** `gates.conf` has one command per gate with no platform
-  dimension, but the core itself is cross-platform (§"Reading, gates, and
-  Windows" ships `.cmd`/`.ps1` ports for every tool). A path that is
-  correct for a POSIX venv is wrong on Windows (`Scripts/python.exe`), and
-  the Mac has no bare `python` at all (see `system/environments.md`), so no
-  single literal command satisfies both machines sharing the file.
-- **Workaround / fix:** unresolved in-place — deliberately not edited, because
-  any literal path fixes one platform and breaks the other. Needs a checked-in
-  wrapper (e.g. `scripts/test` + `scripts/test.cmd`) that `gates.conf` calls.
-- **Prevent next time:** let `gates.conf` express a command per platform, or
-  make `ledger-gates` fall back to auto-discovery when the configured command
-  is missing from the filesystem (loud notice, not a silent skip) instead of
-  failing the gate with 127.
-- **Upstream:** candidate
+- **Problem:** this repo's declared dev environment cannot run this repo's own
+  test suite. `pyproject.toml` puts pytest in `[dev]` and declares the runtime
+  deps as separate extras (`[deriv]` = websocket-client, `[browser]` =
+  playwright), but `tests/test_cli.py`, `test_deriv_api.py`,
+  `test_deriv_trading.py` and `test_executor.py` `import websocket` at module
+  top level and `test_browser_driver.py` imports `playwright`, none of them
+  guarded. A venv built exactly as `system/environments.md` documented
+  (`uv pip install -e '.[dev]'`) therefore fails collection in 5 files: the
+  documented recipe and the suite disagree, and the gate goes red for a reason
+  that has nothing to do with the code.
+- **Cost:** two extra install rounds and a misleading red gate; the missing
+  extras surface only by reading collection errors. Masked in the other
+  direction too — this machine's system Python happens to carry
+  websocket-client and playwright in its user-site, so `python -m pytest -q`
+  there passed 177 while the pinned venv could not collect. A gate that is
+  green on one interpreter and red on another, for install reasons, is exactly
+  the muddle a gate exists to prevent.
+- **Cause:** the package guards its own optional imports (it raises "the
+  'deriv' extra is required: pip install -e '.[deriv]'"), but the tests import
+  the third-party modules directly, so that guard never runs.
+- **Workaround / fix:** install the full set — `uv pip install -e
+  '.[dev,deriv,browser]'` in the venv; both environment recipes now say so.
+  Deliberately NOT fixed by adding `pytest.importorskip` to those test modules:
+  that converts a missing dependency into a skipped module and a green gate,
+  which is the same false green the venv rule exists to reject. The real fix is
+  the user's call — declare the suite's needs in one extra, or add the skips
+  *and* accept that green then means "tested what happened to be installed".
+- **Prevent next time:** keep the documented install recipe and the suite's
+  actual top-level imports in sync; `.[dev]` plus unguarded third-party imports
+  is a trap that fires on every fresh machine.

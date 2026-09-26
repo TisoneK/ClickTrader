@@ -79,3 +79,44 @@ this office's only live record of that thread, her session never logged an
 entry, and deleting a live plan to satisfy a "clear the file" step is the
 worse trade. Her stale roster row is logged as an open flaw instead of being
 edited — the roster asks each agent to touch only its own row.
+
+**Round 2 — making the gates actually run on Windows (user-directed).** The
+user asked where the fix belonged, and the answer ran both ways: the *core*
+half was not mine to write at all — `ledger-state.ps1`'s unparseable
+interpolation and `ledger-mem.ps1`'s `||` are package defects, fixed upstream
+in core **2.0.4** (2026-09-23, the day before this project vendored the broken
+2.0.3, and its changelog names this exact failure), so the fix here was to
+consume it: `ledger-sync update`, committed as `chore(ledger): update core to
+2.0.4`. The *gate* half is project-owned (`memory/workflows/gates.conf` is
+never touched by core updates), so that one was mine to register.
+
+**A correction that matters more than the fix.** My first registration made
+the command fall back to the system `python` when no `.venv/` was present —
+chosen so I would not have to touch the user's machine — and the user rejected
+it on sight: "so because you havent seen .venv on windows you use system's
+version?" They were right. That form passes 177 tests against CPython 3.14
+with pytest from a user-site and reports a green that says nothing about the
+pinned environment the gate exists to hold to; a gate whose green means "some
+interpreter ran something" is worse than a red one. The shipped command
+discovers either venv layout (`.venv/bin/python`, `.venv/Scripts/python.exe`)
+and otherwise prints the create-the-venv command and exits 1. The lesson
+generalises: when a rule and local convenience disagree, the convenience is
+the bug.
+
+**What that stricter rule then exposed.** A venv created exactly as
+`system/environments.md` documented (`.[dev]`) cannot collect this suite: five
+test modules `import websocket`/`playwright` unguarded while the deps live in
+separate extras. The system Python had been hiding it — its user-site happened
+to carry both. So the honest env is also the one that reveals the repo's own
+recipe is incomplete; recorded as a live inefficiency entry rather than patched
+with `pytest.importorskip`, which would convert a missing dependency into a
+skipped module and the same false green.
+
+**Handed off, not abandoned.** `playwright` (38.6 MB wheel) would not finish
+downloading on this link at ~50 KB/s across three attempts (uv: network
+timeout and an extraction failure; pip: cut mid-file). The browser tests need
+only the package — they drive a `FakePage`, no real browser — so the venv is
+complete the moment it lands: `uv pip install playwright --python
+.venv/Scripts/python.exe` (uv venvs ship no `pip`). Until then
+`tests/test_browser_driver.py` is the single uncollectable module and the
+gates are red by exactly those 6 tests: 171 passed in the venv, 177 with them.
