@@ -5,10 +5,10 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-09-26T05:54:14Z_
+_Regenerated: 2026-09-26T06:49:15Z_
 
 ## Standing params
-- **Core:** 2.0.3 (locked, verified 2026-09-24)
+- **Core:** 2.0.4 (locked, verified 2026-09-26)
 - **Target:** build DESIGN.md's layers in order — recorder, then replay harness, then a gated executor; a target in the user's chat message overrides this
 - **Scope:** free — the user names the task per session
 - **Push policy:** push to main directly after each commit
@@ -26,8 +26,8 @@ _Regenerated: 2026-09-26T05:54:14Z_
 _1 medium, 0 low priority row(s) — see tasks/backlog.md_
 
 ## Logs at a glance — open only if your task touches these
-- flaws/log.md (protocol/.context_ledger friction): 3 entries, last added 2026-09-26
-- inefficiencies/log.md (project code/env friction): 1 entry, last added 2026-09-26
+- flaws/log.md (protocol/.context_ledger friction): 2 entries, last added 2026-09-26
+- inefficiencies/log.md (project code/env friction): 2 entries, last added 2026-09-26
 - plans/decisions.md (ADRs in force — respected, not relitigated): 1 entry, last added 2026-09-24
 
 ## Collaboration
