@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-09-26T05:43:04Z_
+_Regenerated: 2026-09-26T05:49:36Z_
 
 ## Standing params
 - **Core:** 2.0.3 (locked, verified 2026-09-24)
@@ -16,7 +16,6 @@ _Regenerated: 2026-09-26T05:43:04Z_
 
 ## Office — who's in, right now
 - **Amara** (S002) — Working — Forex tie-rate verdict fix landed (2d5ebf1); now built `risk_replay.py` — session-by-sess…
-- **Njeri** (S005) — Working — Recovery: undo the local-only session that deleted `clicktrader/` and committed `.env` as…
 
 ## Current task
 - **2026-09-24/25 — Amara / claude-sonnet-5** — **Digit-contract side (CryptonicHub + Deriv): stable, considered done for now.** All 3 layers built, live-verified (real demo trades placed… — *open. Next: let the real EUR/USD recording keep accumulating, then run `forex-replay` for a real read once there's enough data. No forex live-trading/executor code exists yet (only the digit-contract side has one) — deliberately not started until the directional-accuracy question has a real answer from real data.*
@@ -27,9 +26,10 @@ _Regenerated: 2026-09-26T05:43:04Z_
 _1 medium, 0 low priority row(s) — see tasks/backlog.md_
 
 ## Logs at a glance — open only if your task touches these
-- flaws/log.md (protocol/.context_ledger friction): 0 entries
-- inefficiencies/log.md (project code/env friction): 0 entries
+- flaws/log.md (protocol/.context_ledger friction): 2 entries, last added 2026-09-26
+- inefficiencies/log.md (project code/env friction): 1 entry, last added 2026-09-26
 - plans/decisions.md (ADRs in force — respected, not relitigated): 1 entry, last added 2026-09-24
 
 ## Collaboration
-(no collaboration/events — collaboration never used)
+- 2 event(s) on file; most recent: `20260926T054913Z-Njeri-3115a5b0.json`
+- Full trail + rules: `memory/collaboration/README.md`; live status: `ledger-collab status --session <S> --issue <slug>`
