@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-09-24T13:56:32Z_
+_Regenerated: 2026-09-26T05:43:04Z_
 
 ## Standing params
 - **Core:** 2.0.3 (locked, verified 2026-09-24)
@@ -15,15 +15,16 @@ _Regenerated: 2026-09-24T13:56:32Z_
 - Full params: `memory/workflows/active.md`
 
 ## Office — who's in, right now
-- **Wanjiru** (S001) — Blocked — bootstrap ledger, then build layer 1 (recorder) + core
+- **Amara** (S002) — Working — Forex tie-rate verdict fix landed (2d5ebf1); now built `risk_replay.py` — session-by-sess…
+- **Njeri** (S005) — Working — Recovery: undo the local-only session that deleted `clicktrader/` and committed `.env` as…
 
 ## Current task
-- **2026-09-24 — Wanjiru / claude-opus-5-5** — bootstrap .context_ledger/, then start building DESIGN.md layer 1 (recorder) and the platform-agnostic core — *blocked (push not permitted from this session; target platform unknown — P-2026-09-24-1)*
+- **2026-09-24/25 — Amara / claude-sonnet-5** — **Digit-contract side (CryptonicHub + Deriv): stable, considered done for now.** All 3 layers built, live-verified (real demo trades placed… — *open. Next: let the real EUR/USD recording keep accumulating, then run `forex-replay` for a real read once there's enough data. No forex live-trading/executor code exists yet (only the digit-contract side has one) — deliberately not started until the directional-accuracy question has a real answer from real data.*
 
 ## Backlog — High priority (the top of the queue)
-| B-2026-09-24-1 | Write the recorder's live adapter once P-2026-09-24-1 is answered — WebSocket feed if one exists, Playwright DOM read otherwise; must emit `TickRecord`s into `clicktrader.recording.Recorder` |
+(none)
 
-_2 medium, 0 low priority row(s) — see tasks/backlog.md_
+_1 medium, 0 low priority row(s) — see tasks/backlog.md_
 
 ## Logs at a glance — open only if your task touches these
 - flaws/log.md (protocol/.context_ledger friction): 0 entries
