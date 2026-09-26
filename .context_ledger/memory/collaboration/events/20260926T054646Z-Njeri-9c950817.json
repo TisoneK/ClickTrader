@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260926T054646Z-Njeri-9c950817",
+  "type": "claim",
+  "session": "S005",
+  "agent": "Njeri",
+  "created": "2026-09-26T05:46:46Z",
+  "issue": "recover-deleted-source",
+  "body": "Recovering a local-only session that deleted the whole clicktrader package and committed .env as a tracked backup; main reset to origin/main (45bbc59), tree restored and verified",
+  "paths": ["clicktrader/", "tests/", "DESIGN.md"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
