@@ -53,7 +53,6 @@ is your stable session tag.
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
 | Amara | S002 | claude-sonnet-5 | Forex tie-rate verdict fix landed (2d5ebf1); now built `risk_replay.py` — session-by-session RiskGuard-vs-unbounded replay (B-2026-09-24-2) | Working | 175 tests passing; new `clicktrader risk-replay` CLI + DESIGN.md measured finding (real 8k-tick Deriv run: guard capped worst session at -$7.68 vs -$39.23 unbounded); about to commit+push |
-| Femi | S003 | claude-sonnet-5 | Extracted three candlestick patterns from the user's book as new forex strategies: Engulfing Bar, Pin Bar, Inside Bar (4c6724a, b3f7be0) | Working | candles.py + strategies.py + 47 new tests, all green (200 total); all three confirmed against real EUR/USD data, NO VERDICT (below 500-bet threshold) — book cited by pattern name only, not transcribed, per copyright discussion; wrapping up |
 
 **Keep your Status cells current — that is what the board is for.** The
 next live worker reads it to know at a glance what a peer has finished,
