@@ -63,6 +63,16 @@ not a red test — `python -m pytest -q` passes 177/177. Logged in
 `inefficiencies/log.md` with a suggested wrapper-script fix; `gates.conf` was
 deliberately left unedited so this machine's fix cannot break bao's Mac.
 
+The `exit` gate reports two failing checks for the same reason: the second is
+`ledger-sync`'s port-parse step, which cannot pass on Windows — `ledger-state.ps1`
+has a `"$var:…"` interpolation no PowerShell version accepts, and `ledger-mem.ps1`
+additionally needs PowerShell 7 while `ledger-sync` prefers the built-in 5.1.
+Its advice ("rollback") would have been actively wrong here: `sha256sum -c
+MANIFEST.sha256` inside `core/` exits 0 with **70 OK / 0 FAILED**, so core 2.0.3
+is intact. Logged as a flaw with the three-line fix; `ledger-sync status` also
+shows core 2.0.4 available from the user's local package clone, which this
+session did not apply — replacing the office's protocol is the user's call.
+
 **Not done, on purpose.** `tasks/current.md` still carries Amara's (S002)
 forex handoff below a new idle marker, rather than being wiped: the text is
 this office's only live record of that thread, her session never logged an
