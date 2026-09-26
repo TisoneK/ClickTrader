@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-09-26T18:18:35Z_
+_Regenerated: 2026-09-26T18:25:12Z_
 
 ## Standing params
 - **Core:** 2.0.4 (locked, verified 2026-09-26)
@@ -16,7 +16,7 @@ _Regenerated: 2026-09-26T18:18:35Z_
 
 ## Office — who's in, right now
 - **Amara** (S002) — Working — Forex tie-rate verdict fix landed (2d5ebf1); now built `risk_replay.py` — session-by-se…
-- **Femi** (S003) — Working — Extracted two candlestick patterns from the user's book as new forex strategies: Engulfin…
+- **Femi** (S003) — Working — Extracted three candlestick patterns from the user's book as new forex strategies: Engulf…
 
 ## Current task
 - **2026-09-24/25 — Amara / claude-sonnet-5** — **Digit-contract side (CryptonicHub + Deriv): stable, considered done for now.** All 3 layers built, live-verified (real demo trades placed… — *open. Next: let the real EUR/USD recording keep accumulating, then run `forex-replay` for a real read once there's enough data. No forex live-trading/executor code exists yet (only the digit-contract side has one) — deliberately not started until the directional-accuracy question has a real answer from real data.*
