@@ -46,6 +46,8 @@ Format: - <preference> — <how to apply it> (provenance, YYYY-MM-DD)
 
 ## Workflow
 
+- Drop a bad session's commits instead of stacking revert commits on top — reset to the last good commit when the commits are still local-only, so they cannot be pushed by accident later; use a revert commit only for history that already reached the remote. (stated, 2026-09-26 — "we are reverting to the session before Alex", after a session deleted the product package and committed `.env` as a tracked backup)
+
 ## Communication
 
 ## Code style

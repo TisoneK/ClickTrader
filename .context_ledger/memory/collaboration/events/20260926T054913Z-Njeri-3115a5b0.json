@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260926T054913Z-Njeri-3115a5b0",
+  "type": "release",
+  "session": "S005",
+  "agent": "Njeri",
+  "created": "2026-09-26T05:49:13Z",
+  "issue": "recover-deleted-source",
+  "body": "Recovery complete: main reset to origin/main (45bbc59); product tree restored, 177 tests green, secret commit unreachable from every ref and never pushed",
+  "paths": [],
+  "refs": ["45bbc59"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}

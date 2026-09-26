@@ -36,3 +36,11 @@ block (and its "last verified" date) every time you run on it again.
 - **Runtimes:** system `python3` is 3.9.6 — too old (`requires-python >=3.11`) and there is no bare `python`; uv at `~/.local/bin/uv` with CPython 3.10–3.13 managed. Repo venv: `uv venv --python 3.12 .venv && uv pip install -e '.[dev]' --python .venv/bin/python`
 - **Verified commands:** `.venv/bin/python -m pytest -q` (45 passed) · `.venv/bin/clicktrader simulate|check|replay`
 - **Quirks:** `ledger-gates` auto-discovers `python -m pytest`, which fails here (no `python`) — explicit gates are registered in `workflows/gates.conf`. `git push` from an agent session in the Claude desktop app was blocked by its auto-mode classifier (2026-09-24). The context-ledger package clone lives at `~/Code/context` (not `~/Code/context-ledger` as the package QUICKSTART says).
+
+---
+## Tison's Windows 10 (last verified 2026-09-26)
+- **Identify by:** Windows 10.0.26200 x64 (`win32`), checkout at `C:\Users\tison\Dev\ClickTrader`, shell is Git Bash, agents run via the ZCode CLI
+- **OS:** Windows 10; Git Bash (`sh` available, no `sha256sum`-dependent paths needed so far)
+- **Runtimes:** `python` 3.14.2 on PATH (satisfies `requires-python >=3.11`); pytest 9.0.2 and pip 26.1.1 installed in the user-site (`C:\Users\tison\AppData\Roaming\Python\Python314`). No repo `.venv/` exists here
+- **Verified commands:** `python -m pytest -q` from the repo root (177 passed, 2026-09-26) · `python -c "import clicktrader"` resolves from the repo root without an editable install · the POSIX `sh .context_ledger/core/bin/ledger-*` helpers all run under Git Bash (`ledger-state`, `ledger-gates`, `ledger-collab`, `ledger-mem`)
+- **Quirks:** `gates.conf`'s `.venv/bin/python -m pytest -q` fails here with `No such file or directory` (127) — that path is macOS-shaped, and macOS has no bare `python`, so the one literal command cannot serve both machines (logged in `office/inefficiencies/log.md`). A stale Kilo worktree exists at `.kilo/worktrees/wistful-piano` (detached HEAD, self-ignored by `.kilo/.gitignore`); it is not part of this repo's tracked tree. No `recordings/` directory in this checkout, so no live Deriv recording is accumulating here.

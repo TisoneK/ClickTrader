@@ -12,6 +12,12 @@ entry and backlog before starting.
 - **Status:** blocked (push not permitted from this session; target platform unknown — P-2026-09-24-1) | done | blocked (<blocker>)
 -->
 
+- **Session:** 2026-09-26 — Njeri / deepseek-flash
+- **Task:** no task in flight. This was a recovery session: undo local sessions 3–4 (deleted `clicktrader/`, committed `.env` as a tracked backup), reset `main` to `origin/main`. Standing target for the next session is in `workflows/active.md`.
+- **Status:** done
+
+**Below — the previous session's thread (S002, Amara), kept as reference, not as a live task.** Her work is committed and pushed on `main` (`39e702d`, `ea89932`); her roster row is stale (flaw logged 2026-09-26).
+
 - **Session:** 2026-09-24/25 — Amara / claude-sonnet-5
 - **Task:** **Digit-contract side (CryptonicHub + Deriv): stable, considered done for now.** All 3 layers built, live-verified (real demo trades placed and broker-settled), 8 strategy claims tested and all converge to "No edge" as the algebra predicts. Three rigor/documentation follow-ups shipped (multiple-comparisons correction, broker-verified settlement replacing self-grading, DESIGN.md now documents all of it). Live stake sizing for a future digit-contract live-runner is deliberately left open, pending the user's own stake-sizing research videos (separate, not-yet-started track).
 

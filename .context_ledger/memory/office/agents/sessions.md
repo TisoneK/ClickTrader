@@ -32,3 +32,13 @@ re-seeded into the new office explicitly, and nothing else carries over.
 - **Open items:** B-2026-09-24-1..3; P-2026-09-24-1, P-2026-09-24-2
 - **Notes:** none
 - **Report:** none (build session, not a review)
+
+---
+## 2026-09-26 — Session 5
+- **Agent:** Njeri | **Model:** deepseek/deepseek-flash | **Platform:** Tison's Windows 10 (local development, ZCode CLI), Windows 10.0.26200 x64 | **Role:** engineer | **Core:** 2.0.3
+- **Task:** the user's `pull` had deadlocked in a conflicted merge — recover it by undoing the local-only sessions 3–4 ("Alex"), which had deleted the whole `clicktrader/` package and committed `.env` as a tracked backup
+- **Commits:** 4+ memory commits (8d3d95e..this closeout); no product commit — the recovery's product effect is the reset of `main` to `origin/main` (45bbc59)
+- **Outcome:** done — `main` == `origin/main` (0/0 divergence), 28 product files restored with 177 tests green; the secret-bearing commit is unreachable from every ref and was **never pushed** (checked against all remote refs); `.env` values were first copied back into gitignored `.env`
+- **Open items:** none; two open flaws logged (a `chore(ledger):` commit can delete product code or add a secret file with every gate green; a dead session's roster row stays live)
+- **Notes:** .context_ledger/memory/office/sessions/notes.md — "2026-09-26 — Njeri / deepseek-flash (Session 5)"
+- **Report:** none (recovery session, not a review)

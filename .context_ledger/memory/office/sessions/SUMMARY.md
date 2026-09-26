@@ -30,3 +30,8 @@ records.
 - A removed summary line MUST have a corresponding permanent entry in
   agents/sessions.md — never delete the only record of a session.
 -->
+
+---
+- **2026-09-26 — Session 5** — Njeri / deepseek-flash — recovery: `main` reset to `origin/main` after local sessions 3–4 deleted the entire `clicktrader/` package and committed `.env` as a tracked backup; the tree is restored, 177 tests green, and the secret-bearing commit is unreachable from every ref and was never pushed.
+  Key facts: the reset was the whole fix (all ten unpushed local commits belonged to that session); `.env` was rebuilt from the backup copy before the reset; `gates.conf`'s `.venv/bin/python` cannot run on this Windows checkout, so the pre-commit gate fails environmentally (logged in `inefficiencies/log.md`).
+  Detail: .context_ledger/memory/office/sessions/notes.md — "2026-09-26 — Njeri / deepseek-flash (Session 5)".
