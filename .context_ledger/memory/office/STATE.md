@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-09-26T18:01:31Z_
+_Regenerated: 2026-09-26T18:18:35Z_
 
 ## Standing params
 - **Core:** 2.0.4 (locked, verified 2026-09-26)
@@ -16,7 +16,7 @@ _Regenerated: 2026-09-26T18:01:31Z_
 
 ## Office — who's in, right now
 - **Amara** (S002) — Working — Forex tie-rate verdict fix landed (2d5ebf1); now built `risk_replay.py` — session-by-se…
-- **Femi** (S003) — Working — User shared a candlestick-pattern trading book (PDF) and asked whether/how to fold its no…
+- **Femi** (S003) — Working — Extracted two candlestick patterns from the user's book as new forex strategies: Engulfin…
 
 ## Current task
 - **2026-09-24/25 — Amara / claude-sonnet-5** — **Digit-contract side (CryptonicHub + Deriv): stable, considered done for now.** All 3 layers built, live-verified (real demo trades placed… — *open. Next: let the real EUR/USD recording keep accumulating, then run `forex-replay` for a real read once there's enough data. No forex live-trading/executor code exists yet (only the digit-contract side has one) — deliberately not started until the directional-accuracy question has a real answer from real data.*
@@ -32,5 +32,5 @@ _1 medium, 0 low priority row(s) — see tasks/backlog.md_
 - plans/decisions.md (ADRs in force — respected, not relitigated): 1 entry, last added 2026-09-24
 
 ## Collaboration
-- 2 event(s) on file; most recent: `20260926T054913Z-Njeri-3115a5b0.json`
+- 4 event(s) on file; most recent: `20260926T181801Z-Femi-25302cec.json`
 - Full trail + rules: `memory/collaboration/README.md`; live status: `ledger-collab status --session <S> --issue <slug>`

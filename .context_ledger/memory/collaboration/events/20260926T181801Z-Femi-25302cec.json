@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260926T181801Z-Femi-25302cec",
+  "type": "release",
+  "session": "S003",
+  "agent": "Femi",
+  "created": "2026-09-26T18:18:01Z",
+  "issue": "candlestick-book-notes",
+  "body": "Engulfing Bar + Pin Bar forex strategies shipped (candles.py + strategies.py), both confirmed running against real EUR/USD data (NO VERDICT, below 500-bet threshold). Book itself not transcribed into the repo -- cited by pattern name only, per copyright discussion with the user.",
+  "paths": [],
+  "refs": ["4c6724a"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}

@@ -12,6 +12,12 @@ entry and backlog before starting.
 - **Status:** blocked (push not permitted from this session; target platform unknown — P-2026-09-24-1) | done | blocked (<blocker>)
 -->
 
+- **Session:** 2026-09-26 — Femi / claude-sonnet-5
+- **Task:** User shared "The Candlestick Trading Bible" PDF and asked whether to fold its notes into the ledger. Declined to transcribe the book itself into the repo (public, MIT-licensed — republishing copyrighted chapters under that license was flagged to the user as a real legal exposure, not a style nitpick; freely-downloadable and citable are not the same as freely-reproducible). Agreed path instead: extract pattern *definitions* as original strategy code, citing the technique by name only. Shipped two: `EngulfingBar`, `PinBar` in `clicktrader/forex/strategies.py` (4c6724a), backed by a new `clicktrader/forex/candles.py` (ticks have no OHLC shape on their own — needed a bar-aggregation layer that indicators.py's tick-level approximation didn't need).
+- **Status:** open. Both confirmed running against the real EUR/USD recording (NO VERDICT, 418/343 out-of-sample bets — below the 500-bet threshold, same as every other forex strategy at this sample size). DESIGN.md deliberately not touched yet, matching precedent (8ad5c9e): it gets a "what's been tested" update once a real verdict lands, not at registration time. Next: check with the user whether to extract more patterns (Inside Bar was flagged as a bigger lift — the book treats it as a two-stage breakout-confirmation setup, not a single-bar call) or close out here.
+
+**Below — the previous session's thread (Njeri), kept as reference, not as a live task.**
+
 - **Session:** 2026-09-26 — Njeri / deepseek-flash
 - **Task:** no task in flight. This was a recovery session: undo local sessions 3–4 (deleted `clicktrader/`, committed `.env` as a tracked backup), reset `main` to `origin/main`. Standing target for the next session is in `workflows/active.md`.
 - **Status:** done
