@@ -139,8 +139,9 @@ def cmd_record_live(args: argparse.Namespace) -> int:
 
 
 def cmd_record_deriv(args: argparse.Namespace) -> int:
-    from .api.deriv import DEFAULT_APP_ID, stream_ticks
+    from .api.deriv import DEFAULT_APP_ID, DerivAPIError, stream_ticks
 
+    status = 0
     with Recorder(args.out) as recorder:
         print(f"recording {args.symbol} to {args.out} — Ctrl+C to stop")
         try:
@@ -150,8 +151,11 @@ def cmd_record_deriv(args: argparse.Namespace) -> int:
                     break
         except KeyboardInterrupt:
             pass
+        except DerivAPIError as exc:
+            print(f"\nDeriv API error: {exc}")
+            status = 2
     print(f"wrote {recorder.count} ticks to {args.out}")
-    return 0
+    return status
 
 
 def _print_live_row(row) -> None:
@@ -172,7 +176,7 @@ def cmd_run_deriv(args: argparse.Namespace) -> int:
 
     import websocket
 
-    from .api.deriv import get_otp_url, stream_ticks
+    from .api.deriv import DerivAPIError, get_otp_url, stream_ticks
     from .executor import run
     from .limits import RiskGuard, RiskLimits
 
@@ -203,10 +207,16 @@ def cmd_run_deriv(args: argparse.Namespace) -> int:
         print("back out if this wasn't intentional.")
         print("=" * 60)
     print(f"requesting an OTP session for {account_id} ({'REAL' if is_real else 'demo'})...")
-    otp_url = get_otp_url(account_id, token, app_id, require_demo=not is_real)
+    try:
+        otp_url = get_otp_url(account_id, token, app_id, require_demo=not is_real)
+    except DerivAPIError as exc:
+        print(f"Deriv API error: {exc}")
+        return 2
+
     trade_ws = websocket.create_connection(otp_url)
     ledger = DecisionLedger(args.ledger) if args.ledger else None
     print(f"running {strategy.name} live on {args.symbol} — Ctrl+C to stop")
+    status = 0
     try:
         run(
             strategy,
@@ -222,6 +232,9 @@ def cmd_run_deriv(args: argparse.Namespace) -> int:
         )
     except KeyboardInterrupt:
         pass
+    except DerivAPIError as exc:
+        print(f"\nDeriv API error: {exc}")
+        status = 2
     finally:
         final_balance_note = ""
         try:
@@ -235,7 +248,7 @@ def cmd_run_deriv(args: argparse.Namespace) -> int:
         if ledger is not None:
             ledger.close()
     print(f"stopped — {risk.trades} trades, session P/L {risk.session_pnl:+.2f}{final_balance_note}, halted: {risk.halted_reason or 'no'}")
-    return 0
+    return status
 
 
 def main(argv: list[str] | None = None) -> int:

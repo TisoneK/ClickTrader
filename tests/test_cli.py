@@ -1,5 +1,6 @@
 import pytest
 
+import clicktrader.api.deriv as deriv_api
 from clicktrader.cli import main
 
 _RUN_DERIV_LIMITS = ["--max-stake", "1", "--max-session-loss", "5", "--max-consecutive-losses", "5"]
@@ -27,6 +28,41 @@ def test_run_deriv_real_account_needs_its_own_separate_id(monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "DERIV_REAL_ACCOUNT_ID" in out
     assert "never silently reuses the demo account" in out
+
+
+def test_record_deriv_reports_a_clean_message_on_a_deriv_api_error(tmp_path, monkeypatch, capsys):
+    # e.g. the forex market being closed for the weekend -- a real, expected condition, not a bug,
+    # and previously recorded ticks (however few) must survive it rather than being lost to a traceback.
+    from clicktrader.recording import TickRecord
+    from clicktrader.model import Tick
+
+    def fake_stream_ticks(symbol, *, app_id):
+        yield TickRecord(tick=Tick(ts=1.0, price="1.10000", symbol=symbol))
+        yield TickRecord(tick=Tick(ts=2.0, price="1.10001", symbol=symbol))
+        raise deriv_api.DerivAPIError("This market is presently closed. Market will open at 2026-09-28 00:00:00.")
+
+    monkeypatch.setattr(deriv_api, "stream_ticks", fake_stream_ticks)
+    out_path = tmp_path / "eurusd.jsonl"
+    assert main(["record-deriv", str(out_path), "--symbol", "frxEURUSD"]) == 2
+    out = capsys.readouterr().out
+    assert "Deriv API error: This market is presently closed" in out
+    assert "wrote 2 ticks" in out
+    assert out_path.exists()
+    assert len(out_path.read_text().splitlines()) == 2
+
+
+def test_run_deriv_reports_a_clean_message_when_the_otp_request_fails(monkeypatch, capsys):
+    monkeypatch.setenv("DERIV_API_TOKEN", "fake-token")
+    monkeypatch.setenv("DERIV_APP_ID", "1")
+    monkeypatch.setenv("DERIV_DEMO_ACCOUNT_ID", "VRTC0000000")
+
+    def fake_get_otp_url(account_id, token, app_id, *, require_demo=True):
+        raise deriv_api.DerivAPIError("401: invalid token")
+
+    monkeypatch.setattr(deriv_api, "get_otp_url", fake_get_otp_url)
+    assert main(["run-deriv", *_RUN_DERIV_LIMITS]) == 2
+    out = capsys.readouterr().out
+    assert "Deriv API error: 401: invalid token" in out
 
 
 def test_simulate_check_replay(tmp_path, capsys):

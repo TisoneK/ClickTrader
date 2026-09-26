@@ -158,6 +158,14 @@ one-time-password URL (`POST .../otp` → connect to the *returned* address) rat
 `authorize` message. None of this was known going in; both adapters exist and pass the same recorder and
 harness unmodified either way, which is the actual test of "not tied to one platform" below.
 
+Deriv's own API error responses (`DerivAPIError`) were deliberately never retried inside `stream_ticks` —
+reconnecting cannot fix a request that's wrong on its face, e.g. the forex market being closed for the
+weekend. The gap was one layer up: `clicktrader record-deriv` and `run-deriv` did not catch that error at
+all, so a legitimate "market closed" response surfaced as an unhandled traceback instead of a clean stop —
+harmless (the recorder's `with` block still flushed whatever was already written), but noisy and easy to
+mistake for a real bug. Both commands now catch `DerivAPIError` specifically, print the broker's own
+message, and exit with a distinct status instead of a stack trace.
+
 ## Observability: a decision ledger, borrowed deliberately
 
 Every decision is recorded as a row: what the page said, what was decided, why, what the outcome was.
