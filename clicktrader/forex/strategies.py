@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import Callable, Protocol
 
 from ..strategies import History
+from .candles import CandleBuilder
 from .indicators import bollinger_bands, ema, last_non_null, macd, rsi
 from .model import Direction, Signal
 
@@ -228,6 +229,93 @@ class EMATrendFollowing(_ZoneEdgeStrategy):
         )
 
 
+class EngulfingBar:
+    """The Engulfing Bar reversal claim from candlestick price-action trading: a candle whose body
+    fully covers the prior candle's body, in the opposite direction, read as that side's buyers or
+    sellers having overwhelmed the prior candle entirely — call the reversal the instant a bar
+    completes that shape.
+
+    Candle-shape patterns have no tick-level analog the way a moving average does; see `candles.py`'s
+    docstring for the synthetic-bar gap this and `PinBar` share. Rule per the standard engulfing-candle
+    definition used across candlestick price-action trading, not any one book's specific wording.
+    """
+
+    def __init__(self, *, bar_size: int = 10, horizon_ticks: int = 10, stake: float = 1.0) -> None:
+        self.name = f"engulfing-bar(bar_size={bar_size}, horizon={horizon_ticks})"
+        self._builder = CandleBuilder(bar_size)
+        self._horizon = horizon_ticks
+        self._stake = stake
+
+    def decide(self, history: History) -> SignalDecision | None:
+        if not self._builder.feed(history.last_prices(1)[0]):
+            return None
+        candles = self._builder.last(2)
+        if len(candles) < 2:
+            return None
+        prev, last = candles
+        if prev.bullish and not last.bullish and last.open >= prev.close and last.close <= prev.open:
+            direction = Direction.DOWN
+        elif not prev.bullish and last.bullish and last.open <= prev.close and last.close >= prev.open:
+            direction = Direction.UP
+        else:
+            return None
+        return SignalDecision(
+            Signal(direction, self._horizon), self._stake,
+            f"engulfing {direction.value}: candle {last.open:.5f}->{last.close:.5f} engulfs prior body {prev.open:.5f}->{prev.close:.5f}",
+        )
+
+
+class PinBar(_ZoneEdgeStrategy):
+    """The Pin Bar rejection claim (a "Hammer" when it calls up, a "Shooting Star" when it calls
+    down): a candle whose wick makes up most of its range on one side and almost none on the other,
+    read as price probing beyond a level and being rejected back — call the direction opposite the
+    long wick the instant a bar completes that shape.
+
+    Uses `_ZoneEdgeStrategy` for the same reason RSI/MACD/Bollinger/EMA-trend do: a bar can hold the
+    same shape (e.g. two hammers in a row) without that being two independent decisions. Wick and body
+    are measured as a fraction of the candle's own range rather than an absolute price move, so the
+    shape test is scale-free — the same ratios apply regardless of instrument or of how a real, wider
+    time-based candle compares to this project's synthetic tick-count bar (see `candles.py`). Rule per
+    the standard pin-bar / hammer / shooting-star definition used across candlestick price-action
+    trading, not any one book's specific wording.
+    """
+
+    def __init__(
+        self, *, bar_size: int = 10, wick_ratio: float = 0.66, opposite_wick_ratio: float = 0.25,
+        horizon_ticks: int = 10, stake: float = 1.0,
+    ) -> None:
+        super().__init__()
+        self.name = f"pin-bar(bar_size={bar_size}, horizon={horizon_ticks})"
+        self._builder = CandleBuilder(bar_size)
+        self._wick_ratio = wick_ratio
+        self._opposite_wick_ratio = opposite_wick_ratio
+        self._horizon = horizon_ticks
+        self._stake = stake
+
+    def decide(self, history: History) -> SignalDecision | None:
+        if not self._builder.feed(history.last_prices(1)[0]):
+            return None
+        candle = self._builder.last(1)[0]
+        if candle.range <= 0:
+            zone = "neutral"
+        else:
+            lower, upper = candle.lower_wick / candle.range, candle.upper_wick / candle.range
+            if lower >= self._wick_ratio and upper <= self._opposite_wick_ratio:
+                zone = "long"
+            elif upper >= self._wick_ratio and lower <= self._opposite_wick_ratio:
+                zone = "short"
+            else:
+                zone = "neutral"
+        if not self._fire(zone):
+            return None
+        direction = Direction.UP if zone == "long" else Direction.DOWN
+        shape = "hammer" if zone == "long" else "shooting star"
+        return SignalDecision(
+            Signal(direction, self._horizon), self._stake,
+            f"{shape}: lower wick {candle.lower_wick / candle.range:.2f} / upper wick {candle.upper_wick / candle.range:.2f} of range {candle.range:.5f}",
+        )
+
+
 REGISTRY: dict[str, Callable[[], ForexStrategy]] = {
     "random-direction": lambda: RandomDirection(),
     "ma-crossover": lambda: MovingAverageCrossover(),
@@ -235,4 +323,6 @@ REGISTRY: dict[str, Callable[[], ForexStrategy]] = {
     "macd-momentum": lambda: MACDMomentum(),
     "bollinger-mean-reversion": lambda: BollingerMeanReversion(),
     "ema-trend": lambda: EMATrendFollowing(),
+    "engulfing-bar": lambda: EngulfingBar(),
+    "pin-bar": lambda: PinBar(),
 }

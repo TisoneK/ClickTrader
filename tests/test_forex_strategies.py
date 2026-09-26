@@ -5,8 +5,10 @@ from clicktrader.forex.strategies import (
     REGISTRY,
     BollingerMeanReversion,
     EMATrendFollowing,
+    EngulfingBar,
     MACDMomentum,
     MovingAverageCrossover,
+    PinBar,
     RandomDirection,
     RSIMeanReversion,
 )
@@ -150,8 +152,84 @@ def test_ema_trend_no_signal_without_enough_history():
     assert strategy.decide(_history([1.0] * 4)) is None
 
 
-def test_forex_registry_has_all_six_strategies():
+# --- EngulfingBar -------------------------------------------------------
+
+
+def test_engulfing_bar_detects_bullish_engulfing():
+    strategy = EngulfingBar(bar_size=3, horizon_ticks=5, stake=2.0)
+    prices = [10.0, 9.0, 8.0, 7.0, 11.0, 12.0]  # bearish candle then a larger bullish one engulfing it
+    decisions = [strategy.decide(_history(prices[: i + 1])) for i in range(len(prices))]
+    fired = [d for d in decisions if d is not None]
+    assert len(fired) == 1
+    assert fired[0].signal.direction is Direction.UP
+    assert fired[0].signal.horizon_ticks == 5
+    assert fired[0].stake == 2.0
+
+
+def test_engulfing_bar_detects_bearish_engulfing():
+    strategy = EngulfingBar(bar_size=3)
+    prices = [8.0, 9.0, 10.0, 11.0, 7.0, 6.0]  # bullish candle then a larger bearish one engulfing it
+    decisions = [strategy.decide(_history(prices[: i + 1])) for i in range(len(prices))]
+    fired = [d for d in decisions if d is not None]
+    assert len(fired) == 1
+    assert fired[0].signal.direction is Direction.DOWN
+
+
+def test_engulfing_bar_no_signal_without_two_completed_candles():
+    strategy = EngulfingBar(bar_size=3)
+    assert strategy.decide(_history([1.0, 1.1])) is None  # not even one full candle yet
+
+
+def test_engulfing_bar_no_signal_when_there_is_no_body_to_engulf():
+    strategy = EngulfingBar(bar_size=3)
+    prices = [1.0] * 6  # flat: every candle is a doji, nothing counts as bullish or bearish
+    decisions = [strategy.decide(_history(prices[: i + 1])) for i in range(len(prices))]
+    assert all(d is None for d in decisions)
+
+
+# --- PinBar ---------------------------------------------------------------
+
+
+def test_pin_bar_fires_up_on_a_hammer():
+    strategy = PinBar(bar_size=3, horizon_ticks=6, stake=1.5)
+    prices = [10.0, 7.0, 9.8]  # long lower wick, closes near the top -> hammer
+    decisions = [strategy.decide(_history(prices[: i + 1])) for i in range(len(prices))]
+    fired = [d for d in decisions if d is not None]
+    assert len(fired) == 1
+    assert fired[0].signal.direction is Direction.UP
+    assert fired[0].signal.horizon_ticks == 6
+    assert fired[0].stake == 1.5
+
+
+def test_pin_bar_fires_down_on_a_shooting_star():
+    strategy = PinBar(bar_size=3)
+    prices = [10.0, 13.0, 10.2]  # long upper wick, closes near the bottom -> shooting star
+    decisions = [strategy.decide(_history(prices[: i + 1])) for i in range(len(prices))]
+    fired = [d for d in decisions if d is not None]
+    assert len(fired) == 1
+    assert fired[0].signal.direction is Direction.DOWN
+
+
+def test_pin_bar_no_signal_on_a_balanced_candle():
+    strategy = PinBar(bar_size=3)
+    assert strategy.decide(_history([10.0, 11.0, 10.5])) is None
+
+
+def test_pin_bar_no_signal_without_a_completed_candle():
+    strategy = PinBar(bar_size=3)
+    assert strategy.decide(_history([1.0, 1.1])) is None
+
+
+def test_pin_bar_does_not_refire_on_consecutive_matching_shapes():
+    strategy = PinBar(bar_size=3)
+    prices = [10.0, 7.0, 9.8, 10.0, 7.0, 9.8]  # two hammers back to back
+    decisions = [strategy.decide(_history(prices[: i + 1])) for i in range(len(prices))]
+    fired = [d is not None for d in decisions]
+    assert fired.count(True) == 1
+
+
+def test_forex_registry_has_all_eight_strategies():
     assert set(REGISTRY) == {
         "random-direction", "ma-crossover", "rsi-mean-reversion", "macd-momentum",
-        "bollinger-mean-reversion", "ema-trend",
+        "bollinger-mean-reversion", "ema-trend", "engulfing-bar", "pin-bar",
     }
