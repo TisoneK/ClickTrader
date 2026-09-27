@@ -4,7 +4,7 @@ from clicktrader.harness import replay
 from clicktrader.ledger import DecisionLedger, read_ledger
 from clicktrader.model import Contract, Side, Tick
 from clicktrader.stats import bonferroni_z
-from clicktrader.strategies import FixedContract, History, LowDigitOver, RandomControl, StreakReversal
+from clicktrader.strategies import Decision, FixedContract, History, LowDigitOver, RandomControl, StreakReversal
 from clicktrader.synthetic import synthetic_ticks
 
 
@@ -46,6 +46,60 @@ def test_contract_settles_on_the_next_tick():
     replay(FixedContract(Contract(Side.OVER, 4)), ticks, split=0.5, ledger=ledger)
     first = ledger.rows[0]
     assert (first.digit_seen, first.settle_digit, first.won) == (0, 9, True)
+
+
+class AlwaysBetOverFourForDuration:
+    """A fixed strategy that declares its own contract duration, so the harness's multi-tick settlement
+    can be tested without dragging a whole Over/Under filter into it."""
+
+    def __init__(self, duration: int) -> None:
+        self.name = f"always-over-4(duration={duration})"
+        self._duration = duration
+
+    def decide(self, history: History) -> Decision:
+        return Decision(Contract(Side.OVER, 4), 1.0, "always", duration=self._duration)
+
+
+# 12 ticks, split at 6. Tick 5 is the only 9 before the split and tick 11 the only one after it, which
+# makes "settled 5 ticks later" distinguishable from "settled on the next tick".
+_DURATION_DIGITS = [1, 1, 1, 1, 1, 9, 1, 1, 1, 1, 1, 0]
+
+
+def _digit_ticks(digits: list[int]) -> list[Tick]:
+    return [Tick(i, f"1.{d}") for i, d in enumerate(digits)]
+
+
+def test_a_multi_tick_contract_settles_its_own_duration_later():
+    ledger = DecisionLedger()
+    replay(AlwaysBetOverFourForDuration(5), _digit_ticks(_DURATION_DIGITS), split=0.5, ledger=ledger)
+    first = ledger.rows[0]
+    assert (first.digit_seen, first.duration, first.settle_digit, first.won) == (1, 5, 9, True)
+
+
+def test_a_duration_that_runs_past_the_segment_is_skipped_not_graded():
+    ledger = DecisionLedger()
+    result = replay(
+        AlwaysBetOverFourForDuration(5), _digit_ticks(_DURATION_DIGITS), split=0.5, ledger=ledger, log_skips=True
+    )
+    # only the decisions whose settle tick lands inside the segment can be graded: one per half
+    assert result.in_sample.bets == 1
+    assert result.out_of_sample.bets == 1
+    ungraded = [r for r in ledger.rows if r.action == "skip" and "no settling tick" in r.reason]
+    assert len(ungraded) == 8  # the four tail ticks in each half that a 5-tick contract cannot reach
+
+
+def test_the_same_ticks_at_one_tick_duration_are_all_graded():
+    result = replay(AlwaysBetOverFourForDuration(1), _digit_ticks(_DURATION_DIGITS), split=0.5)
+    assert result.in_sample.bets == 5
+    assert result.out_of_sample.bets == 5
+
+
+def test_a_multi_tick_replay_finds_no_edge_either():
+    # A long duration changes nothing about the arithmetic: each tick's digit is still uniform, so the
+    # contract's win probability (and therefore the payout) is unchanged and EV stays at the pricing's.
+    result = replay(AlwaysBetOverFourForDuration(3), list(synthetic_ticks(40_000, seed=31)))
+    mean, lo, hi = result.out_of_sample.return_per_stake
+    assert lo < -0.05 < hi
 
 
 def test_split_is_mandatory():

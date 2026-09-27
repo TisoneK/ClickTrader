@@ -26,6 +26,10 @@ class LedgerRow:
     contract: str | None = None
     stake: float | None = None
     settle_digit: int | None = None
+    duration: int | None = None
+    """How many ticks the contract ran before that settling tick — ``1`` for the one-tick contracts
+    every strategy but the multi-tick ones trades. Kept on the row so a replay can be diffed against
+    a live session that used a different duration (executor.py passes ``Decision.duration`` through)."""
     won: bool | None = None
     pnl: float | None = None
     balance: float | None = None

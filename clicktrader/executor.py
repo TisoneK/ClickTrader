@@ -60,6 +60,12 @@ def run(
     close to instant for a 1-tick contract. `tick_source`'s own connection just queues incoming ticks
     while this loop is briefly not reading it, the same as any consumer that pauses a moment.
 
+    The contract's duration is the strategy's own (`Decision.duration`, settled the same number of
+    ticks later by `harness._run_segment`), passed straight through to `place_digit_contract` — a
+    strategy that declares a 5-tick contract is not silently traded as a 1-tick one. A caller setting
+    `settle_timeout` should scale it with the duration it expects: a 5-tick contract on a 1-second
+    symbol settles in about 5 seconds, which a too-small timeout would report as a stall.
+
     `on_row`, if given, is called with every `LedgerRow` the instant it's produced — including "skip"
     rows, which are most of them on a selective strategy. There is no console output otherwise: a long
     run with nothing printed looks identical to a frozen one, so a caller that wants to watch this live
@@ -98,7 +104,10 @@ def run(
             )
             continue
 
-        bought = place_digit_contract(trade_ws, decision.contract, symbol=symbol, stake=stake, currency=currency)
+        bought = place_digit_contract(
+            trade_ws, decision.contract, symbol=symbol, stake=stake, currency=currency,
+            duration=decision.duration,
+        )
         settlement = wait_for_settlement(trade_ws, bought.contract_id, timeout=settle_timeout)
         won = settlement.status == "won"
         risk.record(settlement.profit)
@@ -111,6 +120,7 @@ def run(
             LedgerRow(
                 seen.ts, index, seen.digit, strategy.name, "bet", decision.reason,
                 contract=str(decision.contract), stake=stake, settle_digit=settle_digit,
-                won=won, pnl=settlement.profit, balance=risk.session_pnl, account_balance=account_balance,
+                duration=decision.duration, won=won, pnl=settlement.profit, balance=risk.session_pnl,
+                account_balance=account_balance,
             )
         )

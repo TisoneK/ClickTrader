@@ -1,6 +1,9 @@
 """Layer 2: replay a strategy over recorded ticks, and be hostile to the result.
 
-- A contract decided on tick ``i`` settles on tick ``i + 1`` (one-tick digit contracts).
+- A contract decided on tick ``i`` settles on tick ``i + decision.duration`` — one tick later for
+  the ordinary digit contract, more for the multi-tick durations Deriv also quotes. A decision is
+  only graded when that settling tick falls inside the segment being run; the tail ticks that a long
+  duration cannot settle inside are passed over rather than graded against a tick they don't reach.
 - The recording is split chronologically. The verdict is drawn from the out-of-sample half only; the
   in-sample half is shown, labelled, and never trusted.
 - A random control runs over the same ticks, so the report always shows what knowing nothing earns.
@@ -120,7 +123,8 @@ def _run_segment(
     seg = SegmentResult(label=label, ticks=stop - start, z=z)
     balance = peak = 0.0
     streak = 0
-    # The last tick of the segment has no settling tick inside it, so decisions stop one short.
+    # The last tick of the segment has no settling tick inside it, so decisions stop one short. With a
+    # duration longer than one tick the same rule applies further from the end (`settle_index` below).
     for i in range(start, stop - 1):
         history = History(ticks, i + 1)
         decision = strategy.decide(history)
@@ -129,7 +133,18 @@ def _run_segment(
             if ledger is not None and log_skips:
                 ledger.append(LedgerRow(seen.ts, i, seen.digit, strategy.name, "skip", "no signal", balance=balance))
             continue
-        settle = ticks[i + 1].digit
+        settle_index = i + decision.duration
+        if settle_index > stop - 1:
+            if ledger is not None and log_skips:
+                ledger.append(
+                    LedgerRow(
+                        seen.ts, i, seen.digit, strategy.name, "skip",
+                        f"no settling tick {decision.duration} ticks ahead inside this segment",
+                        balance=balance,
+                    )
+                )
+            continue
+        settle = ticks[settle_index].digit
         pnl = decision.contract.settle(decision.stake, settle)
         won = pnl > 0
         seg.bets += 1
@@ -148,7 +163,7 @@ def _run_segment(
                 LedgerRow(
                     seen.ts, i, seen.digit, strategy.name, "bet", decision.reason,
                     contract=str(decision.contract), stake=decision.stake,
-                    settle_digit=settle, won=won, pnl=pnl, balance=balance,
+                    settle_digit=settle, duration=decision.duration, won=won, pnl=pnl, balance=balance,
                 )
             )
     return seg

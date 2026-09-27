@@ -48,9 +48,23 @@ class History(Sequence[Tick]):
 
 @dataclass(frozen=True)
 class Decision:
+    """One bet: which contract, how much, and why.
+
+    ``duration`` is how many ticks the contract runs before its exit spot is read. ``1`` is the
+    one-tick contract every other strategy here trades; Deriv quotes the same Over/Under barriers at
+    2-5 ticks too, and the claim that comes with them is that a longer run absorbs a bad single tick.
+    The harness settles at ``tick + duration`` accordingly (`harness._run_segment`), rather than
+    hard-coding one tick.
+    """
+
     contract: Contract
     stake: float
     reason: str
+    duration: int = 1
+
+    def __post_init__(self) -> None:
+        if self.duration < 1:
+            raise ValueError(f"duration must be at least 1 tick, got {self.duration}")
 
 
 class Strategy(Protocol):
@@ -177,6 +191,63 @@ class ColdTailReactiveOver:
         )
 
 
+class ColdLossSetOverUnder:
+    """The user's Over/Under video claim, which is *not* the same filter as `ColdTailOverUnder` in
+    two ways that matter, so it is registered separately rather than treated as a duplicate:
+
+    - it prices the **combined** frequency of every digit the contract loses on, instead of testing
+      each watched digit on its own against a per-digit cap; and
+    - that losing set **includes the barrier digit itself** (Over 3 loses on 0, 1, 2, 3 — so digit 3
+      is part of the filter, where `ColdTailOverUnder` deliberately never checks it); and
+    - the thresholds come from the video as absolute tail shares ("digits 7, 8 and 9 together under
+      20%"), not as a per-digit percentage.
+
+    For Over(b) the losing set is 0..b; for Under(b) it is b..9 — in both cases exactly the digits a
+    win excludes. The claim is that when that set has been quiet over the window, the next tick is
+    likelier to land outside it. Included to be tested, not believed: a cold set in a window of
+    independent draws predicts nothing about the next one (DESIGN.md).
+
+    ``max_share`` has no default on purpose — it is the claim's own threshold, not something this
+    code should guess silently.
+    """
+
+    def __init__(
+        self,
+        side: Side,
+        barrier: int,
+        *,
+        max_share: float,
+        window: int = 100,
+        duration: int = 1,
+        stake: float = 1.0,
+    ) -> None:
+        self._contract = Contract(side, barrier)  # validates the barrier
+        self._loss_digits = tuple(range(0, barrier + 1)) if side is Side.OVER else tuple(range(barrier, 10))
+        suffix = f", duration={duration}" if duration != 1 else ""
+        self.name = (
+            f"cold-loss-set-{side.value}(barrier={barrier}, window={window}, "
+            f"max_share={max_share:.1%}{suffix})"
+        )
+        self._window = window
+        self._max_share = max_share
+        self._duration = duration
+        self._stake = stake
+
+    def decide(self, history: History) -> Decision | None:
+        if len(history) < self._window:
+            return None
+        freqs = _digit_frequencies(history.last_digits(self._window))
+        share = sum(freqs[d] for d in self._loss_digits)
+        if share >= self._max_share:
+            return None
+        return Decision(
+            self._contract,
+            self._stake,
+            f"losing digits {list(self._loss_digits)} together {share:.1%} < {self._max_share:.1%} (window={self._window})",
+            duration=self._duration,
+        )
+
+
 class ParityCounterTrend:
     """Two Even/Odd videos' claim, differing only in how "dominant" gets decided:
 
@@ -296,6 +367,45 @@ class LowDigitOver:
         return Decision(self._contract, self._stake, f"last digit {last} <= barrier {self._barrier}")
 
 
+class RepeatDigitReversal:
+    """The user's second Over/Under claim: wait for the *same* digit to print ``run`` times in a row,
+    then bet the 80% contract away from it — a run of identical low digits (0-4) triggers Over(1)
+    (wins on 2-9), a run of identical high digits (5-9) triggers Under(8) (wins on 0-7). The video's
+    own example is two or three 0s in a row, then Over 1.
+
+    The trigger is an exact repeat, not merely "recent ticks were low": ``1, 2`` does not fire,
+    ``2, 2`` does. Included to be tested, not believed: digits are independent, so a run carries no
+    information about the next one (DESIGN.md) — and at 80% per tick the contract still pays only
+    ``payout = 0.95/p``, so a win returns well under one stake.
+    """
+
+    def __init__(self, *, run: int = 2, duration: int = 1, stake: float = 1.0) -> None:
+        if run < 2:
+            raise ValueError("run must be at least 2 — a repeat needs a digit to repeat")
+        suffix = f", duration={duration}" if duration != 1 else ""
+        self.name = f"repeat-digit-reversal(run={run}{suffix})"
+        self._run = run
+        self._duration = duration
+        self._stake = stake
+        self._low = Contract(Side.OVER, 1)  # wins on digits 2-9
+        self._high = Contract(Side.UNDER, 8)  # wins on digits 0-7
+
+    def decide(self, history: History) -> Decision | None:
+        if len(history) < self._run:
+            return None
+        recent = history.last_digits(self._run)
+        if len(set(recent)) != 1:
+            return None
+        digit = recent[0]
+        contract = self._low if digit <= 4 else self._high
+        return Decision(
+            contract,
+            self._stake,
+            f"{self._run} x digit {digit} in a row {recent} — betting away from it",
+            duration=self._duration,
+        )
+
+
 REGISTRY: dict[str, Callable[[], Strategy]] = {
     "random": lambda: RandomControl(seed=1),
     "over-4": lambda: FixedContract(Contract(Side.OVER, 4)),
@@ -308,6 +418,11 @@ REGISTRY: dict[str, Callable[[], Strategy]] = {
     "cold-tail-under-6": lambda: ColdTailOverUnder(Side.UNDER, 6),
     "cold-tail-under-7": lambda: ColdTailOverUnder(Side.UNDER, 7),
     "cold-tail-reactive-over-2": lambda: ColdTailReactiveOver(barrier=2),
+    "cold-loss-set-over-3": lambda: ColdLossSetOverUnder(Side.OVER, 3, max_share=0.375),
+    "cold-loss-set-under-7": lambda: ColdLossSetOverUnder(Side.UNDER, 7, max_share=0.20),
+    "cold-loss-set-over-3-5tick": lambda: ColdLossSetOverUnder(Side.OVER, 3, max_share=0.375, duration=5),
+    "repeat-digit-run-2": lambda: RepeatDigitReversal(run=2),
+    "repeat-digit-run-3": lambda: RepeatDigitReversal(run=3),
     "parity-counter-trend-threshold": lambda: ParityCounterTrend(dominance="threshold"),
     "parity-counter-trend-majority": lambda: ParityCounterTrend(dominance="majority"),
     "martingale-low-digit-over": lambda: MartingaleOnLoss(

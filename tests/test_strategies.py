@@ -3,12 +3,14 @@ import pytest
 from clicktrader.harness import replay
 from clicktrader.model import Contract, Side, Tick
 from clicktrader.strategies import (
+    ColdLossSetOverUnder,
     ColdTailOverUnder,
     ColdTailReactiveOver,
     Decision,
     History,
     MartingaleOnLoss,
     ParityCounterTrend,
+    RepeatDigitReversal,
 )
 from clicktrader.synthetic import synthetic_ticks
 
@@ -70,6 +72,96 @@ def test_cold_tail_reactive_needs_both_the_filter_and_the_live_trigger():
     # last digit qualifies but the filter doesn't (0 is hot)
     hot_tail = [0, 3, 4, 5, 6, 7, 8, 9, 2, 1]
     assert strategy.decide(_history(hot_tail)) is None
+
+
+# --- ColdLossSetOverUnder --------------------------------------------------
+
+
+def test_cold_loss_set_fires_when_the_combined_losing_share_is_under_the_claim():
+    # Over(3) loses on 0, 1, 2 and 3 -> 3 of 10 digits is a 30% losing share, inside the video's band
+    strategy = ColdLossSetOverUnder(Side.OVER, 3, window=10, max_share=0.375, stake=1.0)
+    decision = strategy.decide(_history([0, 1, 2, 4, 5, 6, 7, 8, 9, 9]))
+    assert decision is not None
+    assert decision.contract == Contract(Side.OVER, 3)
+
+
+def test_cold_loss_set_does_not_fire_when_the_losing_share_reaches_the_claim():
+    strategy = ColdLossSetOverUnder(Side.OVER, 3, window=10, max_share=0.375, stake=1.0)
+    # 0, 1, 2 and 3 are 4 of 10 digits: a 40% losing share, the top of the video's own 35-40% band
+    assert strategy.decide(_history([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])) is None
+
+
+def test_cold_loss_set_counts_the_barrier_digit_cold_tail_deliberately_ignores():
+    # These are not the same claim. With digit 3 hot but 0, 1 and 2 each cold, this strategy's combined
+    # losing set 0-3 is 70% so it stays out, while ColdTailOverUnder -- which never checks the barrier
+    # digit -- sees 0, 1 and 2 cold and fires.
+    digits = [0, 1, 2] + [3] * 11 + [4, 5, 6, 7, 8, 9]
+    assert len(digits) == 20
+    assert ColdLossSetOverUnder(Side.OVER, 3, window=20, max_share=0.375).decide(_history(digits)) is None
+    assert ColdTailOverUnder(Side.OVER, 3, window=20).decide(_history(digits)) is not None
+
+
+def test_cold_loss_set_under_watches_the_digits_a_win_excludes():
+    strategy = ColdLossSetOverUnder(Side.UNDER, 7, window=10, max_share=0.20, stake=1.0)
+    hot = [7, 8, 9, 0, 1, 2, 3, 4, 5, 6]  # 7, 8 and 9 together are 30%, over the video's 20% ceiling
+    cold = [0, 1, 2, 3, 4, 5, 6, 0, 1, 2]  # none of 7, 8, 9 appear at all
+    assert strategy.decide(_history(hot)) is None
+    assert strategy.decide(_history(cold)).contract == Contract(Side.UNDER, 7)
+
+
+def test_cold_loss_set_needs_a_full_window_and_a_stated_threshold():
+    strategy = ColdLossSetOverUnder(Side.OVER, 3, window=10, max_share=0.5)
+    assert strategy.decide(_history([9] * 9)) is None
+    with pytest.raises(TypeError):
+        ColdLossSetOverUnder(Side.OVER, 3)  # max_share is the claim's own number, never guessed
+
+
+# --- RepeatDigitReversal ---------------------------------------------------
+
+
+def test_repeat_digit_reversal_bets_away_from_a_low_run():
+    strategy = RepeatDigitReversal(run=2, stake=1.0)
+    decision = strategy.decide(_history([3, 2, 0, 0]))
+    assert decision is not None
+    assert decision.contract == Contract(Side.OVER, 1)  # wins on digits 2-9
+
+
+def test_repeat_digit_reversal_bets_away_from_a_high_run():
+    strategy = RepeatDigitReversal(run=2, stake=1.0)
+    decision = strategy.decide(_history([3, 2, 9, 9]))
+    assert decision is not None
+    assert decision.contract == Contract(Side.UNDER, 8)  # wins on digits 0-7
+
+
+def test_repeat_digit_reversal_needs_an_exact_repeat_not_merely_low_digits():
+    strategy = RepeatDigitReversal(run=2, stake=1.0)
+    assert strategy.decide(_history([5, 2, 3])) is None
+    assert strategy.decide(_history([5, 2, 2])).contract == Contract(Side.OVER, 1)
+
+
+def test_repeat_digit_reversal_splits_low_from_high_at_the_midpoint():
+    strategy = RepeatDigitReversal(run=2, stake=1.0)
+    assert strategy.decide(_history([4, 4])).contract == Contract(Side.OVER, 1)
+    assert strategy.decide(_history([5, 5])).contract == Contract(Side.UNDER, 8)
+
+
+def test_repeat_digit_reversal_respects_the_run_length():
+    strategy = RepeatDigitReversal(run=3, stake=1.0)
+    assert strategy.decide(_history([1, 2, 2])) is None
+    assert strategy.decide(_history([1, 2, 2, 2])).contract == Contract(Side.OVER, 1)
+
+
+def test_repeat_digit_reversal_rejects_a_run_shorter_than_two():
+    with pytest.raises(ValueError):
+        RepeatDigitReversal(run=1)
+
+
+# --- multi-tick duration ---------------------------------------------------
+
+
+def test_decision_rejects_a_duration_shorter_than_one_tick():
+    with pytest.raises(ValueError):
+        Decision(Contract(Side.OVER, 4), 1.0, "always", 0)
 
 
 # --- ParityCounterTrend ----------------------------------------------------
@@ -170,6 +262,25 @@ def test_cold_tail_finds_no_edge_on_a_uniform_feed():
     oos = result.out_of_sample
     assert oos.bets > 500
     assert oos.expected_hit_rate == pytest.approx(0.7)  # Over(2) wins on digits 3-9
+    assert result.verdict.startswith(("No edge", "Return per stake", "Worse than the pricing"))
+
+
+def test_cold_loss_set_finds_no_edge_on_a_uniform_feed():
+    result = replay(
+        ColdLossSetOverUnder(Side.OVER, 3, window=100, max_share=0.375, stake=0.10),
+        list(synthetic_ticks(60_000, seed=23)),
+    )
+    oos = result.out_of_sample
+    assert oos.bets > 500
+    assert oos.expected_hit_rate == pytest.approx(0.6)  # Over(3) wins on digits 4-9
+    assert result.verdict.startswith(("No edge", "Return per stake", "Worse than the pricing"))
+
+
+def test_repeat_digit_reversal_finds_no_edge_on_a_uniform_feed():
+    result = replay(RepeatDigitReversal(run=2, stake=0.10), list(synthetic_ticks(60_000, seed=24)))
+    oos = result.out_of_sample
+    assert oos.bets > 500
+    assert oos.expected_hit_rate == pytest.approx(0.8)  # both triggered contracts win on 8 of 10 digits
     assert result.verdict.startswith(("No edge", "Return per stake", "Worse than the pricing"))
 
 
