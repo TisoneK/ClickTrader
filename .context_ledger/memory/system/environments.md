@@ -30,11 +30,12 @@ block (and its "last verified" date) every time you run on it again.
 -->
 
 ---
-## bao's Mac (last verified 2026-09-24)
+## bao's Mac (last verified 2026-09-27)
 - **Identify by:** macOS (darwin 24.6.0, x86_64), checkout at `/Users/bao/Code/ClickTrader`
 - **OS:** macOS; bash
 - **Runtimes:** system `python3` is 3.9.6 — too old (`requires-python >=3.11`) and there is no bare `python`; uv at `~/.local/bin/uv` with CPython 3.10–3.13 managed. Repo venv: `uv venv --python 3.12 .venv && uv pip install -e '.[dev]' --python .venv/bin/python`
-- **Verified commands:** `.venv/bin/python -m pytest -q` (45 passed) · `.venv/bin/clicktrader simulate|check|replay`
+- **Verified commands:** `.venv/bin/python -m pytest -q` (223 passed, 2026-09-27) · `.venv/bin/clicktrader simulate|check|replay|replay-all|risk-replay|forex-replay` · `sh .context_ledger/core/bin/ledger-gates run pre-commit` (green; discovers `.venv/bin/python`) · the POSIX `sh .context_ledger/core/bin/ledger-*` helpers all work here
+- **Recordings on this checkout:** `recordings/live-deriv.jsonl` (8,000 real Deriv ticks) and `recordings/live-cryptonichub.jsonl` (7,585 real browser-recorded ticks) are committed-adjacent local data — small enough that most selective digit strategies land `NO VERDICT` rather than a verdict; `recordings/forex/` holds the EUR/USD captures.
 - **Quirks:** `ledger-gates` auto-discovers `python -m pytest`, which fails here (no `python`) — explicit gates are registered in `workflows/gates.conf`. `git push` from an agent session in the Claude desktop app was blocked by its auto-mode classifier (2026-09-24). The context-ledger package clone lives at `~/Code/context` (not `~/Code/context-ledger` as the package QUICKSTART says).
 
 ---

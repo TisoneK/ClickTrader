@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260927T104420Z-Zara-9e119b17",
+  "type": "release",
+  "session": "S008",
+  "agent": "Zara",
+  "created": "2026-09-27T10:44:20Z",
+  "issue": "deriv-over-under-variants",
+  "body": "Shipped all three variants in a8e476b. ColdLossSetOverUnder (bundled losing-set share, barrier digit included, notes' own thresholds), RepeatDigitReversal (exact 2-3 repeat then the 80% contract away from it), and Decision.duration + multi-tick settlement in harness._run_segment with the live executor passing it through. 18 new tests, 223 passing, pre-commit and exit gates green, ledger-mem lint clean. Replayed at batch-corrected z=2.58 on both real recordings: every new registry entry is 'No edge' or 'NO VERDICT' -- the 0.95/p algebra held. cold-loss-set-under-7 warrants a note rather than a bug hunt: it took 83 in-sample bets and 0 out-of-sample because its 20% ceiling is far below the ~30% 7/8/9 share the feed actually shows, and every qualifying window sits in the recording's first ~40% (P-2026-09-27-4).",
+  "paths": [],
+  "refs": ["a8e476b"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}

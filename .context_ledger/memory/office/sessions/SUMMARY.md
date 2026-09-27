@@ -32,6 +32,16 @@ records.
 -->
 
 ---
+- **2026-09-27 — Session 7** — Kwame / deepseek/deepseek-v4-flash — validated the three candlestick forex strategies (all `NO VERDICT` at their shipped bar_size=10, so unjudgeable rather than bad), shipped `record-deriv --progress-every` and `forex-replay-all`, and researched where positive EV could actually live.
+  Key facts: digits are closed more strongly than "-5%" — the measured payout is `0.95/p` at every barrier, so the platform re-prices whenever the probability moves and no feed finding can create a digit edge; the only avenue algebra does not rule out is Deriv's deliberately biased synthetics, and only if their quoted ROI is fixed rather than probability-scaled (unmeasurable until payouts are recorded — B-2026-09-27-1).
+  Detail: .context_ledger/memory/office/sessions/2026-09-27-7/notes.md.
+
+---
+- **2026-09-27 — Session 8** — Zara / deepseek/deepseek-v4-flash — built the three Over/Under claims the user's strategy notes describe but the repo lacked, and tested them: `ColdLossSetOverUnder` (the bundled losing-set filter that includes the barrier digit), `RepeatDigitReversal` (exact repeated digit, then the 80% contract away from it), and `Decision.duration` + multi-tick settlement.
+  Key facts: 223 tests green; replayed at batch-corrected z=2.58 on both real recordings, every new strategy is "No edge" or "NO VERDICT", so the `0.95/p` algebra held for all three. The Under 7 filter is effectively a never-trade — its 20% ceiling sits far below the ~30% share the feed actually delivers — so it took 83 in-sample bets and 0 out-of-sample (P-2026-09-27-4). Multi-tick duration changed nothing measurable (P-2026-09-27-5).
+  Detail: summary only.
+
+---
 - **2026-09-26 — Session 5** — Njeri / deepseek-flash — recovery: `main` reset to `origin/main` after local sessions 3–4 deleted the entire `clicktrader/` package and committed `.env` as a tracked backup; the tree is restored, 177 tests green, and the secret-bearing commit is unreachable from every ref and was never pushed.
   Key facts: the reset was the whole fix (all ten unpushed local commits belonged to that session); `.env` was rebuilt from the backup copy before the reset; `gates.conf`'s `.venv/bin/python` cannot run on this Windows checkout, so the pre-commit gate fails environmentally (logged in `inefficiencies/log.md`).
   Detail: .context_ledger/memory/office/sessions/notes.md — "2026-09-26 — Njeri / deepseek-flash (Session 5)".
