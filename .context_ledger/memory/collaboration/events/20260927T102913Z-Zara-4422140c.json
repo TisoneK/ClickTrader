@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260927T102913Z-Zara-4422140c",
+  "type": "claim",
+  "session": "S008",
+  "agent": "Zara",
+  "created": "2026-09-27T10:29:13Z",
+  "issue": "deriv-over-under-variants",
+  "body": "Implement the three Over/Under variants the user's strategy notes describe but the repo lacks: (1) ColdLossSetOverUnder - the bundled losing-digit share filter including the barrier digit (Over 3: 0-3 combined <37.5%; Under 7: 7-9 combined <20%), vs the shipped ColdTailOverUnder which checks watch digits individually and excludes the barrier; (2) RepeatDigitReversal - run of identical consecutive digits then bet the 80% contract away from them (low run -> Over 1, high run -> Under 8); (3) multi-tick duration (1-5 ticks) in Decision + harness settlement, which today is hard-coded to one tick. All digit strategies are algebraically closed at -5% EV (payout = 0.95/p measured at every barrier), so these are claim-killers to register and replay against real ticks, not candidates.",
+  "paths": ["clicktrader/strategies.py", "clicktrader/harness.py", "clicktrader/model.py", "clicktrader/cli.py", "tests/test_strategies.py", "tests/test_harness.py"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}

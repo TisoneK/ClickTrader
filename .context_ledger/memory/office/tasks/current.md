@@ -1,10 +1,10 @@
 # Current Task (overwrite each session)
 
 Holds exactly one task — the one being worked on right now. Set it at
-session start (protocol Step 3), clear it at session end (Step 15). If
-you find a stale in-progress entry here, a prior session died mid-task —
-its roster row (if left behind) says who was here; check the session
-entry and backlog before starting.
+session start (protocol Step 3), clear it at session end (Step 15). If you
+find a stale in-progress entry here, a prior session died mid-task — its
+roster row (if left behind) says who was here; check the session entry
+and backlog before starting.
 
 <!-- TEMPLATE — replace everything below this comment:
 - **Session:** YYYY-MM-DD — <agent> / <model>
@@ -12,25 +12,20 @@ entry and backlog before starting.
 - **Status:** blocked (push not permitted from this session; target platform unknown — P-2026-09-24-1) | done | blocked (<blocker>)
 -->
 
-- **Session:** 2026-09-26 — Femi / claude-sonnet-5
-- **Task:** User shared "The Candlestick Trading Bible" PDF and asked whether to fold its notes into the ledger. Declined to transcribe the book itself into the repo (public, MIT-licensed — republishing copyrighted chapters under that license was flagged to the user as a real legal exposure, not a style nitpick; freely-downloadable and citable are not the same as freely-reproducible). Agreed path instead: extract pattern *definitions* as original strategy code, citing the technique by name only. Shipped three: `EngulfingBar`, `PinBar` (4c6724a), and `InsideBar` (b3f7be0) in `clicktrader/forex/strategies.py`, backed by a new `clicktrader/forex/candles.py` (ticks have no OHLC shape on their own — needed a bar-aggregation layer that indicators.py's tick-level approximation didn't need).
-- **Status:** done. All three confirmed running against the real EUR/USD recording (NO VERDICT in every case — below the 500-bet threshold, same as every other forex strategy at this sample size; InsideBar's 114 out-of-sample bets is fewer than the other two's, expected since it only fires on a breakout rather than every bar formation). DESIGN.md deliberately not touched, matching precedent (8ad5c9e): it gets a "what's been tested" update once a real verdict lands, not at registration time. InsideBar was initially deferred as "a bigger lift" and offered to the user as a follow-up rather than just built — corrected on sight ("You could have added that too but explicitly say that"); logged as a standing note in this session's own memory, not just this project's, since it's a working-style correction rather than a ClickTrader-specific fact.
+- **Session:** 2026-09-27 — Zara / deepseek/deepseek-v4-flash (S008)
+- **Task:** The user shared two strategy write-ups — the "Over 3 & Under 7" asymmetric high-probability setups with a 100-tick digit-frequency filter, the "Over 1 / Under 8" mean-reversion setups entered after a digit repeats 2–3 times consecutively, and a Rise/Fall vs Over/Under comparison note. Most of it is already in the repo and already settled (`cold-tail-over-3`, `cold-tail-under-7`, `low-digit-over`, `StreakReversal`; digits are algebraically closed at −5% because the measured payout is `0.95/p` at every barrier). Three things the notes describe are genuinely absent, and the user chose to have all three built and tested: (1) the **bundled** losing-set share filter including the barrier digit (Over 3: digits 0–3 combined under ~37.5%; Under 7: digits 7–9 combined under 20%) versus the shipped per-digit, barrier-excluding `ColdTailOverUnder`; (2) a **repeat-run** reversal (2–3 identical digits in a row, then bet the 80% contract away from them — low run → Over 1, high run → Under 8); (3) **multi-tick duration** (1–5 ticks), which the harness hard-codes to one tick today.
+- **Status:** in progress — implementing `ColdLossSetOverUnder`, `RepeatDigitReversal`, and `Decision.duration` + harness settlement.
 
-**Below — the previous session's thread (Njeri), kept as reference, not as a live task.**
+**Below — the two previous sessions' threads, kept as reference, not as a live task.**
 
-- **Session:** 2026-09-26 — Njeri / deepseek-flash
-- **Task:** no task in flight. This was a recovery session: undo local sessions 3–4 (deleted `clicktrader/`, committed `.env` as a tracked backup), reset `main` to `origin/main`. Standing target for the next session is in `workflows/active.md`.
-- **Status:** done
+- **Session:** 2026-09-27 — Kwame / deepseek/deepseek-v4-flash (S007)
+- **Task:** Validate Femi's three candlestick forex strategies against the real EUR/USD recording; give `record-deriv` live progress output; then (rounds 2–3) add `forex-replay-all` and research where positive EV could actually come from.
+- **Status:** done — strategies could not be judged yet (all `NO VERDICT` at shipped `bar_size=10`, filed P-2026-09-27-1); `record-deriv --progress-every` shipped; `forex-replay-all` shipped (forex replay never passed `z` through to the harness); positive-EV research memo at `office/sessions/2026-09-27-7/notes.md`, condensed to P-2026-09-27-2/-3 and B-2026-09-27-1.
 
-**Below — the previous session's thread (S002, Amara), kept as reference, not as a live task.** Her work is committed and pushed on `main` (`39e702d`, `ea89932`); her roster row is stale (flaw logged 2026-09-26).
+- **Session:** 2026-09-26 — Femi / claude-sonnet-5 (S006)
+- **Task:** User shared "The Candlestick Trading Bible" PDF and asked whether to fold its notes into the ledger. Declined to transcribe the book itself into the repo (public, MIT-licensed — republishing copyrighted chapters under that license was flagged to the user as a real legal exposure, not a style nitpick; freely-downloadable and citable are not the same as freely-reproducible). Agreed path instead: extract pattern *definitions* as original strategy code, citing the technique by name only. Shipped three: `EngulfingBar`, `PinBar` (4c6724a), and `InsideBar` (b3f7be0) in `clicktrader/forex/strategies.py`, backed by a new `clicktrader/forex/candles.py`.
+- **Status:** done. All three confirmed running against the real EUR/USD recording (NO VERDICT in every case).
 
-- **Session:** 2026-09-24/25 — Amara / claude-sonnet-5
-- **Task:** **Digit-contract side (CryptonicHub + Deriv): stable, considered done for now.** All 3 layers built, live-verified (real demo trades placed and broker-settled), 8 strategy claims tested and all converge to "No edge" as the algebra predicts. Three rigor/documentation follow-ups shipped (multiple-comparisons correction, broker-verified settlement replacing self-grading, DESIGN.md now documents all of it). Live stake sizing for a future digit-contract live-runner is deliberately left open, pending the user's own stake-sizing research videos (separate, not-yet-started track).
-
-  **New active thread: forex**, at the user's request, scoped deliberately to the safer end of what Deriv offers (fixed-stake Rise/Fall-style options on a forex underlying — the user chose this explicitly over real leveraged CFD margin trading when given the choice, since they're relying on this session's lead and have limited domain knowledge here). Unlike digit contracts, forex direction has **no algebraic proof either way** — this is genuinely open empirical territory, so pacing is more careful and the harness is honest about not having a verified payout model yet (reports hit rate vs. a 50% coin-flip null, not P/L).
-  - `clicktrader/forex/` (1323c84): new package, not an extension of `model.py`/`harness.py` (neither's assumptions hold — no fixed win probability, no one-tick settlement). Reuses `strategies.History` (gained `last_prices()`) and the generic half of `stats.py` directly.
-  - Six strategies now registered (`clicktrader.forex.strategies.REGISTRY`): `random-direction` (control), `ma-crossover`, and four standard technical-indicator claims added in 8ad5c9e — `rsi-mean-reversion`, `macd-momentum`, `bollinger-mean-reversion`, `ema-trend`. All share one "fire only when the long/short/neutral zone changes" bookkeeping helper. New `clicktrader/forex/indicators.py` (SMA/EMA/RSI/MACD/Bollinger, cross-checked against known reference behavior — a strictly rising series drives RSI to 100, etc.).
-  - **A cross-project reference slip happened and was caught by the user, then fixed** (428de1e): early docstrings named a separate, unrelated project of the user's as the source of these indicators. That project is private/unrelated and this repo is public — no reference to another of the user's projects belongs here, regardless of how accurate it would be. Full-tree grep confirmed clean afterward. Worth remembering as a standing rule, not just a one-off fix: describe techniques generically (e.g. "the standard RSI formula"), never cite where a private project happened to also implement something standard.
-  - Confirmed live: `record-deriv --symbol frxEURUSD` (or any forex pair) works through the **existing, unmodified** layer-1 pipeline — zero new code needed for recording itself. A background recording of real EUR/USD ticks has been running (`recordings/forex/live-eurusd.jsonl`, ~5,400 ticks as of last check); all six strategies run correctly against it and correctly report NO VERDICT (still below the 500-bet threshold for any of them).
-  - **`--account demo|real` added to `run-deriv`** (045a72a), at the user's explicit request — this project isn't purely for testing, so the real-money path needed to actually be reachable, not just supported by `get_otp_url` underneath with no CLI exposure. `--account real` requires its own separate `DERIV_REAL_ACCOUNT_ID` (never falls back to the demo ID), prints an explicit warning banner, and is gated by the same required, no-default `RiskGuard` limits either way. Default remains `demo`.
-- **Status:** open. Next: let the real EUR/USD recording keep accumulating, then run `forex-replay` for a real read once there's enough data. No forex live-trading/executor code exists yet (only the digit-contract side has one) — deliberately not started until the directional-accuracy question has a real answer from real data.
+- **Session:** 2026-09-24/25 — Amara / claude-sonnet-5 (S002)
+- **Task:** **Digit-contract side (CryptonicHub + Deriv): stable, considered done for now.** All 3 layers built, live-verified (real demo trades placed and broker-settled), 8 strategy claims tested and all converge to "No edge" as the algebra predicts.
+- **Status:** open (roster row stale since 2026-09-26 — logged flaw). New active thread: forex, scoped to fixed-stake Rise/Fall-style options on a forex underlying. Next: let the real EUR/USD recording keep accumulating, then run `forex-replay` for a real read once there's enough data. No forex live-trading/executor code exists yet.
