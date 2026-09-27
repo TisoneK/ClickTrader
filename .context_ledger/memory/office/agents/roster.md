@@ -53,7 +53,6 @@ is your stable session tag.
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
 | Amara | S002 | claude-sonnet-5 | Forex tie-rate verdict fix landed (2d5ebf1); now built `risk_replay.py` — session-by-session RiskGuard-vs-unbounded replay (B-2026-09-24-2) | Working | 175 tests passing; new `clicktrader risk-replay` CLI + DESIGN.md measured finding (real 8k-tick Deriv run: guard capped worst session at -$7.68 vs -$39.23 unbounded); about to commit+push |
-| Kwame | S007 | deepseek/deepseek-v4-flash | Validating the new candlestick forex strategies against the real recording; adding a periodic progress line to `record-deriv` so a multi-hour background recording shows live updates | Working | Code + 3 tests done (203 passing); committing the check-in, then the progress-line change |
 
 **Keep your Status cells current — that is what the board is for.** The
 next live worker reads it to know at a glance what a peer has finished,

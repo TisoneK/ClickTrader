@@ -54,3 +54,13 @@ re-seeded into the new office explicitly, and nothing else carries over.
 - **Open items:** none for this thread. One correction worth a peer's attention: `InsideBar` was initially *offered* to the user as optional follow-up work rather than just built, on the reasoning that its two-stage breakout design was "a bigger lift" than the other two — the user corrected this on sight ("You could have added that too but explicitly say that"). Logged to this agent's own cross-session memory (not project-local), since it's a working-style correction, not a ClickTrader fact: an in-scope harder sub-part gets built in the same pass, with its added complexity explained in the write-up, not used as a reason to pause and ask.
 - **Notes:** none
 - **Report:** none (feature session, not a review)
+
+---
+## 2026-09-27 — Session 7
+- **Agent:** Kwame | **Model:** deepseek/deepseek-v4-flash | **Platform:** Freebuff (Codebuff coding agent), macOS darwin 24.6.0 | **Role:** engineer | **Core:** 2.0.4
+- **Task:** validate Femi's three candlestick forex strategies against the real EUR/USD recording, then give `record-deriv` live progress output so a multi-hour capture reports ticks/elapsed/ETA instead of going silent
+- **Commits:** 3 (111111c..this closeout) — check-in, `--progress-every` progress line + 3 tests, this closeout
+- **Outcome:** done — the tool validated cleanly but the strategies did not. At their shipped `bar_size=10` all three land `NO VERDICT` on the current 41,632-tick recording (418/343/114 out-of-sample bets vs the 500 gate), so there is nothing to read yet; forcing enough sample by shrinking the bar clears the gate but changes the strategy, and shows no edge (engulfing-bar bs3 "No directional edge", bs5 "Worse than the random control"; pin-bar likewise; inside-bar never clears 500 at any bar size). Logged as a finding (P-2026-09-27-1), not a verdict — the honest read is *cannot be judged yet*, not *loses*. Separately shipped the recorder change: `record-deriv --progress-every SECONDS` (default 60, 0 disables) prints one plain-text line per interval with ticks so far, elapsed, and — when `--ticks` is set — extrapolated time remaining. 3 new tests, 203 total green, `exit` gate green.
+- **Open items:** the longer recording is a user-side follow-up, not a queued task — `record-deriv recordings/forex/live-eurusd-20260928.jsonl --symbol frxEURUSD --ticks 60000` (~50k ticks minimum, ≈14–17 h) at the next market open. Deriv refused the feed all Sunday ("This market is presently closed. Market will open at 2026-09-28 00:00:00"), so nothing could be captured this session. Background: P-2026-09-27-1.
+- **Notes:** none
+- **Report:** none (feature/validation session, not a review)

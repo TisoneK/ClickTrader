@@ -42,6 +42,7 @@ causes, "the current design does X because Y".
 
 | ID | Summary |
 |----|---------|
+| P-2026-09-27-1 | The three candlestick forex strategies (`EngulfingBar`, `PinBar`, `InsideBar`, shipped 4c6724a/b3f7be0) cannot be judged on the current 41,632-tick EUR/USD recording at their designed `bar_size=10`: all land `NO VERDICT` (418/343/114 out-of-sample bets vs the 500 gate). Forcing more signals by shrinking the bar clears the gate but changes the strategy, and shows no edge — engulfing-bar bs3 "No directional edge" (0.362 vs control 0.362), bs5 "Worse than the random control" (0.335 vs 0.372); pin-bar bs3 no edge (0.337 vs 0.369), bs5 worse (0.340 vs 0.386); inside-bar never clears 500 at any bar size (114–154). Note the raw hit rates (~0.33–0.44) are not the −5% story: ~15% of horizons end in a tie, which counts as a loss for either direction and drags the control down with it, which is why the harness compares against the measured control. The bs10 question needs a longer capture: ~50k ticks total (≈14–17 h) — `record-deriv recordings/forex/live-eurusd-20260928.jsonl --symbol frxEURUSD --ticks 60000`. |
 
 ## Open questions
 
