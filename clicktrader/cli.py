@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import time
 
 from .forex.harness import replay as forex_replay
 from .forex.strategies import REGISTRY as FOREX_REGISTRY
@@ -138,17 +139,47 @@ def cmd_record_live(args: argparse.Namespace) -> int:
     return 0
 
 
+def _now() -> float:
+    """Indirection around `time.monotonic` so a test can drive the progress clock without patching the
+    global `time` module out from under pytest itself."""
+    return time.monotonic()
+
+
+def _hms(seconds: float) -> str:
+    """A duration as `8m20s`, or `2h05m00s` once it passes an hour — short enough to sit on one line."""
+    total = max(0, int(seconds))
+    hours, rest = divmod(total, 3600)
+    minutes, secs = divmod(rest, 60)
+    return f"{hours}h{minutes:02d}m{secs:02d}s" if hours else f"{minutes}m{secs:02d}s"
+
+
+def _progress_line(count: int, elapsed: float, target: int | None) -> str:
+    """One plain-text progress line, not a TUI: ticks so far, time elapsed, and — only when a `--ticks`
+    target was set — a rough time remaining, extrapolated from the average rate so far (which is all a
+    steady feed honestly supports)."""
+    line = f"{count} ticks  |  {_hms(elapsed)} elapsed"
+    if target is not None and count:
+        line += f"  |  ~{_hms((target - count) * (elapsed / count))} left of {target}"
+    return line
+
+
 def cmd_record_deriv(args: argparse.Namespace) -> int:
     from .api.deriv import DEFAULT_APP_ID, DerivAPIError, stream_ticks
 
     status = 0
     with Recorder(args.out) as recorder:
         print(f"recording {args.symbol} to {args.out} — Ctrl+C to stop")
+        started = _now()
+        last_progress = started
         try:
             for record in stream_ticks(args.symbol, app_id=args.app_id or DEFAULT_APP_ID):
                 recorder.write(record)
                 if args.ticks is not None and recorder.count >= args.ticks:
                     break
+                now = _now()
+                if args.progress_every > 0 and now - last_progress >= args.progress_every:
+                    print(_progress_line(recorder.count, now - started, args.ticks))
+                    last_progress = now
         except KeyboardInterrupt:
             pass
         except DerivAPIError as exc:
@@ -325,6 +356,10 @@ def main(argv: list[str] | None = None) -> int:
     deriv.add_argument("--symbol", default="1HZ10V", help="Deriv symbol, e.g. 1HZ10V = Volatility 10 (1s) Index")
     deriv.add_argument("--app-id", type=int, help="default: Deriv's shared public test app_id (1089)")
     deriv.add_argument("--ticks", type=int, help="stop after this many ticks (default: run until Ctrl+C)")
+    deriv.add_argument(
+        "--progress-every", type=float, default=60.0, metavar="SECONDS",
+        help="print a progress line every SECONDS while recording (0 disables; default 60)",
+    )
     deriv.set_defaults(func=cmd_record_deriv)
 
     run_deriv = sub.add_parser(

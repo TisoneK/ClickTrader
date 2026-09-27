@@ -65,6 +65,55 @@ def test_run_deriv_reports_a_clean_message_when_the_otp_request_fails(monkeypatc
     assert "Deriv API error: 401: invalid token" in out
 
 
+def test_progress_line_includes_remaining_only_with_a_target():
+    from clicktrader.cli import _progress_line
+
+    assert _progress_line(1000, 500.0, None) == "1000 ticks  |  8m20s elapsed"
+    assert _progress_line(1000, 500.0, 2000) == "1000 ticks  |  8m20s elapsed  |  ~8m20s left of 2000"
+
+
+def test_record_deriv_prints_a_progress_line_at_the_interval(tmp_path, monkeypatch, capsys):
+    # The progress clock is driven directly so the test neither sleeps nor patches the global time module.
+    import clicktrader.cli as cli
+    from clicktrader.model import Tick
+    from clicktrader.recording import TickRecord
+
+    def fake_stream_ticks(symbol, *, app_id):
+        for i in range(5):
+            yield TickRecord(tick=Tick(ts=float(i), price="1.10000", symbol=symbol))
+
+    monkeypatch.setattr(deriv_api, "stream_ticks", fake_stream_ticks)
+    times = [0.0, 1.0, 2.0, 61.0, 62.0, 63.0]
+    state = {"i": 0}
+
+    def fake_now():
+        value = times[min(state["i"], len(times) - 1)]
+        state["i"] += 1
+        return value
+
+    monkeypatch.setattr(cli, "_now", fake_now)
+    out_path = tmp_path / "eurusd.jsonl"
+    assert main(["record-deriv", str(out_path), "--symbol", "frxEURUSD", "--progress-every", "60"]) == 0
+    out = capsys.readouterr().out
+    assert "3 ticks  |  1m01s elapsed" in out  # a single line, at the 61s mark
+    assert "wrote 5 ticks" in out
+
+
+def test_record_deriv_progress_can_be_disabled(tmp_path, monkeypatch, capsys):
+    import clicktrader.cli as cli
+    from clicktrader.model import Tick
+    from clicktrader.recording import TickRecord
+
+    def fake_stream_ticks(symbol, *, app_id):
+        yield TickRecord(tick=Tick(ts=1.0, price="1.10000", symbol=symbol))
+
+    monkeypatch.setattr(deriv_api, "stream_ticks", fake_stream_ticks)
+    monkeypatch.setattr(cli, "_now", lambda: 0.0)
+    out_path = tmp_path / "eurusd.jsonl"
+    assert main(["record-deriv", str(out_path), "--symbol", "frxEURUSD", "--progress-every", "0"]) == 0
+    assert "elapsed" not in capsys.readouterr().out
+
+
 def test_simulate_check_replay(tmp_path, capsys):
     rec = tmp_path / "synthetic.jsonl"
     assert main(["simulate", str(rec), "--ticks", "5000", "--seed", "4"]) == 0
