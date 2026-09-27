@@ -68,6 +68,7 @@ Full spec: `.context_ledger/core/schemas/ledger-schema.md` →
 
 | ID | Summary |
 |----|---------|
+| B-2026-09-27-1 | Record the quoted payout + contract terms alongside each Deriv forex tick (extend layer 1 using `api/deriv/trading.py`'s existing `proposal` flow), so the harness can compute EV instead of only hit rate. Without it no positive-EV claim on the Deriv side is even measurable — `forex/harness.py` says so in its own docstring, and `api/deriv/ticks.py::tick_record_from_message` currently stores price+digit only while the CryptonicHub adapter does capture payouts. Rationale + sources: P-2026-09-27-2. |
 | B-2026-09-25-1 | Harness: parameter sweeps tuned on in-sample only (e.g. trying several `window`/`threshold` values for `ColdTailOverUnder`/`ParityCounterTrend` and picking the best on in-sample before an out-of-sample check) — half of the original B-2026-09-24-3; the multiple-comparisons half is done (`stats.bonferroni_z`, `replay-all`, 99d03d9) |
 
 ### Low Priority

@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-09-27T09:06:40Z_
+_Regenerated: 2026-09-27T09:20:05Z_
 
 ## Standing params
 - **Core:** 2.0.4 (locked, verified 2026-09-27)
@@ -23,7 +23,7 @@ _Regenerated: 2026-09-27T09:06:40Z_
 ## Backlog — High priority (the top of the queue)
 (none)
 
-_1 medium, 0 low priority row(s) — see tasks/backlog.md_
+_2 medium, 0 low priority row(s) — see tasks/backlog.md_
 
 ## Logs at a glance — open only if your task touches these
 - flaws/log.md (protocol/.context_ledger friction): 3 entries, last added 2026-09-26
