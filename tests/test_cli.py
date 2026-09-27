@@ -114,6 +114,45 @@ def test_record_deriv_progress_can_be_disabled(tmp_path, monkeypatch, capsys):
     assert "elapsed" not in capsys.readouterr().out
 
 
+def test_forex_replay_all_widens_the_interval_and_reports_the_batch(tmp_path, capsys):
+    rec = tmp_path / "fx.jsonl"
+    assert main(["forex-simulate", str(rec), "--ticks", "3000", "--seed", "7"]) == 0
+    capsys.readouterr()
+    assert main(["forex-replay-all", str(rec), "--strategies", "random-direction", "ma-crossover"]) == 0
+    out = capsys.readouterr().out
+    assert "testing 2 forex strategies together" in out
+    assert "z=2.24" in out  # widened past the single-strategy 1.96 for two comparisons
+    assert "family-wise alpha" in out
+    assert "NO VERDICT" in out  # 3000 ticks is far under the report gate, as intended
+    assert "all 2 strategies: 'no directional edge' or 'NO VERDICT'" in out
+
+
+def test_forex_replay_all_flags_only_the_non_null_verdict(tmp_path, monkeypatch, capsys):
+    # The batch summary is the only new logic that isn't shared with `forex-replay`, so drive it with
+    # constructed results rather than waiting on a real recording to clear the 500-bet gate.
+    import clicktrader.cli as cli
+    from clicktrader.forex.harness import ForexReplayResult, ForexSegmentResult
+
+    def seg(label, wins, bets=600):
+        return ForexSegmentResult(label=label, ticks=bets, bets=bets, wins=wins)
+
+    def fake_replay(strategy, ticks, *, split, z):
+        # 400/600 clears the control's 0.500 outright; 300/600 straddles it.
+        oos, ctl = (seg("out-of-sample", 400), seg("control", 300))
+        if not strategy.name.startswith("ma-crossover"):
+            oos = seg("out-of-sample", 300)
+        return ForexReplayResult(strategy.name, seg("in-sample", 300), oos, ctl)
+
+    monkeypatch.setattr(cli, "forex_replay", fake_replay)
+    rec = tmp_path / "fx.jsonl"
+    rec.write_text("")
+    assert main(["forex-replay-all", str(rec), "--strategies", "random-direction", "ma-crossover"]) == 0
+    out = capsys.readouterr().out
+    assert "worth a second look" in out
+    assert "ma-crossover" in out.split("worth a second look")[1]
+    assert "random-direction" not in out.split("worth a second look")[1]
+
+
 def test_simulate_check_replay(tmp_path, capsys):
     rec = tmp_path / "synthetic.jsonl"
     assert main(["simulate", str(rec), "--ticks", "5000", "--seed", "4"]) == 0
