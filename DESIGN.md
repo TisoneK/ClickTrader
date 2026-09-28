@@ -112,6 +112,50 @@ and `--account real` are both supported, but real trading needs its own separate
 (`DERIV_REAL_ACCOUNT_ID`, distinct from the demo one) — there is no flag that reuses demo credentials
 against a real account, and no default that lands there by omission.
 
+## Two kinds of claim, and two harnesses to grade them
+
+Strategies on this side arrive in one of two shapes, and they cannot be graded the same way. The first is
+a **direction call** — "price will be higher in ten ticks" — which `clicktrader/forex/harness.py` grades
+by comparing two prices, against a random control's own measured rate.
+
+The second is a **trade**: an entry, a stop and a target. Chart methods are written this way, because that
+is what a level, a swing and a risk-reward ratio are, and the first harness cannot grade it at all. A
+method can be right about direction and still be stopped out, or wrong and still reach its target;
+comparing the entry price with the price at some fixed horizon answers a different question than the one
+the method asked. So `clicktrader/forex/trade_harness.py` walks every tick between entry and resolution
+and reports **expectancy in R**, where 1R is the distance from entry to the stop.
+
+Two things about that are easy to get wrong, so they are written down here rather than left in the code:
+
+**The control is the mirror of each trade** — the opposite direction, entered on the same tick, with the
+same two distances. A coin-flip *entry moment* is not available: a trade's stop and target are read off
+the market's own structure, so randomising the moment changes the geometry and therefore the question.
+The verdict reads the *paired* difference between a trade and its mirror rather than either absolute
+expectancy, because both share whatever the tick grid contributes on its own. On a grid coarse enough for
+one tick to jump a level, a 2:1 trade wins about half the time instead of a third, and shows a large
+positive expectancy in *both* directions — measured, not assumed. That is why the absolute number is
+printed but never treated as the answer.
+
+**A single recording cannot separate skill from trend.** Flipping the direction does not remove a trend —
+the trend is what the comparison then measures. A market that simply moved the method's way will make any
+aligned method look good, and no control fixes that; only a fresh period and a different instrument do.
+The verdict says so in as many words rather than reporting a number as a result.
+
+Reaching a chart method at all needed two pieces of machinery the project did not have. Ticks were grouped
+into bars by *count* — "a candle here is `bar_size` consecutive ticks, not a wall-clock time window (an
+hourly candle, say)" — and a `Candle` carried no timestamp, so nothing could draw the bar a chart means by
+"the 15-minute candle". And a "day" had no definition on a 24-hour feed, where the boundary is a
+convention rather than a fact about the market. `TimeCandleBuilder` and `sessions.py` supply both, with
+the roll hour as an explicit parameter (`--session-start-hour`) instead of a hidden constant.
+
+**Nothing has been judged with any of this yet, and the reason is arithmetic rather than caution.** The
+method it was built for needs *three* sessions — one to draw its outer lines from, one for the range, and
+one to trade — and the longest capture here is a single 17-hour stretch; every recording on disk yields
+exactly zero trades, checked rather than assumed. A verdict on top of that needs hundreds of resolved
+trades, and a stop/target outcome is wider-tailed than a coin flip, so the same gate demands *more*
+trades here rather than fewer. At one or two setups a day that is years of recording. No amount of
+harness work substitutes for the data, which is the honest summary of where this stands.
+
 ## Why browser automation, and when it would be wrong
 
 An LLM in the decision loop cannot work on the digit-contract side specifically: twenty to forty seconds
@@ -229,8 +273,15 @@ verdict was comparing against the wrong number. Fixed to compare against the ran
 analytically known −5% rather than an assumed one. Re-run after the fix, all five testable strategies
 correctly read "No directional edge" against real EUR/USD data.
 
-## What this is not
+**The other strategy shape has no findings yet, and that is stated rather than glossed.** A trade with a
+stop and a target is graded by `forex/trade_harness.py` instead (see "Two kinds of claim, and two
+harnesses to grade them"): it walks the ticks between entry and resolution and reports expectancy in R
+against the mirror of each trade. It is built, tested, and has produced zero trades on every recording
+this project holds — not because the method fails but because it needs three sessions of data to draw its
+levels and no capture here spans more than one. Until that changes, that mode has no verdicts, and the
+absence is the finding.
 
+## What this is not
 - **Not a system that finds an edge.** See the top of this document, and "What's been tested" above.
 - **Not an AI agent.** No model in the decision loop, on either the digit-contract or forex side —
   reproducibility and a legible reason per decision, not just speed (see "Why browser automation, and
