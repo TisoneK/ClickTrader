@@ -9,6 +9,8 @@ import time
 from .forex.harness import replay as forex_replay
 from .forex.strategies import REGISTRY as FOREX_REGISTRY
 from .forex.synthetic import synthetic_price_records
+from .forex.trade_harness import replay_trades
+from .forex.trade_strategies import TRADE_REGISTRY
 from .harness import replay
 from .ledger import DecisionLedger
 from .recording import Recorder, read_recording
@@ -124,6 +126,14 @@ def cmd_forex_replay_all(args: argparse.Namespace) -> int:
             f"all {len(names)} strategies: 'no directional edge' or 'NO VERDICT' even at the corrected "
             "interval width"
         )
+    return 0
+
+
+def cmd_forex_trade_replay(args: argparse.Namespace) -> int:
+    ticks = _load(args.recording)
+    strategy = TRADE_REGISTRY[args.strategy](session_start_hour_utc=args.session_start_hour)
+    result = replay_trades(strategy, ticks, split=args.split)
+    print(result.report())
     return 0
 
 
@@ -380,6 +390,19 @@ def main(argv: list[str] | None = None) -> int:
     fx_sim.add_argument("--seed", type=int, default=0)
     fx_sim.add_argument("--drift", type=float, default=0.0, help="per-tick price drift (default 0.0 -- driftless is the null hypothesis)")
     fx_sim.set_defaults(func=cmd_forex_simulate)
+
+    fx_trade = sub.add_parser(
+        "forex-trade-replay",
+        help="replay a stop/target forex strategy, reporting expectancy in R against the mirror of its own trades",
+    )
+    fx_trade.add_argument("recording")
+    fx_trade.add_argument("--strategy", choices=sorted(TRADE_REGISTRY), default="sneaky-pivot")
+    fx_trade.add_argument("--split", type=float, default=0.5, help="in-sample fraction (default 0.5)")
+    fx_trade.add_argument(
+        "--session-start-hour", type=int, default=0,
+        help="UTC hour a trading day starts on (default 0) -- sets what \"yesterday's range\" means",
+    )
+    fx_trade.set_defaults(func=cmd_forex_trade_replay)
 
     live = sub.add_parser(
         "record-live", help="record real ticks from a live site (layer 1 — observes, trades nothing)"

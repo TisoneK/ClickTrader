@@ -153,6 +153,23 @@ def test_forex_replay_all_flags_only_the_non_null_verdict(tmp_path, monkeypatch,
     assert "random-direction" not in out.split("worth a second look")[1]
 
 
+def test_forex_trade_replay_reports_the_mirror_control_and_refuses_a_thin_sample(tmp_path, capsys):
+    # A driftless synthetic walk is the null, and it is also far too short to clear the trade gate, so
+    # this pins the plumbing (segments, the mirror control, the paired statistic, the refusal) rather
+    # than any claim about the strategy.
+    rec = tmp_path / "fx.jsonl"
+    assert main(["forex-simulate", str(rec), "--ticks", "20000", "--seed", "4"]) == 0
+    capsys.readouterr()
+    assert main(["forex-trade-replay", str(rec), "--session-start-hour", "0"]) == 0
+    out = capsys.readouterr().out
+    assert "strategy: sneaky-pivot" in out
+    assert "[in-sample]" in out and "[out-of-sample]" in out
+    assert "control: mirror of sneaky-pivot" in out
+    assert "expectancy" in out and "paired edge over the mirror" in out
+    assert "NO VERDICT" in out
+    assert "verdict (out-of-sample only)" in out
+
+
 def test_simulate_check_replay(tmp_path, capsys):
     rec = tmp_path / "synthetic.jsonl"
     assert main(["simulate", str(rec), "--ticks", "5000", "--seed", "4"]) == 0
