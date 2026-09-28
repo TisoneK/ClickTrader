@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-09-28T19:42:41Z_
+_Regenerated: 2026-09-28T19:45:50Z_
 
 ## Standing params
 - **Core:** 2.0.4 (locked, verified 2026-09-28)
@@ -28,7 +28,7 @@ _2 medium, 0 low priority row(s) — see tasks/backlog.md_
 ## Logs at a glance — open only if your task touches these
 - flaws/log.md (protocol/.context_ledger friction): 3 entries, last added 2026-09-26
 - inefficiencies/log.md (project code/env friction): 3 entries, last added 2026-09-28
-- plans/decisions.md (ADRs in force — respected, not relitigated): 2 entries, last added 2026-09-28
+- plans/decisions.md (ADRs in force — respected, not relitigated): 3 entries, last added 2026-09-28
 
 ## Collaboration
 - 6 event(s) on file; most recent: `20260927T104420Z-Zara-9e119b17.json`
