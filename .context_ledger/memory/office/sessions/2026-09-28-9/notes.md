@@ -170,3 +170,61 @@ Second sample, same command against `recordings/forex/live-eurusd.jsonl`
   error — a reminder that "the extractor returned nothing" and "there is
   nothing to extract" look identical until you check the file's internals for
   font objects.
+
+## Round 2 — the build (after clock-out, user-directed)
+
+Composition decisions worth knowing if this code is ever revisited:
+
+- The trade family got its **own module, protocol, registry and CLI command** rather than joining the
+  direction family's. The two produce different decision types, are graded by different rules, and
+  return verdicts that are not comparable (a hit rate against a coin flip; an expectancy in R against a
+  mirror). Keeping that in the module structure means nothing has to `isinstance` its way through a
+  replay. `ADR-2` records it.
+- `TradePlan` carries **no entry price**. The harness takes the entry from the tick the decision was made
+  on, exactly as the direction harness does, so a strategy cannot state an entry it did not get.
+- The control is graded **inside the same pass** as the strategy (`_run_trade_segment` returns both
+  segments), rather than being a second strategy object replayed separately. That makes the pairing
+  exact by construction: there is no way for the control to see a different set of entries, and no way
+  for the two to land on different samples.
+- The strategy's own two discretionary escape hatches ("three wicks hold → localized floor", "scale out
+  against the biggest seller block") are **not implemented**. They are the source's own "don't be rigid"
+  carve-outs; writing them down means inventing the rule the source declined to state, which would make
+  the result a test of the invention rather than of the method.
+
+### Verification detail (real data, not synthetic)
+
+61,572-tick `recordings/forex/live-eurusd-20260928.jsonl`, snapshot to `/tmp` first so a moving file could
+not produce a moving number:
+
+```
+level ticks=61572 -> 15-minute bars completed=69  (span 16.85 h => ~69 expected)
+first bars: 00:00 1.13840/1.13775, 00:15 1.13818/1.13787, 00:30 1.13838/1.13785
+bars not aligned to the epoch grid: 0
+non-increasing bar starts: 0
+gaps (skipped intervals): []
+```
+
+Sessions per roll hour, and the levels each produces — this is the zero-trades evidence:
+
+| roll | completed sessions | levels |
+|---|---|---|
+| 00h | 0 (61,572 ticks all in one bucket) | `None` — no previous session, so no lines |
+| 06h | 1 | range 1.13913/1.13775, **swing None both sides** |
+| 08h | 1 | range 1.13913/1.13713, **swing None both sides** |
+| 12h | 1 | range 1.13913/1.13662, **swing None both sides** |
+
+So the first trade needs a third session and no capture here has one. The synthetic and hand-built
+scenarios in the tests are what demonstrate the pattern firing and grading correctly in the meantime
+(`tests/test_forex_trade_strategies.py`, `tests/test_forex_trade_harness.py`).
+
+### The measurements behind the two statistics corrections
+
+```
+driftless walk, 20k ticks, seed 3, decimals=5, step_std=5e-5, stop 2e-5 / target 4e-5
+  strategy +0.257R   mirror +0.287R     <- both positive, both artifact (barriers below the tick step)
+  paired difference  -0.03R             <- what the verdict reads
+
+100k ticks, seed 3, decimals=8, stop 2e-4 / target 4e-4, every 100 ticks
+  strategy win rate 0.321 against a theoretical 1/3   <- realized trend of the sample, not a bug
+  mirror    win rate 0.399
+```
