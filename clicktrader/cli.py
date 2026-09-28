@@ -10,7 +10,7 @@ from .forex.harness import replay as forex_replay
 from .forex.strategies import REGISTRY as FOREX_REGISTRY
 from .forex.synthetic import synthetic_price_records
 from .forex.trade_harness import replay_trades
-from .forex.trade_strategies import TRADE_REGISTRY
+from .forex.trade_strategies import TRADE_REGISTRY, build as build_trade_strategy
 from .harness import replay
 from .ledger import DecisionLedger
 from .recording import Recorder, read_recording
@@ -131,7 +131,7 @@ def cmd_forex_replay_all(args: argparse.Namespace) -> int:
 
 def cmd_forex_trade_replay(args: argparse.Namespace) -> int:
     ticks = _load(args.recording)
-    strategy = TRADE_REGISTRY[args.strategy](session_start_hour_utc=args.session_start_hour)
+    strategy = build_trade_strategy(args.strategy, session_start_hour_utc=args.session_start_hour)
     result = replay_trades(strategy, ticks, split=args.split)
     print(result.report())
     return 0
