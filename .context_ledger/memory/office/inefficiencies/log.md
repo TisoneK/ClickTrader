@@ -94,3 +94,35 @@ names them), and roll-up candidates.
 - **Prevent next time:** on a slow link, sample the download rate before retrying
   a large wheel three ways, and hand the command over instead of burning the
   session on it.
+
+---
+## 2026-09-28 — Lena / deepseek-flash
+- **Problem:** the two strategy decks the user shared are image-only PDFs (no
+  text layer — 0 `/Font` objects, 28–30 `/Image` objects each, ~12 MB per
+  15-page deck), so the Read tool's PDF path could not be used and neither
+  could plain text extraction. This machine has no `pdftotext`, and the venv
+  has no `pypdf`; both were needed before a single word of the material could
+  be read.
+- **Cost:** ~10 minutes and one failed attempt (a first render loop returned
+  14 empty pages rather than an error, which reads like "extraction is
+  impossible" when it is really "the bridge is wrong").
+- **Cause:** nothing project-specific — the repo has never needed PDF
+  handling, so no dependency for it is declared, and the deck format (slides
+  exported as images) is the least tractable kind.
+- **Workaround / fix:** macOS PDFKit through `osascript -l JavaScript` renders
+  every page to PNG with no network and no new dependency:
+  `ObjC.import('PDFKit')`, `$.PDFDocument.alloc.initWithURL($.NSURL.fileURLWithPath(p))`,
+  `page.drawWithBoxToContext($.kPDFDisplayBoxMediaBox, ctx)` into a
+  `CGBitmapContextCreate` at 2× scale, then
+  `NSBitmapImageRep.initWithCGImage(...).representationUsingTypeProperties($.NSBitmapImageFileTypePNG, ...)`.
+  Verified on both decks (14 and 15 pages). **Gotcha that cost the retry:** C
+  functions bridged into JXA must be *called* — `const cs = $.CGColorSpaceCreateDeviceRGB;`
+  passes a function reference, the bitmap context then returns null, and the
+  failure only surfaces one call later as `Invalid parameter not satisfying:
+  cgImage != NULL`. Recipe + full reading of both decks:
+  `office/sessions/2026-09-28-9/notes.md`.
+- **Prevent next time:** when a PDF yields empty text, check the file's
+  internals for font objects *before* concluding anything — `strings f.pdf |
+  grep -c "/Font"` distinguishes "no text layer" from "bad extractor" in one
+  command. On macOS, reach for PDFKit first; it is the only PDF tool this
+  machine has without installing one.
