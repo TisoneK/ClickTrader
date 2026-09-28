@@ -5,6 +5,8 @@ from __future__ import annotations
 import argparse
 import sys
 import time
+from datetime import datetime, timezone
+from pathlib import Path
 
 from .forex.harness import replay as forex_replay
 from .forex.strategies import REGISTRY as FOREX_REGISTRY
@@ -25,7 +27,55 @@ def _load(path: str):
     synthetic = sum(1 for r in records if r.extra.get("synthetic"))
     if synthetic:
         print(f"note: {synthetic}/{len(records)} records are SYNTHETIC — nothing here describes a real feed\n")
+    imported = sum(1 for r in records if r.extra.get("source") == "deriv-history")
+    if imported:
+        print(
+            f"note: {imported}/{len(records)} records were reconstructed from imported candles (four points "
+            "per bar) — the prices are the broker's, the timestamps inside each bar are not\n"
+        )
     return [r.tick for r in records]
+
+
+def cmd_history_deriv(args: argparse.Namespace) -> int:
+    # deferred like the other deriv commands: the extra is only needed if one of them actually runs
+    from .api.deriv.history import candles_backwards, ticks_from_candles
+
+    out = Path(args.out)
+    if out.exists() and out.stat().st_size and not args.overwrite:
+        print(
+            f"{out} already holds data and recordings are append-only, so importing history into it would "
+            "interleave old bars with new ones and break the time order every bar builder depends on.\n"
+            "Pass --overwrite to replace it, or choose another path."
+        )
+        return 2
+    if args.overwrite and out.exists():
+        out.unlink()
+
+    def progress(batch: int, total: int, oldest: int) -> None:
+        stamp = datetime.fromtimestamp(oldest, tz=timezone.utc).strftime("%Y-%m-%d %H:%M")
+        print(f"  +{batch} candles ({total}/{args.bars}) back to {stamp}")
+
+    print(f"fetching up to {args.bars} x {args.granularity}s candles of {args.symbol} (paced at {args.pace}s)")
+    candles = candles_backwards(
+        args.symbol, bars=args.bars, granularity=args.granularity, batch=args.batch, pace=args.pace,
+        on_batch=progress,
+    )
+    if not candles:
+        print("no candles came back — nothing written")
+        return 2
+    records = ticks_from_candles(
+        candles, symbol=args.symbol, granularity=args.granularity, decimals=args.decimals
+    )
+    with Recorder(args.out, fsync=False) as recorder:
+        for record in records:
+            recorder.write(record)
+    first = datetime.fromtimestamp(int(candles[0]["epoch"]), tz=timezone.utc).strftime("%Y-%m-%d %H:%M")
+    last = datetime.fromtimestamp(int(candles[-1]["epoch"]), tz=timezone.utc).strftime("%Y-%m-%d %H:%M")
+    print(
+        f"wrote {len(candles)} candles ({first} -> {last}) as {recorder.count} ticks to {args.out}\n"
+        f"four points per bar: `forex-trade-replay`/`forex-replay` rebuild the identical bars from them"
+    )
+    return 0
 
 
 def cmd_check(args: argparse.Namespace) -> int:
@@ -412,6 +462,21 @@ def main(argv: list[str] | None = None) -> int:
     live.add_argument("--profile-dir", help="persistent browser profile dir (default: ~/.clicktrader/browser-profile)")
     live.add_argument("--ticks", type=int, help="stop after this many ticks (default: run until Ctrl+C)")
     live.set_defaults(func=cmd_record_live)
+
+    hist = sub.add_parser(
+        "history-deriv",
+        help="import candles from Deriv's public API as a recording (paced, and it refuses to append)",
+    )
+    hist.add_argument("out")
+    hist.add_argument("--symbol", default="frxXAUUSD", help="default frxXAUUSD = gold; frxEURUSD = EUR/USD")
+    hist.add_argument("--granularity", type=int, default=900, help="candle size in seconds (default 900 = 15m)")
+    hist.add_argument("--bars", type=int, default=2000, help="how many candles to fetch, back from now")
+    hist.add_argument("--batch", type=int, default=5000, help="candles to ask for per request")
+    hist.add_argument("--pace", type=float, default=6.0, help="seconds between requests; the endpoint rate-limits")
+    hist.add_argument("--decimals", type=int, default=2, help="price decimals to store (gold quotes 2)")
+    hist.add_argument("--overwrite", action="store_true", help="replace the file if it already has data")
+    hist.add_argument("--app-id", type=int, help="default: Deriv's shared public test app_id (1089)")
+    hist.set_defaults(func=cmd_history_deriv)
 
     deriv = sub.add_parser(
         "record-deriv", help="record real ticks from Deriv's public WebSocket API (layer 1, no auth needed)"
