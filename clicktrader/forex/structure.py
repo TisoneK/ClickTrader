@@ -328,6 +328,48 @@ def approach_speed(candles: Sequence[Candle], *, bars: int, lookback: int) -> fl
     return (sum(c.body for c in recent) / len(recent)) / baseline
 
 
+def zone_invalidated(zone: Zone, candles: Sequence[Candle], *, from_index: int | None = None) -> bool:
+    """Has a candle *closed* beyond the zone's far boundary?
+
+    "If a candle closes outside the boundary, the institutional volume is exhausted — delete the zone
+    from your chart immediately." A close, not a wick: a wick through the level is the market probing it,
+    which is what the zone is for; a close through it means the orders that made the level are gone.
+
+    The far boundary is the zone's *outer* edge — its low for demand, its high for supply. Price leaving
+    a demand zone upward through its upper edge is just the trade working.
+    """
+    start = zone.origin_index + 1 if from_index is None else from_index
+    if zone.direction is Direction.UP:
+        return any(c.close < zone.lower for c in candles[start:])
+    return any(c.close > zone.upper for c in candles[start:])
+
+
+def structure_target(
+    swings: Sequence[SwingPoint], *, direction: Direction, price: float
+) -> float | None:
+    """The recent extreme price action is heading back to — the take-profit the worked example draws.
+
+    For a long that is the *most recent* swing high above the entry; for a short the most recent swing
+    low below it. "Most recent" rather than "highest", and the difference is not cosmetic: taking the
+    highest swing in the window picks up whatever peak the recording happens to contain hundreds of bars
+    back, which on the test chart turned a sensible target into a 21R one that price would essentially
+    never reach — trades that never resolve instead of trades that win or lose. The deck's own example
+    draws the level at the top of the leg the zone came from, which after a pullback of lower highs *is*
+    the most recent high above the entry.
+
+    It is a level the market has already turned at, not a projection and not a gap: an earlier version of
+    this project aimed at the nearest untouched imbalance, which is a rule nothing states.
+
+    `None` when there is no swing beyond the entry, which a caller should read as "no target" rather
+    than inventing one.
+    """
+    if direction is Direction.UP:
+        above = [s.price for s in swings if s.kind is SwingKind.HIGH and s.price > price]
+        return above[-1] if above else None
+    below = [s.price for s in swings if s.kind is SwingKind.LOW and s.price < price]
+    return below[-1] if below else None
+
+
 @dataclass(frozen=True)
 class Zone:
     """A supply or demand zone, drawn wick to wick on one candle.

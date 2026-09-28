@@ -33,7 +33,8 @@ from .structure import (
     displacement,
     fair_value_gaps,
     gap_untouched,
-    target_gap,
+    structure_target,
+    zone_invalidated,
     swing_points,
     taps,
     trend_sequence,
@@ -262,6 +263,12 @@ class _Setup:
     zone: Zone
     trade_dir: Direction
     reason: str
+    limit_price: float
+    """The aggressive model's level: the origin candle's body edge, fixed when the zone was armed.
+
+    Held as a price rather than an index into the window, because the window slides as bars arrive and an
+    index kept from an earlier call would point at a different candle by the time it was used.
+    """
     touched: bool = False
 
 
@@ -278,7 +285,8 @@ class SupplyDemand:
        back into.
     4. **STRUCTURE** — the run trades beyond the last opposing swing that stood before it.
     5. **PRECISION** — the zone is the candle *before* the run, drawn wick to wick.
-    6. **FRESHNESS** — no candle has traded into that zone since the run ended.
+    6. **FRESHNESS** — no candle has traded into that zone since the run ended, and no candle has closed
+       beyond its outer edge (a "dead zone", deleted rather than traded).
     7. **MOMENTUM** — at the first touch, the approach must not be parabolic: recent candle bodies within
        `max_approach_speed` times the median body before them.
     8. **EXECUTION** — the `entry_model` decides how much confirmation the entry waits for.
@@ -295,13 +303,18 @@ class SupplyDemand:
     - the three entry models' meanings (see `EntryModel`) — the SOP names them without defining them.
     - "1-2-3 structure sequence" is read as `trend_steps` successive steps in one direction on both
       swing highs and swing lows.
-    - the exit is the earlier material's: stop beyond the far side of the zone, target the next opposing
-      imbalance ahead. Where there is no such imbalance there is no trade, because a method whose target
-      is "the next zone" has nothing to aim at.
+    - the exit is the entry matrix's own: the stop per model (zone edge / confirmation candle / origin
+      wick) and the target at recent structure — the extreme the leg came from — per the deck's worked
+      example. An earlier draft aimed at the nearest untouched imbalance instead; that was a guess off a
+      vaguer slide, and the worked example overrules it.
     - **trade management is not modelled.** The earlier material says "scale out against the biggest
       seller block" and the SOP says nothing about exits at all; a partial exit, a stop moved to
       breakeven and a runner are all absent, and a `TradePlan` cannot express them. So this is the entry
       half of the method, graded as a single stop and a single target.
+    - **the zone's invalidation rule as stated ("a candle closing outside the boundary → delete the
+      zone") is implemented as a close beyond the *outer* edge, and applies both to arming and to a setup
+      already armed. What it does not model is the deck's "delete the zone from your chart" applying to
+      every zone on the chart rather than to the one being watched; only the armed zone is tracked.
     - **a setup that is touched and then abandoned stays armed.** If price enters the zone and no bar
       closes back out of it, freshness is not re-checked on the next visit, because the SOP's rule is
       about the first tap and says nothing about what voids a level afterwards. The earlier material's
@@ -362,7 +375,24 @@ class SupplyDemand:
         closed = self._bars.feed(tick.ts, float(tick.price))
         if closed is not None:
             self._recheck()
+            self._drop_if_dead(closed)
         return self._enter(float(tick.price), closed)
+
+    def _drop_if_dead(self, closed: TimedCandle) -> None:
+        """A zone that dies between arming and entry stops being tradeable, armed or not.
+
+        Checked on each newly closed bar rather than over a slice of the window: a candle that closes
+        beyond the boundary is the rule, every close after the zone formed is a candidate, and the bar
+        that just closed is the only new one.
+        """
+        setup = self._setup
+        if setup is None:
+            return
+        zone = setup.zone
+        dead = closed.close < zone.lower if setup.trade_dir is Direction.UP else closed.close > zone.upper
+        if dead:
+            self._spend(zone)
+            self._setup = None
 
     def _recheck(self) -> None:
         """Run the checklist against the bars so far and arm a zone if all of it holds.
@@ -403,7 +433,10 @@ class SupplyDemand:
             return  # FRESHNESS: this is not the first tap
         if (zone.direction.value, zone.lower, zone.upper) in self._spent:
             return
-        self._setup = _Setup(zone=zone, trade_dir=direction, reason=self._reason(push, zone, candles))
+        self._setup = _Setup(
+            zone=zone, trade_dir=direction, reason=self._reason(push, zone, candles),
+            limit_price=_body_edge(origin, direction),
+        )
 
     def _reason(self, push, zone: Zone, candles) -> str:
         return (
@@ -425,7 +458,9 @@ class SupplyDemand:
             return None
         zone = setup.zone
         if self._model is EntryModel.AGGRESSIVE:
-            if not zone.contains(price):
+            limit = setup.limit_price
+            reached = price <= limit if setup.trade_dir is Direction.UP else price >= limit
+            if not (reached or zone.contains(price)):
                 return None
         else:
             if closed is None or not (closed.low <= zone.upper and closed.high >= zone.lower):
@@ -441,7 +476,7 @@ class SupplyDemand:
                     return None
         if not self._momentum_ok(setup):
             return None
-        return self._decision(price, setup)
+        return self._decision(price, setup, closed)
 
     def _momentum_ok(self, setup: _Setup) -> bool:
         """The falling-knife veto, decided once per setup, the first time price reaches the zone."""
@@ -455,8 +490,8 @@ class SupplyDemand:
             return False
         return True
 
-    def _decision(self, price: float, setup: _Setup) -> TradeDecision | None:
-        plan = self._plan(price, setup)
+    def _decision(self, price: float, setup: _Setup, confirming: Candle | None = None) -> TradeDecision | None:
+        plan = self._plan(price, setup, confirming)
         if plan is None or not plan.is_well_formed(price):
             self._spend(setup.zone)  # nothing to aim at, or no room to the stop: not a trade, not a retry
             self._setup = None
@@ -465,15 +500,45 @@ class SupplyDemand:
         self._setup = None
         return TradeDecision(plan, self._stake, f"{setup.reason}; entered at {price:.5f}")
 
-    def _plan(self, price: float, setup: _Setup) -> TradePlan | None:
+    def _plan(self, price: float, setup: _Setup, confirming: Candle | None) -> TradePlan | None:
+        """Stop and target, as the entry matrix defines them rather than one shape for all three.
+
+        The stop depends on the model, which is most of what distinguishes the three columns:
+
+        - Normal — "above/below the entire zone": the zone's far edge.
+        - Conservative — "below the engulfing pattern": the confirmation candle's own extreme, which sits
+          inside the zone and is therefore tighter.
+        - Aggressive — "tightly below the origin wick": the zone's far edge again, with no clearance
+          beyond it. With the zone drawn on a single candle (the SOP's wording) this coincides with
+          Normal's level, and the two differ in their *entry* instead — a limit at the zone's body against
+          a wait for a confirmation close. If the zone is in fact a cluster of base candles, Normal's stop
+          is the wider of the two; the deck's zone-anatomy illustration draws a two-candle box while its
+          own caption says one candle, so this is flagged rather than guessed.
+
+        The target is the recent structure the worked example aims at, not a gap.
+        """
         zone = setup.zone
-        stop = zone.lower if setup.trade_dir is Direction.UP else zone.upper
+        long = setup.trade_dir is Direction.UP
+        stop = zone.lower if long else zone.upper
+        if self._model is EntryModel.CONSERVATIVE and confirming is not None:
+            stop = confirming.low if long else confirming.high
         candles = self._bars.last(self._window)
-        target = target_gap(fair_value_gaps(candles), candles, direction=setup.trade_dir, price=price)
+        target = structure_target(
+            swing_points(candles, strength=self._swing_strength), direction=setup.trade_dir, price=price
+        )
         if target is None:
             return None
-        edge = target.lower if setup.trade_dir is Direction.UP else target.upper
-        return TradePlan(setup.trade_dir, stop=stop, target=edge)
+        return TradePlan(setup.trade_dir, stop=stop, target=target)
+
+
+def _body_edge(candle: Candle, direction: Direction) -> float:
+    """Where the aggressive model's limit order sits: the origin candle's *body*, not its wick.
+
+    "Limit order triggered precisely at the structural body." For a demand zone that is the upper edge of
+    the candle's real body, so the order fills as price dips into the top of the body rather than waiting
+    for the wick — which is what makes this the maximum-R:R column: the earliest fill of the three.
+    """
+    return max(candle.open, candle.close) if direction is Direction.UP else min(candle.open, candle.close)
 
 
 def _engulfs(previous: Candle, last: Candle, direction: Direction) -> bool:

@@ -7,7 +7,9 @@ show that gate is what stops it.
 
 import pytest
 
+from clicktrader.forex.candles import TimedCandle
 from clicktrader.forex.model import Direction
+from clicktrader.forex.structure import swing_points
 from clicktrader.forex.trade_strategies import EntryModel, SupplyDemand, build
 from clicktrader.model import Tick
 from clicktrader.strategies import History
@@ -169,15 +171,30 @@ def test_the_reason_reads_like_the_checklist_it_passed():
         assert fragment in decision.reason
 
 
-def test_the_target_is_the_largest_untouched_imbalance_ahead():
+def test_the_target_is_recent_structure_not_a_gap():
+    # the deck's worked example takes profit at "recent price action" — the level the market last turned
+    # at — and draws it at the top of the leg, not at a fair value gap
     bars, zone_low, zone_high = _build()
     _return_to_zone(bars, zone_low, zone_high)
     _, decision = _feed(_sop(entry_model="normal"), _series(*bars))[0]
-    # the biggest bearish imbalance left near the top of the earlier excursion, which nothing has been
-    # back to. "Largest", not "nearest": the approach into a zone leaves its own small imbalance just
-    # ahead of the entry, and aiming at that one gives a target worth a fraction of the risk
-    assert decision.plan.target == pytest.approx(1.11893, abs=1e-4)
-    assert decision.plan.reward_risk(decision.plan.stop + 0.0009) > 2.0
+    candles = [TimedCandle(*b, opened_at=float(i)) for i, b in enumerate(bars)]
+    entry = 1.1041
+    highs = [s.price for s in swing_points(candles, strength=1) if s.price > entry]
+    assert highs, "the fixture should have a swing high above the entry"
+    assert min(abs(t - decision.plan.target) for t in highs) < 1e-12  # one of the swing highs
+    # and the *last* of them, which on the deck's own example geometry (a deep pullback into discount)
+    # is the low of the leg's high -- the 0% level its take-profit is drawn at
+    assert decision.plan.target == pytest.approx(highs[-1], abs=1e-9)
+    assert decision.plan.reward_risk(entry) > 0
+
+
+def test_the_target_is_the_most_recent_high_not_the_highest_in_the_window():
+    # "highest" picks up whatever peak the recording happens to hold hundreds of bars back, which makes
+    # a target price will essentially never reach and turns resolved trades into unresolved ones
+    bars, zone_low, zone_high = _build()
+    _return_to_zone(bars, zone_low, zone_high)
+    _, decision = _feed(_sop(entry_model="normal"), _series(*bars))[0]
+    assert decision.plan.target < 1.12000  # not the top of the earlier spike
 
 
 # --- each gate blocking -------------------------------------------------------------------------
@@ -191,18 +208,18 @@ def test_without_displacement_there_is_no_setup():
 
 
 def test_the_displacement_count_is_the_sop_four_and_is_configurable():
-    bars, zone_low, zone_high = _build(run_candles=3)
+    # the earlier deck said 3+ where the SOP says 4+, which is exactly the sort of difference that
+    # should be a parameter rather than a silent choice
+    bars, zone_low, zone_high = _build(run_candles=3, run_body=0.0040)
     _return_to_zone(bars, zone_low, zone_high)
     ticks = _series(*bars)
     assert _feed(_sop(entry_model="normal"), ticks) == []
-    # the earlier deck said 3+ where the SOP says 4+, which is exactly the sort of difference that
-    # should be a parameter rather than a silent choice
     assert len(_feed(_sop(entry_model="normal", min_candles=3), ticks)) == 1
 
 
 def test_a_parabolic_crash_into_the_zone_is_vetoed():
     bars, zone_low, zone_high = _build()
-    _approach(bars, body=0.0035)  # the whole return happens in huge candles
+    _approach(bars, bars_down=3, body=0.0040)  # the whole return happens in huge candles
     price = bars[-1][3]
     bars.append(_bar(price, price + 0.0002, (zone_low + zone_high) / 2, zone_high + 0.0001))
     _continue(bars)
