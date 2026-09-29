@@ -128,6 +128,55 @@ class SettlementResult:
     sell_price: float | None
 
 
+def place_rise_fall(
+    ws: websocket.WebSocket,
+    rise: bool,
+    *,
+    symbol: str,
+    stake: float,
+    currency: str,
+    duration: int = 2,
+    duration_unit: str = "m",
+) -> BuyResult:
+    """Price then buy one Rise/Fall contract on an already OTP-authenticated connection.
+
+    The same two round trips as `place_digit_contract` — a `proposal` for the live ask price, then a `buy`
+    naming that proposal's id — with `CALL`/`PUT` as the contract type and a *time* duration, because a
+    Rise/Fall expiry is a length of time rather than a number of ticks.
+
+    This is the one contract on the platform whose payout is not scaled to the probability: a
+    barrier-less Rise/Fall is priced as a symmetric event, so it quotes a flat ROI (measured 2026-09-29:
+    95.35% on Volatility 25 at every expiry from one to ten minutes). `BuyResult.payout` therefore carries
+    the real number the trade is actually paid at, which is the only honest way to turn a hit rate into
+    money.
+    """
+    ws.send(
+        json.dumps(
+            {
+                "proposal": 1,
+                "amount": stake,
+                "basis": "stake",
+                "contract_type": "CALL" if rise else "PUT",
+                "currency": currency,
+                "underlying_symbol": symbol,
+                "duration": duration,
+                "duration_unit": duration_unit,
+            }
+        )
+    )
+    priced = _recv_or_raise(ws)["proposal"]
+    ws.send(json.dumps({"buy": priced["id"], "price": priced["ask_price"]}))
+    bought = _recv_or_raise(ws)["buy"]
+    return BuyResult(
+        contract_id=bought["contract_id"],
+        transaction_id=bought["transaction_id"],
+        buy_price=bought["buy_price"],
+        payout=bought["payout"],
+        balance_after=bought["balance_after"],
+        purchase_time=bought["purchase_time"],
+    )
+
+
 def get_contract_status(ws: websocket.WebSocket, contract_id: int) -> dict[str, Any]:
     """A one-off (non-subscribed) ``proposal_open_contract`` lookup for one contract's current state.
     Same reasoning as `get_balance`: a plain request-response, not `subscribe: 1`, to avoid interleaving

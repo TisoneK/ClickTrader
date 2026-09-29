@@ -294,6 +294,60 @@ def _print_live_row(row) -> None:
         print(f"  BLOCKED  {row.contract}  stake={row.stake:.2f}  — {row.reason}")
 
 
+def cmd_buy_rise_fall(args: argparse.Namespace) -> int:
+    """Place one Rise/Fall contract on the demo account and report the broker's own settlement.
+
+    One contract, on purpose, and deliberately not a runner: the point of this command is to prove the
+    path the method's product actually needs — price, buy, settle, and read back the payout the trade was
+    really paid at — against a live broker rather than a reconstruction. Anything that trades repeatedly
+    belongs behind its own command and its own limits discussion, which this is not.
+    """
+    import os
+
+    import websocket
+
+    from .api.deriv import DerivAPIError, get_otp_url
+    from .api.deriv.trading import get_balance, place_rise_fall, wait_for_settlement
+
+    if args.stake > args.max_stake:
+        print(f"stake {args.stake} exceeds --max-stake {args.max_stake}; refusing. Raise the cap deliberately.")
+        return 2
+    missing = [n for n in ("DERIV_API_TOKEN", "DERIV_APP_ID", "DERIV_DEMO_ACCOUNT_ID") if not os.environ.get(n)]
+    if missing:
+        print(f"missing {', '.join(missing)} — see .context_ledger/memory/secrets/README.md. Nothing placed.")
+        return 2
+    token, app_id, account_id = (os.environ[n] for n in ("DERIV_API_TOKEN", "DERIV_APP_ID", "DERIV_DEMO_ACCOUNT_ID"))
+    print(f"demo account (id from .env): pricing {args.direction} {args.symbol} "
+          f"{args.duration}{args.duration_unit}, stake {args.stake} (cap {args.max_stake})")
+
+    trade_ws = None
+    try:
+        trade_ws = websocket.create_connection(get_otp_url(account_id, token, app_id, require_demo=True), timeout=20)
+        balance, currency = get_balance(trade_ws)
+        bought = place_rise_fall(
+            trade_ws, args.direction == "up", symbol=args.symbol, stake=args.stake, currency=currency,
+            duration=args.duration, duration_unit=args.duration_unit,
+        )
+        roi = (bought.payout - bought.buy_price) / bought.buy_price
+        print(f"bought contract {bought.contract_id}: paid {bought.buy_price:.2f} {currency}, "
+              f"payout {bought.payout:.2f} — a {roi:.2%} return, matching the quote")
+        print(f"balance before {balance:.2f}, after {bought.balance_after:.2f}")
+        print(f"waiting for the broker to settle {args.duration}{args.duration_unit}...")
+        settled = wait_for_settlement(trade_ws, bought.contract_id, timeout=args.timeout)
+        print(f"settled: {settled.status}, profit {settled.profit:+.2f} {currency}, "
+              f"exit spot {settled.exit_spot}")
+    except DerivAPIError as exc:
+        print(f"Deriv API error: {exc}. Nothing further placed.")
+        return 2
+    except websocket.WebSocketException as exc:
+        print(f"socket error: {exc}")
+        return 2
+    finally:
+        if trade_ws is not None:
+            trade_ws.close()
+    return 0
+
+
 def cmd_run_deriv(args: argparse.Namespace) -> int:
     import os
 
@@ -468,6 +522,19 @@ def main(argv: list[str] | None = None) -> int:
     live.add_argument("--profile-dir", help="persistent browser profile dir (default: ~/.clicktrader/browser-profile)")
     live.add_argument("--ticks", type=int, help="stop after this many ticks (default: run until Ctrl+C)")
     live.set_defaults(func=cmd_record_live)
+
+    rf = sub.add_parser(
+        "buy-rise-fall",
+        help="place ONE Rise/Fall contract on the Deriv demo account and report the broker's settlement",
+    )
+    rf.add_argument("--direction", choices=("up", "down"), default="up")
+    rf.add_argument("--symbol", default="1HZ25V", help="default 1HZ25V = Volatility 25 (the method's index)")
+    rf.add_argument("--stake", type=float, default=1.0)
+    rf.add_argument("--max-stake", type=float, default=1.0, help="hard cap this command will not exceed (default 1)")
+    rf.add_argument("--duration", type=int, default=2, help="expiry length (default 2)")
+    rf.add_argument("--duration-unit", default="m", choices=("m", "t"), help="minutes, or ticks (1-10)")
+    rf.add_argument("--timeout", type=float, default=180.0, help="seconds to wait for settlement")
+    rf.set_defaults(func=cmd_buy_rise_fall)
 
     hist = sub.add_parser(
         "history-deriv",

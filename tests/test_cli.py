@@ -200,3 +200,28 @@ def test_risk_replay(tmp_path, capsys):
     ]) == 0
     out = capsys.readouterr().out
     assert "guard intervened in" in out and "guarded" in out and "unbounded" in out
+
+
+def test_buy_rise_fall_refuses_to_exceed_its_own_stake_cap(capsys):
+    # the guard that matters: one contract, on a demo account, and a cap it will not cross even if a
+    # flag asks it to
+    assert main(["buy-rise-fall", "--stake", "25", "--max-stake", "1"]) == 2
+    out = capsys.readouterr().out
+    assert "exceeds --max-stake" in out
+    assert "refusing" in out
+
+
+def test_buy_rise_fall_says_what_is_missing_before_touching_the_network(monkeypatch, capsys):
+    for name in ("DERIV_API_TOKEN", "DERIV_APP_ID", "DERIV_DEMO_ACCOUNT_ID"):
+        monkeypatch.delenv(name, raising=False)
+    assert main(["buy-rise-fall"]) == 2
+    out = capsys.readouterr().out
+    assert "DERIV_API_TOKEN" in out and "Nothing placed" in out
+
+
+def test_buy_rise_fall_never_reaches_for_the_real_account(monkeypatch, capsys):
+    # a demo-only command: it reads the demo var and nothing else, so there is no path from it to real money
+    import clicktrader.cli as cli
+    source = __import__("inspect").getsource(cli.cmd_buy_rise_fall)
+    assert "DERIV_REAL_ACCOUNT_ID" not in source
+    assert "require_demo=True" in source
