@@ -1,6 +1,6 @@
 import pytest
 
-from clicktrader.forex.harness import _settle_index, replay
+from clicktrader.forex.harness import ForexReplayResult, ForexSegmentResult, _settle_index, replay
 from clicktrader.forex.model import Direction, Signal
 from clicktrader.forex.strategies import MovingAverageCrossover, RandomDirection, SignalDecision
 from clicktrader.forex.synthetic import synthetic_price_ticks
@@ -128,3 +128,47 @@ def test_a_clock_horizon_settles_at_the_first_tick_at_or_after_it():
 def test_a_signal_without_a_clock_horizon_keeps_the_tick_behaviour():
     ticks = [Tick(i, f"{1.0 + i * 0.1:.2f}") for i in range(10)]
     assert replay(AlwaysUpOverThree(), ticks, split=0.5).out_of_sample.hit_rate == pytest.approx(1.0)
+
+
+# --- saying the result in words a person can use -------------------------------------------------
+
+
+def _segment(bets, wins):
+    return ForexSegmentResult(label="out-of-sample", ticks=bets, bets=bets, wins=wins)
+
+
+def test_plain_words_state_the_wins_and_the_trades():
+
+    result = ForexReplayResult(
+        "test", _segment(600, 300), _segment(600, 300), _segment(600, 290), breakeven=0.5119
+    )
+    said = result.plain_words()
+    assert "won 300 of 600 trades" in said
+    assert "50.0%" in said
+    assert "290 of 600" in said  # the random comparison, spelled out
+
+
+def test_plain_words_say_which_side_of_breakeven_the_result_is_on():
+
+    clearly_winning = ForexReplayResult("t", _segment(600, 300), _segment(600, 400), _segment(600, 295), breakeven=0.5119)
+    assert "above the 51.2% needed to break even" in clearly_winning.plain_words()
+    clearly_losing = ForexReplayResult("t", _segment(600, 300), _segment(600, 250), _segment(600, 295), breakeven=0.5119)
+    assert "below the 51.2% needed to break even" in clearly_losing.plain_words()
+    too_close = ForexReplayResult("t", _segment(600, 300), _segment(600, 310), _segment(600, 295), breakeven=0.5119)
+    assert "cannot say which side" in too_close.plain_words()
+
+
+def test_plain_words_refuse_to_conclude_on_a_small_sample():
+
+    small = ForexReplayResult("t", _segment(20, 12), _segment(20, 12), _segment(20, 9), breakeven=0.5119)
+    assert "too few trades to conclude anything" in small.plain_words()
+
+
+def test_the_report_carries_the_plain_reading_and_the_breakeven():
+    ticks = list(synthetic_price_ticks(2_000, seed=1))
+    result = replay(RandomDirection(seed=1), ticks)
+    result.breakeven = 0.5119
+    report = result.report()
+    assert "In plain words:" in report
+    assert "breaking even needs 51.2%" in report
+    assert "verdict (out-of-sample only)" in report

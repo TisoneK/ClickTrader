@@ -144,6 +144,7 @@ def cmd_risk_replay(args: argparse.Namespace) -> int:
 def cmd_forex_replay(args: argparse.Namespace) -> int:
     ticks = _load(args.recording)
     result = forex_replay(FOREX_REGISTRY[args.strategy](), ticks, split=args.split)
+    result.breakeven = args.breakeven
     print(result.report())
     return 0
 
@@ -422,6 +423,11 @@ def main(argv: list[str] | None = None) -> int:
     fx_rep.add_argument("recording")
     fx_rep.add_argument("--strategy", choices=sorted(FOREX_REGISTRY), default="random-direction")
     fx_rep.add_argument("--split", type=float, default=0.5, help="in-sample fraction (default 0.5)")
+    fx_rep.add_argument(
+        "--breakeven", type=float,
+        help="win rate this contract needs to break even, e.g. 0.5119 for a 95.35%% Rise/Fall payout — "
+             "prints the result as an answer instead of a hit rate",
+    )
     fx_rep.set_defaults(func=cmd_forex_replay)
 
     fx_rep_all = sub.add_parser(

@@ -45,6 +45,13 @@ class ForexReplayResult:
     in_sample: ForexSegmentResult
     out_of_sample: ForexSegmentResult
     control: ForexSegmentResult
+    breakeven: float | None = None
+    """The win rate this contract needs to break even, if the caller knows it.
+
+    Not an assumption this module makes: hit rate is all it can honestly report without a verified payout.
+    But when a contract's own quoted payout is known — Rise/Fall on Volatility 25 pays a flat 95.35%, so
+    51.19% of bets covers the rake — saying so in plain words is what turns a hit rate into an answer.
+    """
 
     @property
     def verdict(self) -> str:
@@ -57,8 +64,9 @@ class ForexReplayResult:
         oos = self.out_of_sample
         if oos.bets < MIN_BETS_REPORT:
             return (
-                f"NO VERDICT — {oos.bets} out-of-sample bets; at least {MIN_BETS_REPORT} are needed. "
-                "Record more ticks rather than read anything into this."
+                f"NO VERDICT — only {oos.bets} trades in the second half of the data; at least "
+                f"{MIN_BETS_REPORT} are needed before the numbers mean anything. Get more data rather than "
+                "reading this one."
             )
         baseline = self.control.hit_rate
         lo, hi = oos.hit_rate_interval
@@ -80,14 +88,45 @@ class ForexReplayResult:
             ci_label = "95% CI" if seg.z == 1.96 else f"CI(z={seg.z:.2f})"
             lines.append(f"[{seg.label}] {seg.ticks} ticks, {seg.bets} bets")
             lines.append(f"  hit rate   {seg.hit_rate:.3f}  ({ci_label} {lo:.3f}-{hi:.3f})")
-        lines += [
-            "",
-            f"(a fair coin with no possible ties gives 0.500; the random control above is the real baseline —",
-            f" see 'verdict' below for why those two numbers legitimately differ on real tick data)",
-            "",
-            f"verdict (out-of-sample only): {self.verdict}",
-        ]
+        oos = self.out_of_sample
+        lines += ["", self.plain_words()]
+        if self.breakeven is not None:
+            lines += ["", f"  breaking even needs {self.breakeven:.1%} of trades won (the contract's own payout)"]
+        lines += ["", f"verdict (out-of-sample only): {self.verdict}"]
         return "\n".join(lines)
+
+    def plain_words(self) -> str:
+        """The same result as a sentence, because a hit rate and an interval are not an answer anyone can use.
+
+        Written for the person who watched the method work on a chart and wants to know whether it makes
+        money — not for someone who already knows what a Wilson interval is. Every number it prints is
+        also in the block above it; this is the reading of them.
+        """
+        oos, ctl = self.out_of_sample, self.control
+        if oos.bets == 0:
+            return "In plain words: it found no trades to judge in the second half of the data at all."
+        said = (
+            f"In plain words: it won {oos.wins} of {oos.bets} trades taken ({oos.hit_rate:.1%}) in the second "
+            f"half of the data, where {ctl.wins} of {ctl.bets} ({ctl.hit_rate:.1%}) is what taking those same "
+            "trades at random would have won."
+        )
+        if oos.bets < MIN_BETS_REPORT:
+            return said + f" That is too few trades to conclude anything from — {MIN_BETS_REPORT} are needed."
+        lo, hi = oos.hit_rate_interval
+        if self.breakeven is not None:
+            if lo > self.breakeven:
+                return said + f" Every plausible value ({lo:.1%} to {hi:.1%}) is above the {self.breakeven:.1%} needed to break even."
+            if hi < self.breakeven:
+                return said + f" Every plausible value ({lo:.1%} to {hi:.1%}) is below the {self.breakeven:.1%} needed to break even."
+            return (
+                said + f" The uncertainty ({lo:.1%} to {hi:.1%}) straddles the {self.breakeven:.1%} needed to "
+                "break even, so this many trades cannot say which side of it the method is on."
+            )
+        if lo > ctl.hit_rate:
+            return said + f" The whole plausible range ({lo:.1%} to {hi:.1%}) beats the random result, which is a real signal."
+        if hi < ctl.hit_rate:
+            return said + f" The whole plausible range ({lo:.1%} to {hi:.1%}) is worse than the random result."
+        return said + f" The plausible range ({lo:.1%} to {hi:.1%}) includes the random result, so this says nothing yet."
 
 
 def _run_segment(strategy: ForexStrategy, ticks: Sequence[Tick], start: int, stop: int, label: str, z: float) -> ForexSegmentResult:
