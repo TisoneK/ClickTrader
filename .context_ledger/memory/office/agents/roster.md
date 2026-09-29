@@ -53,7 +53,7 @@ is your stable session tag.
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
 | Amara | S002 | claude-sonnet-5 | Forex tie-rate verdict fix landed (2d5ebf1); now built `risk_replay.py` — session-by-session RiskGuard-vs-unbounded replay (B-2026-09-24-2) | Working | 175 tests passing; new `clicktrader risk-replay` CLI + DESIGN.md measured finding (real 8k-tick Deriv run: guard capped worst session at -$7.68 vs -$39.23 unbounded); about to commit+push |
-| Lena | S009 | deepseek/deepseek-flash | User: "I want you to do it" — building the Rise/Fall demo path so the method can be traded and settled by the broker, not just replayed | Working | Round 12; extending the Deriv adapter |
+| Lena | S009 | deepseek/deepseek-flash | Rise/Fall can now be traded, settled, logged and tallied for real | Done | Shipped: `place_rise_fall` + `buy-rise-fall` + `trade-log` (plain-words tally). Two live demo contracts settled by the broker; both fills paid 88% against a 95.35% quote, so the bar is 53.19%. 393 tests. Next: run it to ~100 trades |
 
 **Keep your Status cells current — that is what the board is for.** The
 next live worker reads it to know at a glance what a peer has finished,
