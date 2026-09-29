@@ -455,3 +455,40 @@ def test_a_candle_with_no_range_is_not_a_momentum_candle():
 def test_the_momentum_test_needs_a_baseline():
     candle = bars((1.0, 1.0055, 0.9995, 1.0050))[0]
     assert not is_momentum_candle(candle, baseline_body=0.0)
+
+
+def test_a_level_band_can_be_given_in_price_units_instead_of_a_fraction():
+    # the band exists so a level's width can be set by volatility rather than by price: near 1.10 the two
+    # forms coincide, which is what makes this testable rather than a matter of opinion
+    series = bars(
+        *[_up(i, 1.1000) for i in range(3)], _up(3, 1.1100), *[_up(i, 1.1000) for i in range(4, 7)],
+        _up(7, 1.11005), *[_up(i, 1.1000) for i in range(8, 11)],
+    )
+    by_fraction = key_zones(series, strength=2, min_touches=2, tolerance=0.002)
+    by_band = key_zones(series, strength=2, min_touches=2, band=0.002 * 1.11002)
+    assert len(by_fraction) == len(by_band) == 1
+    assert by_band[0].price == pytest.approx(by_fraction[0].price)
+
+
+def test_a_volatility_relative_band_transfers_between_price_scales():
+    # the same shape at 1,000x the price gives the same zone when the band scales with it -- which is the
+    # whole point: price and volatility are different things, and only volatility sets a level's width
+    def series(scale):
+        band = 0.002 * 1.11002 * scale
+        return band, bars(
+            *[_up(i, 1.1000 * scale) for i in range(3)],
+            _up(3, 1.1100 * scale),
+            *[_up(i, 1.1000 * scale) for i in range(4, 7)],
+            _up(7, 1.11005 * scale),
+            *[_up(i, 1.1000 * scale) for i in range(8, 11)],
+        )
+
+    band_1, series_1 = series(1.0)
+    band_big, series_big = series(1_000.0)
+    assert len(key_zones(series_1, strength=2, min_touches=2, band=band_1)) == 1
+    zones = key_zones(series_big, strength=2, min_touches=2, band=band_big)
+    assert len(zones) == 1
+    # the zone sits at the mean of the two swing highs (1.1100 and 1.11005), scaled
+    assert zones[0].price == pytest.approx(1.110025 * 1_000.0, rel=1e-9)
+    # and a band that does not scale with the instrument finds nothing at the larger scale
+    assert key_zones(series_big, strength=2, min_touches=2, band=band_1) == []

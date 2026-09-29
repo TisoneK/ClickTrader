@@ -393,12 +393,21 @@ class KeyZone:
 
 
 def key_zones(
-    candles: Sequence[Candle], *, strength: int = 2, tolerance: float = 0.002, min_touches: int = 2
+    candles: Sequence[Candle], *,
+    strength: int = 2,
+    tolerance: float = 0.002,
+    min_touches: int = 2,
+    band: float | None = None,
 ) -> list[KeyZone]:
-    """Levels built by clustering swing points that sit within `tolerance` of each other.
+    """Levels built by clustering swing points that sit within a band of each other.
 
-    Relative rather than absolute distance, so one rule works on a 1.13 forex pair and a 4,100 gold
-    quote without being re-tuned. Clustering is greedy over sorted prices, which is enough for levels a
+    **`band` is the honest way to say how close two swings have to be, and `tolerance` is the wrong one.**
+    A band given as a fraction of *price* is not the same rule on different instruments: 0.2% of Volatility
+    100's ~945 is 1.9 points, about one candle, while 0.2% of Volatility 25's ~850,000 is 1,706 points,
+    which is a different rule wearing the same name. Price and volatility are separate things and only the
+    second one should set a level's width. `band` takes an absolute distance — the strategy passes a
+    multiple of the median candle range — and `tolerance` remains for price-relative callers and for
+    instruments quoted near 1, where the two coincide. Clustering is greedy over sorted prices, which is enough for levels a
     human would circle with a line and is stable between bars — an over-engineered clusterer would move
     the level slightly every bar and make the strategy's decisions flicker.
     """
@@ -412,10 +421,13 @@ def key_zones(
     for kind, swings in by_kind.items():
         cluster: list[SwingPoint] = []
         for swing in sorted(swings, key=lambda s: s.price):
-            if cluster and not (abs(swing.price - cluster[-1].price) <= tolerance * cluster[-1].price * 4):
-                if len(cluster) >= min_touches:
-                    zones.append(KeyZone(sum(s.price for s in cluster) / len(cluster), len(cluster), kind))
-                cluster = []
+            if cluster:
+                last = cluster[-1].price
+                limit = (band * 4) if band is not None else (tolerance * last * 4)
+                if abs(swing.price - last) > limit:
+                    if len(cluster) >= min_touches:
+                        zones.append(KeyZone(sum(s.price for s in cluster) / len(cluster), len(cluster), kind))
+                    cluster = []
             cluster.append(swing)
         if len(cluster) >= min_touches:
             zones.append(KeyZone(sum(s.price for s in cluster) / len(cluster), len(cluster), kind))
