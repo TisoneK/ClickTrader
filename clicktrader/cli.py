@@ -68,6 +68,35 @@ def cmd_run_rise_fall(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_log_trade(args: argparse.Namespace) -> int:
+    """Record a trade placed by hand, so it counts in the same tally as the loop's.
+
+    A person watching the chart and pressing the button is the method as its author trades it — arguably
+    the *best* evidence there is, since their eye carries context no rule does. That evidence was
+    invisible to this project until it could be written down, and a trade that is not written down is
+    exactly what turns a count into a collection of remembered wins.
+    """
+    import time
+
+    from .trade_log import RiseFallTrade, TradeLog, tally
+
+    profit = (args.payout - args.stake) if args.status == "won" else -args.stake
+    with TradeLog(args.log) as log:
+        log.write(
+            RiseFallTrade(
+                settled_at=args.settled_at or time.time(), symbol=args.symbol, direction=args.direction,
+                stake=args.stake, buy_price=args.stake, payout=args.payout, status=args.status,
+                profit=profit, duration=args.duration, duration_unit=args.duration_unit,
+                currency=args.currency, reason=args.reason or "placed by hand",
+            )
+        )
+    print(f"recorded: {args.direction} {args.symbol}, staked {args.stake:.2f}, "
+          f"payout {args.payout:.2f}, {args.status} ({profit:+.2f})")
+    print()
+    print(tally(args.log).report())
+    return 0
+
+
 def cmd_trade_log(args: argparse.Namespace) -> int:
     from .trade_log import tally
 
@@ -612,6 +641,23 @@ def main(argv: list[str] | None = None) -> int:
     run_rf.add_argument("--paper", action="store_true", help="score the signals and the shadows, place nothing")
     run_rf.add_argument("--report-every", type=float, default=900.0, help="seconds between readouts")
     run_rf.set_defaults(func=cmd_run_rise_fall)
+
+    lt = sub.add_parser(
+        "log-trade",
+        help="record a trade placed by hand so it counts in the same tally as the loop's",
+    )
+    lt.add_argument("--log", default="recordings/rise-fall-demo.jsonl")
+    lt.add_argument("--direction", choices=("up", "down"), required=True)
+    lt.add_argument("--stake", type=float, required=True)
+    lt.add_argument("--payout", type=float, required=True, help="what the contract paid if it won")
+    lt.add_argument("--status", choices=("won", "lost"), required=True)
+    lt.add_argument("--symbol", default="1HZ25V")
+    lt.add_argument("--duration", type=int, default=2)
+    lt.add_argument("--duration-unit", default="m")
+    lt.add_argument("--currency", default="USD")
+    lt.add_argument("--reason", default="", help="why you took it, in a sentence")
+    lt.add_argument("--settled-at", type=float, help="epoch seconds; default now")
+    lt.set_defaults(func=cmd_log_trade)
 
     tl = sub.add_parser(
         "trade-log",

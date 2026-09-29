@@ -127,3 +127,21 @@ def test_the_payout_is_averaged_over_every_trade_not_only_the_winners(tmp_path):
     assert t.average_payout == pytest.approx(1.88)
     assert t.breakeven == pytest.approx(1 / 1.88)
     assert "53.19%" in t.report()
+
+
+def test_a_hand_placed_trade_can_be_written_down_and_counted(tmp_path):
+    # the user trades this by eye; a trade nobody writes down is what turns a count into a memory of wins
+    from clicktrader.cli import main
+
+    path = tmp_path / "hand.jsonl"
+    assert main(["log-trade", "--log", str(path), "--direction", "up", "--stake", "10",
+                 "--payout", "18.8", "--status", "won", "--reason", "rejection from a floor"]) == 0
+    (trade,) = list(read_trades(path))
+    assert trade.status == "won" and trade.profit == pytest.approx(8.8)
+    assert trade.reason == "rejection from a floor"
+    assert main(["log-trade", "--log", str(path), "--direction", "down", "--stake", "10",
+                 "--payout", "18.8", "--status", "lost"]) == 0
+    total = tally(path)
+    assert (total.trades, total.won) == (2, 1)
+    assert total.net == pytest.approx(8.8 - 10.0)
+    assert total.breakeven == pytest.approx(1 / 1.88)
