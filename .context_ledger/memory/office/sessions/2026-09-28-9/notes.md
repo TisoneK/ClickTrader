@@ -228,3 +228,25 @@ driftless walk, 20k ticks, seed 3, decimals=5, step_std=5e-5, stop 2e-5 / target
   strategy win rate 0.321 against a theoretical 1/3   <- realized trend of the sample, not a bug
   mirror    win rate 0.399
 ```
+
+## Live demo run in flight (2026-09-29)
+
+Started by the user's "lets live test our tool": a single `run-rise-fall` process against the demo account,
+`1HZ25V`, $1 a stake, `--max-stake 1`, `--max-session-loss 40`, `--max-consecutive-losses 12`,
+`--max-trades 8`, `--ticks 21600` (≈6 h), readout every 5 minutes, logging to
+`recordings/rise-fall-demo.jsonl` (gitignored). Check it with
+`clicktrader trade-log recordings/rise-fall-demo.jsonl`.
+
+Two things to know about it:
+
+- **It may not survive this session.** It was started as a background process owned by the agent session,
+  so if the session ends the loop probably ends with it. The command above re-runs it unattended.
+- **Expect long silences that are not faults.** The method signals roughly once an hour, so minutes of
+  nothing is normal — and that is exactly why the output is now flushed (see below).
+
+**A bug this exposed immediately, and the fix:** the live run printed nothing at all, because Python
+block-buffers stdout when it goes to a file or a pipe. A working loop that says nothing is
+indistinguishable from a dead one, so the runner's default printer now flushes. Worth noting that this is
+the *second* time this project has learned this lesson — `record-deriv --progress-every` exists for the
+same reason, added after a multi-hour capture went silent — which suggests it belongs somewhere more
+prominent than a docstring on one function.
