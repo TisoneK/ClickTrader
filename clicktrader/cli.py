@@ -368,8 +368,10 @@ def cmd_buy_rise_fall(args: argparse.Namespace) -> int:
             duration=args.duration, duration_unit=args.duration_unit,
         )
         roi = (bought.payout - bought.buy_price) / bought.buy_price
+        # "matching the quote" was ambiguous and misled a reader once: it means the buy matched the
+        # proposal *this account* was shown, which is not the number the public feed advertises.
         print(f"bought contract {bought.contract_id}: paid {bought.buy_price:.2f} {currency}, "
-              f"payout {bought.payout:.2f} — a {roi:.2%} return, matching the quote")
+              f"payout {bought.payout:.2f} — a {roi:.2%} return, at this account's own quoted price")
         print(f"balance before {balance:.2f}, after {bought.balance_after:.2f}")
         print(f"waiting for the broker to settle {args.duration}{args.duration_unit}...")
         settled = wait_for_settlement(trade_ws, bought.contract_id, timeout=args.timeout)
