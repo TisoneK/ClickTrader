@@ -36,6 +36,38 @@ def _load(path: str):
     return [r.tick for r in records]
 
 
+def cmd_run_rise_fall(args: argparse.Namespace) -> int:
+    """Run the method live: place a Rise/Fall on every signal, log it, and score variants in the shadows."""
+    import os
+
+    from .api.deriv import DerivAPIError
+    from .limits import RiskLimits
+    from .runner import run
+
+    if args.stake > args.max_stake:
+        print(f"stake {args.stake} exceeds --max-stake {args.max_stake}; refusing.")
+        return 2
+    if not args.paper:
+        missing = [n for n in ("DERIV_API_TOKEN", "DERIV_APP_ID", "DERIV_DEMO_ACCOUNT_ID") if not os.environ.get(n)]
+        if missing:
+            print(f"missing {', '.join(missing)} — or pass --paper to score signals without placing anything.")
+            return 2
+    try:
+        run(
+            symbol=args.symbol, log_path=args.log, stake=args.stake, duration=args.duration,
+            duration_unit=args.duration_unit, max_trades=args.max_trades, max_ticks=args.ticks,
+            paper=args.paper, report_every=args.report_every,
+            limits=RiskLimits(
+                max_stake=args.max_stake, max_session_loss=args.max_session_loss,
+                max_consecutive_losses=args.max_consecutive_losses,
+            ),
+        )
+    except DerivAPIError as exc:
+        print(f"Deriv API error: {exc}. Stopped; whatever was logged is written.")
+        return 2
+    return 0
+
+
 def cmd_trade_log(args: argparse.Namespace) -> int:
     from .trade_log import tally
 
@@ -560,6 +592,24 @@ def main(argv: list[str] | None = None) -> int:
     rf.add_argument("--log", help="append the settled trade to this log file (see trade-log)")
     rf.add_argument("--reason", default="", help="why this trade was taken, for the log")
     rf.set_defaults(func=cmd_buy_rise_fall)
+
+    run_rf = sub.add_parser(
+        "run-rise-fall",
+        help="run the price-action method live: place one Rise/Fall per signal, log it, score variants in shadow",
+    )
+    run_rf.add_argument("--symbol", default="1HZ25V")
+    run_rf.add_argument("--log", default="runs/rise-fall.jsonl", help="where settled trades are appended")
+    run_rf.add_argument("--stake", type=float, default=1.0)
+    run_rf.add_argument("--max-stake", type=float, default=1.0, help="hard cap this run will not exceed")
+    run_rf.add_argument("--max-session-loss", type=float, default=10.0)
+    run_rf.add_argument("--max-consecutive-losses", type=int, default=5)
+    run_rf.add_argument("--duration", type=int, default=2)
+    run_rf.add_argument("--duration-unit", default="m", choices=("m", "t"))
+    run_rf.add_argument("--max-trades", type=int, help="stop after this many placed trades")
+    run_rf.add_argument("--ticks", type=int, help="stop after this many ticks")
+    run_rf.add_argument("--paper", action="store_true", help="score the signals and the shadows, place nothing")
+    run_rf.add_argument("--report-every", type=float, default=900.0, help="seconds between readouts")
+    run_rf.set_defaults(func=cmd_run_rise_fall)
 
     tl = sub.add_parser(
         "trade-log",
