@@ -36,6 +36,13 @@ def _load(path: str):
     return [r.tick for r in records]
 
 
+def cmd_trade_log(args: argparse.Namespace) -> int:
+    from .trade_log import tally
+
+    print(tally(args.log).report())
+    return 0
+
+
 def cmd_history_deriv(args: argparse.Namespace) -> int:
     # deferred like the other deriv commands: the extra is only needed if one of them actually runs
     from .api.deriv.history import candles_backwards, ticks_from_candles
@@ -336,6 +343,22 @@ def cmd_buy_rise_fall(args: argparse.Namespace) -> int:
         settled = wait_for_settlement(trade_ws, bought.contract_id, timeout=args.timeout)
         print(f"settled: {settled.status}, profit {settled.profit:+.2f} {currency}, "
               f"exit spot {settled.exit_spot}")
+        if args.log:
+            import time as _time
+
+            from .trade_log import RiseFallTrade, TradeLog, tally
+
+            with TradeLog(args.log) as log:
+                log.write(
+                    RiseFallTrade(
+                        settled_at=_time.time(), symbol=args.symbol, direction=args.direction,
+                        stake=args.stake, buy_price=bought.buy_price, payout=bought.payout,
+                        status=settled.status, profit=settled.profit, contract_id=bought.contract_id,
+                        duration=args.duration, duration_unit=args.duration_unit,
+                        exit_spot=settled.exit_spot, currency=currency, reason=args.reason,
+                    )
+                )
+            print(f"logged to {args.log} — {tally(args.log).trades} settled trade(s) in it now")
     except DerivAPIError as exc:
         print(f"Deriv API error: {exc}. Nothing further placed.")
         return 2
@@ -534,7 +557,16 @@ def main(argv: list[str] | None = None) -> int:
     rf.add_argument("--duration", type=int, default=2, help="expiry length (default 2)")
     rf.add_argument("--duration-unit", default="m", choices=("m", "t"), help="minutes, or ticks (1-10)")
     rf.add_argument("--timeout", type=float, default=180.0, help="seconds to wait for settlement")
+    rf.add_argument("--log", help="append the settled trade to this log file (see trade-log)")
+    rf.add_argument("--reason", default="", help="why this trade was taken, for the log")
     rf.set_defaults(func=cmd_buy_rise_fall)
+
+    tl = sub.add_parser(
+        "trade-log",
+        help="add up a log of real Rise/Fall trades and say whether it is winning in plain words",
+    )
+    tl.add_argument("log")
+    tl.set_defaults(func=cmd_trade_log)
 
     hist = sub.add_parser(
         "history-deriv",
