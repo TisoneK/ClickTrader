@@ -4,6 +4,7 @@ from clicktrader.forex.candles import TimedCandle
 from clicktrader.forex.model import Direction
 from clicktrader.forex.structure import (
     FairValueGap,
+    KeyZone,
     SwingKind,
     Trend,
     Zone,
@@ -12,6 +13,8 @@ from clicktrader.forex.structure import (
     displacement,
     fair_value_gaps,
     gap_untouched,
+    is_momentum_candle,
+    key_zones,
     last_swing,
     swing_points,
     taps,
@@ -392,3 +395,63 @@ def test_the_two_readings_of_massive_are_both_available_and_disagree():
 def test_the_run_reading_is_the_default_because_the_each_reading_never_fires_on_real_bars():
     uneven = _flat_then_run([0.0010, 0.0002, 0.0002, 0.0002])
     assert displacement(uneven, min_candles=4, size_multiple=1.5) is not None
+
+
+# --- key zones and the momentum candle ----------------------------------------------------------
+
+
+def test_a_level_needs_more_than_one_turn_to_be_a_key_zone():
+    # one swing is a pivot; the market turning at the same price twice is what makes it a level
+    once = bars(*[_up(i, 1.1000) for i in range(3)], _up(3, 1.1100), *[_up(i, 1.1000) for i in range(4, 7)])
+    assert key_zones(once, strength=2, min_touches=2) == []
+    twice = bars(
+        *[_up(i, 1.1000) for i in range(3)], _up(3, 1.1100), *[_up(i, 1.1000) for i in range(4, 7)],
+        _up(7, 1.11005), *[_up(i, 1.1000) for i in range(8, 11)],
+    )
+    (zone,) = key_zones(twice, strength=2, min_touches=2)
+    assert zone.kind is SwingKind.HIGH
+    assert zone.touches == 2
+    assert zone.price == pytest.approx(1.11002, abs=1e-4)
+    assert zone.is_ceiling
+
+
+def test_floors_and_ceilings_are_found_separately():
+    series = bars(
+        *[_down(i, 1.1000) for i in range(3)], _down(3, 1.0900), *[_down(i, 1.1000) for i in range(4, 7)],
+        _down(7, 1.09005), *[_down(i, 1.1000) for i in range(8, 11)],
+    )
+    (zone,) = key_zones(series, strength=2, min_touches=2)
+    assert not zone.is_ceiling
+
+
+def test_a_single_touch_cannot_be_required():
+    with pytest.raises(ValueError):
+        key_zones(bars(*[_up(i, 1.1) for i in range(6)]), min_touches=1)
+
+
+def test_a_zone_knows_whether_a_price_is_at_it():
+    zone = KeyZone(price=1.1000, touches=3, kind=SwingKind.HIGH)
+    assert zone.within(1.1001, 0.002)
+    assert not zone.within(1.1100, 0.002)
+
+
+def test_a_momentum_candle_is_a_large_body_with_negligible_wicks():
+    baseline = 0.0010
+    big_body_thin_wicks = bars((1.0, 1.0055, 0.9995, 1.0050))[0]
+    assert is_momentum_candle(big_body_thin_wicks, baseline_body=baseline)
+    big_body_long_wicks = bars((1.0, 1.0080, 0.9980, 1.0050))[0]
+    assert not is_momentum_candle(big_body_long_wicks, baseline_body=baseline)
+    doji = bars((1.0, 1.0020, 0.9980, 1.0001))[0]
+    assert not is_momentum_candle(doji, baseline_body=baseline)
+    ordinary = bars((1.0, 1.0010, 0.9990, 1.0008))[0]
+    assert not is_momentum_candle(ordinary, baseline_body=baseline)
+
+
+def test_a_candle_with_no_range_is_not_a_momentum_candle():
+    flat = bars((1.0, 1.0, 1.0, 1.0))[0]
+    assert not is_momentum_candle(flat, baseline_body=0.001)
+
+
+def test_the_momentum_test_needs_a_baseline():
+    candle = bars((1.0, 1.0055, 0.9995, 1.0050))[0]
+    assert not is_momentum_candle(candle, baseline_body=0.0)

@@ -1,6 +1,6 @@
 import pytest
 
-from clicktrader.forex.harness import replay
+from clicktrader.forex.harness import _settle_index, replay
 from clicktrader.forex.model import Direction, Signal
 from clicktrader.forex.strategies import MovingAverageCrossover, RandomDirection, SignalDecision
 from clicktrader.forex.synthetic import synthetic_price_ticks
@@ -109,3 +109,22 @@ def test_verdict_uses_the_measured_control_baseline_not_a_fixed_50_percent():
     # "worse than a coin flip" the way the old fixed-0.5 comparison would have.
     assert result.verdict.startswith("No directional edge")
     assert not result.verdict.startswith("Worse than")
+
+
+def test_a_clock_horizon_settles_at_the_first_tick_at_or_after_it():
+    # The reason `horizon_seconds` exists: the same tick count is two minutes on a one-second feed and
+    # half an hour on imported one-minute bars, and a Rise/Fall expiry is a length of time. Ticks here
+    # are a minute apart, so a 120-second horizon is two of them.
+    ticks = [Tick(0.0, "1.0"), Tick(60.0, "1.0"), Tick(120.0, "1.0"), Tick(180.0, "1.0")]
+    signal = Signal(Direction.UP, horizon_seconds=120)
+    assert _settle_index(ticks, 0, signal, 4) == 2
+    assert _settle_index(ticks, 1, signal, 4) == 3
+    assert _settle_index(ticks, 2, signal, 4) is None  # the segment ends before the clock horizon
+    # and with no clock horizon it stays a tick count, so every earlier strategy is untouched
+    assert _settle_index(ticks, 0, Signal(Direction.UP, 1), 4) == 1
+    assert _settle_index(ticks, 3, Signal(Direction.UP, 1), 4) is None
+
+
+def test_a_signal_without_a_clock_horizon_keeps_the_tick_behaviour():
+    ticks = [Tick(i, f"{1.0 + i * 0.1:.2f}") for i in range(10)]
+    assert replay(AlwaysUpOverThree(), ticks, split=0.5).out_of_sample.hit_rate == pytest.approx(1.0)

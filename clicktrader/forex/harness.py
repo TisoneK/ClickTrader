@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 from ..model import Tick
 from ..stats import MIN_BETS_REPORT, wilson_interval
 from ..strategies import History
+from .model import Signal
 from .strategies import ForexStrategy, RandomDirection
 
 
@@ -96,14 +97,31 @@ def _run_segment(strategy: ForexStrategy, ticks: Sequence[Tick], start: int, sto
         decision = strategy.decide(history)
         if decision is None:
             continue
-        exit_index = i + decision.signal.horizon_ticks
-        if exit_index >= stop:
+        exit_index = _settle_index(ticks, i, decision.signal, stop)
+        if exit_index is None:
             continue  # not enough future data left in this segment to grade it
         entry_price = float(ticks[i].price)
         exit_price = float(ticks[exit_index].price)
         seg.bets += 1
         seg.wins += decision.signal.wins(entry_price, exit_price)
     return seg
+
+
+def _settle_index(ticks: Sequence[Tick], entry: int, signal: Signal, stop: int) -> int | None:
+    """Where the contract settles: the first tick at or after the horizon.
+
+    By the clock when the signal carries a wall-clock horizon — which is what a Rise/Fall expiry actually
+    is — and by tick count otherwise, so every strategy written before this keeps its exact behaviour.
+    `None` when the segment ends first, which is a skip rather than a grade.
+    """
+    if signal.horizon_seconds is None:
+        index = entry + signal.horizon_ticks
+        return index if index < stop else None
+    target = ticks[entry].ts + signal.horizon_seconds
+    for index in range(entry + 1, stop):
+        if ticks[index].ts >= target:
+            return index
+    return None
 
 
 def replay(

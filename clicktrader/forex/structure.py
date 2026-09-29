@@ -371,6 +371,73 @@ def structure_target(
 
 
 @dataclass(frozen=True)
+class KeyZone:
+    """A horizontal level the market has already turned at more than once.
+
+    "Key Zone (Ceiling)" and "Key Zone (Floor)" in the source's own diagram, defined there as a level
+    with *past rejections* — which is what separates a zone from a swing point: one turn is a pivot, and
+    the second turn at the same price is the market remembering it.
+    """
+
+    price: float
+    touches: int
+    kind: SwingKind
+
+    @property
+    def is_ceiling(self) -> bool:
+        return self.kind is SwingKind.HIGH
+
+    def within(self, price: float, tolerance: float) -> bool:
+        """Is `price` close enough to count as being at this level? `tolerance` is a fraction."""
+        return abs(price - self.price) <= tolerance * self.price
+
+
+def key_zones(
+    candles: Sequence[Candle], *, strength: int = 2, tolerance: float = 0.002, min_touches: int = 2
+) -> list[KeyZone]:
+    """Levels built by clustering swing points that sit within `tolerance` of each other.
+
+    Relative rather than absolute distance, so one rule works on a 1.13 forex pair and a 4,100 gold
+    quote without being re-tuned. Clustering is greedy over sorted prices, which is enough for levels a
+    human would circle with a line and is stable between bars — an over-engineered clusterer would move
+    the level slightly every bar and make the strategy's decisions flicker.
+    """
+    if min_touches < 2:
+        raise ValueError("min_touches must be at least 2 — a single swing is a pivot, not a key zone")
+    by_kind: dict[SwingKind, list[SwingPoint]] = {SwingKind.HIGH: [], SwingKind.LOW: []}
+    for swing in swing_points(candles, strength=strength):
+        by_kind[swing.kind].append(swing)
+
+    zones: list[KeyZone] = []
+    for kind, swings in by_kind.items():
+        cluster: list[SwingPoint] = []
+        for swing in sorted(swings, key=lambda s: s.price):
+            if cluster and not (abs(swing.price - cluster[-1].price) <= tolerance * cluster[-1].price * 4):
+                if len(cluster) >= min_touches:
+                    zones.append(KeyZone(sum(s.price for s in cluster) / len(cluster), len(cluster), kind))
+                cluster = []
+            cluster.append(swing)
+        if len(cluster) >= min_touches:
+            zones.append(KeyZone(sum(s.price for s in cluster) / len(cluster), len(cluster), kind))
+    return sorted(zones, key=lambda z: z.price)
+
+
+def is_momentum_candle(
+    candle: Candle, *, baseline_body: float, size_multiple: float = 1.5, body_ratio: float = 0.6
+) -> bool:
+    """A large body with negligible wicks — the source's "clear directional power".
+
+    Both conditions, because neither alone is the thing being described: a big candle full of wicks is a
+    fight rather than a move, and a tiny candle with no wicks is nothing at all. The source's own
+    contrast is a doji ("indecision — do not execute") against an oversized body, so the test is size
+    *relative to recent candles* and shape *relative to its own range*.
+    """
+    if candle.range <= 0 or baseline_body <= 0:
+        return False
+    return candle.body >= size_multiple * baseline_body and (candle.body / candle.range) >= body_ratio
+
+
+@dataclass(frozen=True)
 class Zone:
     """A supply or demand zone, drawn wick to wick on one candle.
 

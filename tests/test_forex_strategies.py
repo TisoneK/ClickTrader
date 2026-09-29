@@ -285,8 +285,9 @@ def test_inside_bar_no_signal_without_a_mother_and_an_inside_bar():
     assert strategy.decide(_history([1.0, 1.1])) is None
 
 
-def test_forex_registry_has_all_nine_strategies():
+def test_forex_registry_has_every_strategy():
     assert set(REGISTRY) == {
         "random-direction", "ma-crossover", "rsi-mean-reversion", "macd-momentum",
         "bollinger-mean-reversion", "ema-trend", "engulfing-bar", "pin-bar", "inside-bar",
+        "pure-price-action",
     }

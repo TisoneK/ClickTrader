@@ -21,13 +21,25 @@ class Direction(str, Enum):
 @dataclass(frozen=True)
 class Signal:
     direction: Direction
-    horizon_ticks: int
+    horizon_ticks: int = 1
     """How many ticks ahead to check the outcome. Fixed per signal, not per strategy, so a replay can
     mix strategies with different horizons without the harness needing to know about it."""
+
+    horizon_seconds: float | None = None
+    """A wall-clock horizon, which **takes precedence** when set.
+
+    It exists because a Rise/Fall contract's expiry is a length of *time* — two minutes — and a tick
+    count is only the same thing when the feed ticks at a known rate. It is not: this project's own
+    importer writes four points per bar, so "120 ticks" means two minutes on a one-second feed and half
+    an hour on imported one-minute bars. Settling on the clock removes the guess, and matches the
+    product the strategy is actually traded on.
+    """
 
     def __post_init__(self) -> None:
         if self.horizon_ticks < 1:
             raise ValueError("horizon_ticks must be at least 1 — a signal about the past isn't one")
+        if self.horizon_seconds is not None and self.horizon_seconds <= 0:
+            raise ValueError("horizon_seconds must be positive — a signal about the past isn't one")
 
     def wins(self, entry_price: float, exit_price: float) -> bool:
         """Strictly higher/lower — an exact tie is a loss on both sides, the same asymmetry a real
@@ -37,6 +49,8 @@ class Signal:
         return exit_price < entry_price
 
     def __str__(self) -> str:
+        if self.horizon_seconds is not None:
+            return f"{self.direction.value} over {self.horizon_seconds:g}s"
         return f"{self.direction.value} over {self.horizon_ticks}"
 
 

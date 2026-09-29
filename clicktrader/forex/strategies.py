@@ -8,10 +8,12 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass
+from collections.abc import Sequence
 from typing import Callable, Protocol
 
 from ..strategies import History
-from .candles import CandleBuilder
+from .candles import CandleBuilder, TimeCandleBuilder
+from .structure import KeyZone, is_momentum_candle, key_zones
 from .indicators import bollinger_bands, ema, last_non_null, macd, rsi
 from .model import Direction, Signal
 
@@ -364,6 +366,152 @@ class InsideBar:
         return decision
 
 
+class PurePriceAction:
+    """The "pure price action" Rise/Fall method: trade the reaction at a level the market has already
+    turned at, on a closed candle, for a fixed expiry.
+
+    Read off the source's own diagram and flowchart, which specify it to the parameter:
+
+    - **Asset Volatility 25 Index, 1-minute chart, Rise/Fall, 2-minute expiry, fixed stake.** Those are
+      the source's own settings ("set these parameters, do not alter them during the session").
+    - A **Key Zone** is a horizontal level with *past rejections* — a level the market has turned at more
+      than once, not a single swing.
+    - Price arriving at a zone has exactly two valid outcomes. **Rejection**: a momentum candle closes
+      away from the zone, and the trade goes with the bounce. **Breakout**: never trade the initial
+      break — wait for price to come back and retest the zone from the other side, then take the
+      continuation when a momentum candle confirms it.
+    - A **momentum candle** is the only permission to enter, and only once the bar has *fully closed*
+      ("never anticipate the market"). Anything indecisive means no trade, and the source is explicit
+      that no trade is itself a valid decision.
+
+    **Where this follows the source and where it had to choose.** The asset, timeframe, contract, expiry
+    and the two engagements are stated. These are the readings:
+
+    - "past rejections" is `key_zones`'s `min_touches`, and the level tolerance is relative rather than
+      absolute so it is not re-tuned per instrument.
+    - "momentum" is a body both large against recent candles and dominant within its own range; the
+      source shows the shape rather than giving the number.
+    - "approaches the zone" is the bar's range reaching the level; "closes away from it" is the close on
+      the far side, which is what makes the rejection a rejection rather than a touch.
+    - a broken zone is remembered until price resolves it, so the retest can be several bars later.
+
+    **What is deliberately absent: everything the other supply-and-demand material has.** No FVG, no
+    break-of-structure test, no Fibonacci, no swing high or low to target, and no stop or take-profit at
+    all — this is a fixed-expiry contract, so the exit is the clock rather than a level. Its edge claim
+    is a hit rate, and the number to clear is the one the platform actually quotes: a 95.35% ROI, so
+    51.19% of bets with ties counted as losses.
+
+    Built to be tested, not believed.
+    """
+
+    def __init__(
+        self,
+        *,
+        bar_minutes: float = 1.0,
+        expiry_seconds: float = 120.0,
+        swing_strength: int = 2,
+        level_tolerance: float = 0.002,
+        min_touches: int = 2,
+        size_multiple: float = 1.5,
+        body_ratio: float = 0.6,
+        lookback: int = 20,
+        window: int = 400,
+        stake: float = 1.0,
+    ) -> None:
+        if bar_minutes <= 0:
+            raise ValueError("bar_minutes must be positive")
+        if expiry_seconds <= 0:
+            raise ValueError("expiry_seconds must be positive")
+        self.name = (
+            f"pure-price-action(bar={bar_minutes:g}m, expiry={expiry_seconds:g}s, "
+            f"touches>={min_touches}, tolerance={level_tolerance:g})"
+        )
+        self._interval = bar_minutes * 60.0
+        self._expiry = expiry_seconds
+        self._strength = swing_strength
+        self._tolerance = level_tolerance
+        self._min_touches = min_touches
+        self._size_multiple = size_multiple
+        self._body_ratio = body_ratio
+        self._lookback = lookback
+        self._window = window
+        self._stake = stake
+        self._bars = TimeCandleBuilder(self._interval)
+        self._broken: dict[float, Direction] = {}
+
+    def decide(self, history: History) -> SignalDecision | None:
+        if not len(history):
+            return None
+        tick = history[-1]
+        closed = self._bars.feed(tick.ts, float(tick.price))
+        if closed is None:
+            return None
+        candles = self._bars.last(self._window)
+        if len(candles) < self._lookback + self._strength * 2 + 1:
+            return None
+
+        zones = key_zones(
+            candles, strength=self._strength, tolerance=self._tolerance, min_touches=self._min_touches
+        )
+        if not zones:
+            return None
+        bodies = sorted(c.body for c in candles[-self._lookback :])
+        baseline = bodies[len(bodies) // 2]
+        momentum = is_momentum_candle(
+            closed, baseline_body=baseline, size_multiple=self._size_multiple, body_ratio=self._body_ratio
+        )
+        self._note_breaks(closed, zones)
+
+        decision = self._rejection(closed, zones, momentum)
+        return decision if decision is not None else self._retest(closed, zones, momentum)
+
+    def _note_breaks(self, closed: Candle, zones: Sequence[KeyZone]) -> None:
+        """Remember each zone the last bar closed cleanly beyond, and in which direction."""
+        for zone in zones:
+            if closed.close > zone.price * (1 + self._tolerance):
+                self._broken[zone.price] = Direction.UP
+            elif closed.close < zone.price * (1 - self._tolerance):
+                self._broken[zone.price] = Direction.DOWN
+
+    def _rejection(self, closed: Candle, zones: Sequence[KeyZone], momentum: bool) -> SignalDecision | None:
+        """"Zone Rejection": price reaches the level and a momentum candle closes away from it."""
+        if not momentum:
+            return None
+        for zone in zones:
+            touched = closed.low <= zone.price <= closed.high
+            if not touched:
+                continue
+            # a bounce off a floor is a Rise; a rejection from a ceiling is a Fall
+            if zone.is_ceiling and not closed.bullish and closed.close < zone.price:
+                return self._signal(Direction.DOWN, f"rejection from ceiling {zone.price:.5f} ({zone.touches} prior turns)")
+            if not zone.is_ceiling and closed.bullish and closed.close > zone.price:
+                return self._signal(Direction.UP, f"rejection from floor {zone.price:.5f} ({zone.touches} prior turns)")
+        return None
+
+    def _retest(self, closed: Candle, zones: Sequence[KeyZone], momentum: bool) -> SignalDecision | None:
+        """"Zone Breakout": the break is not traded; the return to the level is."""
+        if not momentum:
+            return None
+        for zone in zones:
+            broke = self._broken.get(zone.price)
+            if broke is None or not (closed.low <= zone.price <= closed.high):
+                continue
+            if broke is Direction.UP and closed.close > zone.price:
+                self._broken.pop(zone.price, None)
+                return self._signal(Direction.UP, f"retest of broken ceiling {zone.price:.5f} holding as support")
+            if broke is Direction.DOWN and closed.close < zone.price:
+                self._broken.pop(zone.price, None)
+                return self._signal(Direction.DOWN, f"retest of broken floor {zone.price:.5f} holding as resistance")
+        return None
+
+    def _signal(self, direction: Direction, reason: str) -> SignalDecision:
+        return SignalDecision(
+            Signal(direction, horizon_seconds=self._expiry), self._stake,
+            f"{reason}; momentum candle closed, so {self._expiry:g}s "
+            f"{'Rise' if direction is Direction.UP else 'Fall'}",
+        )
+
+
 REGISTRY: dict[str, Callable[[], ForexStrategy]] = {
     "random-direction": lambda: RandomDirection(),
     "ma-crossover": lambda: MovingAverageCrossover(),
@@ -374,4 +522,5 @@ REGISTRY: dict[str, Callable[[], ForexStrategy]] = {
     "engulfing-bar": lambda: EngulfingBar(),
     "pin-bar": lambda: PinBar(),
     "inside-bar": lambda: InsideBar(),
+    "pure-price-action": lambda: PurePriceAction(),
 }
