@@ -73,6 +73,28 @@ def test_the_limits_can_refuse_a_signal_without_stopping_the_run():
     assert any("refused by the limits" in line for line in said)
 
 
+def test_a_tripped_guard_stops_the_run_instead_of_going_quiet():
+    # The guard latches when it trips. A loop that keeps running past that point watches, prints and
+    # places nothing -- the worst of the available behaviours, because it looks like it is working.
+    from clicktrader.limits import RiskGuard, RiskLimits
+
+    class TripsImmediately(RiskGuard):
+        def __init__(self):
+            super().__init__(RiskLimits(max_stake=1.0, max_session_loss=1.0, max_consecutive_losses=1))
+            self._trip("1 consecutive loss (limit 1)")
+
+    said = []
+    summary = run(
+        symbol="1HZ25V", log_path="/tmp/unused.jsonl", stake=1.0, paper=True,
+        ticks=iter(_ticks(50)), strategy_factory=AlwaysRises, emit=said.append, report_every=1e9,
+        guard_factory=TripsImmediately,
+    )
+    assert summary.placed == 0
+    assert any("STOPPING" in line for line in said)
+    assert any("A person has to decide" in line for line in said)
+    assert summary.ticks < 50  # it stopped rather than grinding through the stream
+
+
 def test_the_readout_says_nothing_is_placed_yet_and_that_that_is_normal():
     assert "nothing placed yet" in RunSummary(ticks=500, signals=0).readout()
     assert "normal" in RunSummary(ticks=500, signals=0).readout()

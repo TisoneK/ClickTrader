@@ -145,6 +145,7 @@ def run(
     report_every: float = 900.0,
     expiry_seconds: float = 120.0,
     strategy_factory: Callable[[], PurePriceAction] = PurePriceAction,
+    guard_factory: Callable[[], RiskGuard] | None = None,
     otp_url: str | None = None,
     ticks: Iterator | None = None,
     now: Callable[[], float] = time.time,
@@ -163,7 +164,9 @@ def run(
     summary = RunSummary()
     history: list[Tick] = []
     feed = ticks if ticks is not None else stream_ticks(symbol, app_id=app_id)
-    guard = RiskGuard(limits or RiskLimits(max_stake=stake, max_session_loss=stake * 10, max_consecutive_losses=5))
+    guard = (guard_factory or (lambda: RiskGuard(limits)))() if guard_factory or limits else RiskGuard(
+        RiskLimits(max_stake=stake, max_session_loss=stake * 10, max_consecutive_losses=5)
+    )
     trade_ws = None
     last_report = now()
     trade_log = TradeLog(log_path)
@@ -198,6 +201,13 @@ def run(
                 if refusal is not None:
                     summary.refused += 1
                     emit(f"signal refused by the limits: {refusal}")
+                    if guard.halted:
+                        # The guard *latches*: once tripped it refuses everything until a named human
+                        # rearms it. Carrying on here would leave a loop that is watching, printing and
+                        # inert — looking like it is working while placing nothing, which is the worst of
+                        # the available behaviours. Stop, and say why.
+                        emit(f"STOPPING: {guard.halted_reason}. A person has to decide whether to start again.")
+                        break
                 else:
                     summary = _take(
                         summary, decision, tick, trade_ws, trade_log, guard, currency, symbol, stake,
