@@ -451,7 +451,8 @@ class PurePriceAction:
             return None
 
         zones = key_zones(
-            candles, strength=self._strength, tolerance=self._tolerance, min_touches=self._min_touches
+            candles, strength=self._strength, min_touches=self._min_touches,
+            band=self._tolerance * _typical_range(candles, self._lookback),
         )
         if not zones:
             return None
@@ -466,11 +467,20 @@ class PurePriceAction:
         return decision if decision is not None else self._retest(closed, zones, momentum)
 
     def _note_breaks(self, closed: Candle, zones: Sequence[KeyZone]) -> None:
-        """Remember each zone the last bar closed cleanly beyond, and in which direction."""
+        """Remember each zone the last bar closed cleanly beyond, and in which direction.
+
+        "Cleanly beyond" is measured in the same band the levels use — a multiple of the typical candle
+        range. It used to be a fraction of *price*, which broke silently when the tolerance changed
+        meaning to candle ranges: `price * (1 + 1.0)` made the upside test require a close at twice the
+        price and the downside one a negative close, so every breakout-and-retest setup quietly ceased to
+        exist. Nothing failed; the setups simply stopped happening.
+        """
+        candles = self._bars.last(self._window)
         for zone in zones:
-            if closed.close > zone.price * (1 + self._tolerance):
+            band = self._tolerance * _typical_range(candles, self._lookback)
+            if closed.close > zone.price + band:
                 self._broken[zone.price] = Direction.UP
-            elif closed.close < zone.price * (1 - self._tolerance):
+            elif closed.close < zone.price - band:
                 self._broken[zone.price] = Direction.DOWN
 
     def _rejection(self, closed: Candle, zones: Sequence[KeyZone], momentum: bool) -> SignalDecision | None:
@@ -510,6 +520,20 @@ class PurePriceAction:
             f"{reason}; momentum candle closed, so {self._expiry:g}s "
             f"{'Rise' if direction is Direction.UP else 'Fall'}",
         )
+
+
+def _typical_range(candles: Sequence, lookback: int) -> float:
+    """The median candle range over the recent window — what sets how wide a level is.
+
+    Volatility rather than price, because the same level has to mean the same thing on an index quoted at
+    945 and one quoted at 850,000. Median rather than mean so a single violent candle does not widen every
+    level on the chart.
+    """
+    recent = candles[-lookback:]
+    if not recent:
+        return 0.0
+    ranges = sorted(c.range for c in recent)
+    return ranges[len(ranges) // 2]
 
 
 REGISTRY: dict[str, Callable[[], ForexStrategy]] = {
