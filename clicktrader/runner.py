@@ -43,6 +43,14 @@ from .strategies import History
 from .trade_log import RiseFallTrade, TradeLog, tally
 
 
+def _say(line: str) -> None:
+    """Print and flush. A long run's output goes to a file or a pipe, where Python block-buffers — and a
+    loop that is working but silent is indistinguishable from one that has died. This project already
+    learned that once on `record-deriv` (`--progress-every` exists for the same reason) and the lesson is
+    the same here: a multi-hour process has to report as it goes."""
+    print(line, flush=True)
+
+
 @dataclass
 class ShadowVariant:
     """A set of settings scored on live price without ever being traded."""
@@ -149,7 +157,7 @@ def run(
     otp_url: str | None = None,
     ticks: Iterator | None = None,
     now: Callable[[], float] = time.time,
-    emit: Callable[[str], None] = print,
+    emit: Callable[[str], None] = _say,
 ) -> RunSummary:
     """Run the method against the live feed, placing one contract per signal until a limit or a stop.
 
