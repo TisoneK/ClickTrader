@@ -264,6 +264,9 @@ def run(
             if now() - last_report >= report_every:
                 last_report = now()
                 emit(summary.readout())
+                seen = getattr(strategy, "last_view", None)
+                if seen:
+                    emit(f"what it sees: {seen}")
                 emit(shadow_leaderboard(shadows, live=(summary.won, summary.placed)))
                 settled = tally(log_path)
                 if settled.trades:

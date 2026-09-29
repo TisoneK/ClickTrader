@@ -66,3 +66,28 @@ def test_a_close_well_past_a_level_is_a_breakout():
     assert strategy._broken == {100.0: Direction.UP}
     strategy._note_breaks(_bar(99.5, 99.6, 97.0, 97.5, 460.0), [zone])
     assert strategy._broken == {100.0: Direction.DOWN}
+
+
+def test_the_method_says_what_it_is_looking_at():
+    # a live run with an empty log cannot distinguish "nothing here" from "blind", and "it missed the
+    # setup I saw" is unanswerable without this
+    from clicktrader.forex.candles import TimeCandleBuilder
+    from clicktrader.strategies import History
+    from clicktrader.model import Tick
+
+    strategy = PurePriceAction(bar_minutes=1)
+    assert "nothing seen yet" in strategy.last_view
+
+    def tick(i, price):
+        return Tick(float(i), f"{price:.2f}", "1HZ100V")
+
+    # feed enough bars for the warm-up gate, with ordinary small candles
+    price = 100.0
+    i = 0
+    for bar in range(60):
+        for _ in range(4):
+            price += 0.1
+            i += 1
+            strategy.decide(History([tick(k, 100.0) for k in range(i)], i))
+    assert strategy.last_view != "nothing seen yet"
+    assert "level" in strategy.last_view or "warming up" in strategy.last_view

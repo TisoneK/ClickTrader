@@ -438,6 +438,13 @@ class PurePriceAction:
         self._stake = stake
         self._bars = TimeCandleBuilder(self._interval)
         self._broken: dict[float, Direction] = {}
+        self.last_view = "nothing seen yet"
+        """What the method can see on the bar it most recently closed, in words.
+
+        Exists to answer the only question a live run over an empty log cannot: is it watching a market it
+        finds nothing in, or is it watching one it keeps declining? Without this a quiet run and a blind
+        run look identical, and "it missed the setup I saw" is unanswerable rather than diagnosable.
+        """
 
     def decide(self, history: History) -> SignalDecision | None:
         if not len(history):
@@ -447,7 +454,9 @@ class PurePriceAction:
         if closed is None:
             return None
         candles = self._bars.last(self._window)
-        if len(candles) < self._lookback + self._strength * 2 + 1:
+        needed = self._lookback + self._strength * 2 + 1
+        if len(candles) < needed:
+            self.last_view = f"warming up ({len(candles)}/{needed} bars)"
             return None
 
         zones = key_zones(
@@ -455,6 +464,7 @@ class PurePriceAction:
             band=self._tolerance * _typical_range(candles, self._lookback),
         )
         if not zones:
+            self.last_view = "no level has been turned at twice yet"
             return None
         bodies = sorted(c.body for c in candles[-self._lookback :])
         baseline = bodies[len(bodies) // 2]
@@ -462,6 +472,13 @@ class PurePriceAction:
             closed, baseline_body=baseline, size_multiple=self._size_multiple, body_ratio=self._body_ratio
         )
         self._note_breaks(closed, zones)
+        nearest = min(zones, key=lambda z: abs(z.price - closed.close))
+        at_level = closed.low <= nearest.price <= closed.high
+        self.last_view = (
+            f"{len(zones)} level(s), nearest {nearest.price:.2f} ({nearest.touches} turns, "
+            f"{'ceiling' if nearest.is_ceiling else 'floor'}); last bar "
+            f"{'momentum' if momentum else 'ordinary'}; price at that level: {'yes' if at_level else 'no'}"
+        )
 
         decision = self._rejection(closed, zones, momentum)
         return decision if decision is not None else self._retest(closed, zones, momentum)
