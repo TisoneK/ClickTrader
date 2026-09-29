@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-09-29T11:49:01Z_
+_Regenerated: 2026-09-29T12:20:25Z_
 
 ## Standing params
 - **Core:** 2.0.4 (locked, verified 2026-09-29)
@@ -16,7 +16,8 @@ _Regenerated: 2026-09-29T11:49:01Z_
 
 ## Office — who's in, right now
 - **Amara** (S002) — Working — Forex tie-rate verdict fix landed (2d5ebf1); now built `risk_replay.py` — session-by-se…
-- **Lena** (S009) — Working — User: "I want you to do it" — building the Rise/Fall demo path so the method can be tra…
+- **Lena** (S009) — Working — Correcting the bar: at the real 88% fill the method's 52.5% is *below* break-even, not ab…
+- **Lena** (S009) — Done — Rise/Fall can now be traded, settled, logged and tallied for real
 
 ## Current task
 - **2026-09-24/25 — Amara / claude-sonnet-5 (S002)** — **Digit-contract side (CryptonicHub + Deriv): stable, considered done for now.** All 3 layers built, live-verified (real demo trades placed… — *open (roster row stale since 2026-09-26 — logged flaw). New active thread: forex, scoped to fixed-stake Rise/Fall-style options on a forex underlying. Next: let the real EUR/USD recording keep accumulating, then run `forex-replay` for a real read once there's enough data. No forex live-trading/executor code exists yet.*
