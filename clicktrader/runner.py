@@ -37,7 +37,12 @@ from .api.deriv.ticks import stream_ticks
 from .api.deriv.trading import get_balance, get_otp_url, place_rise_fall, wait_for_settlement
 from .forex.model import Direction, Signal
 from .forex.strategies import PurePriceAction
+from websocket import WebSocketConnectionClosedException, WebSocketException
+
 from .limits import RiskGuard, RiskLimits
+
+WEBSOCKET_ERRORS = (WebSocketException, WebSocketConnectionClosedException)
+"""Everything a dropped or wedged socket raises. Caught so a multi-day run survives one."""
 from .model import Tick
 from .strategies import History
 from .trade_log import RiseFallTrade, TradeLog, tally
@@ -103,6 +108,35 @@ def shadow_grid(*, tolerance: float, body_ratio: float, size_multiple: float, ex
         ("longer expiry", dict(expiry_seconds=expiry * 2)),
     ]
     return [ShadowVariant(name, PurePriceAction(**settings)) for name, settings in variants]
+
+
+def resumable_stream(
+    symbol: str,
+    *,
+    app_id: int = DEFAULT_APP_ID,
+    delay: float = 5.0,
+    emit: Callable[[str], None] = _say,
+) -> Iterator:
+    """Yield ticks forever, reconnecting when the feed drops.
+
+    A dropped socket is a normal event over hours and days, not a failure — the live demo run died after
+    twenty-seven minutes on `WebSocketConnectionClosedException` and stopped collecting, which for
+    something meant to gather evidence overnight is the difference between working and not. `stream_ticks`
+    retries a few times internally; this is the layer that survives it giving up.
+
+    Reconnecting does not lose the strategy's state: the bars are rebuilt from the ticks the loop keeps,
+    so a gap in the feed shows up as a gap in the bars rather than as a corrupted history.
+    """
+    while True:
+        try:
+            for record in stream_ticks(symbol, app_id=app_id):
+                yield record
+        except WEBSOCKET_ERRORS as exc:
+            emit(f"feed dropped ({type(exc).__name__}: {exc}); reconnecting in {delay:g}s")
+            time.sleep(delay)
+        else:
+            emit("feed ended; reconnecting")
+            time.sleep(delay)
 
 
 @dataclass
@@ -171,7 +205,7 @@ def run(
     )
     summary = RunSummary()
     history: list[Tick] = []
-    feed = ticks if ticks is not None else stream_ticks(symbol, app_id=app_id)
+    feed = ticks if ticks is not None else resumable_stream(symbol, app_id=app_id, emit=emit)
     guard = (guard_factory or (lambda: RiskGuard(limits)))() if guard_factory or limits else RiskGuard(
         RiskLimits(max_stake=stake, max_session_loss=stake * 10, max_consecutive_losses=5)
     )

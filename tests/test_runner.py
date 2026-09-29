@@ -142,3 +142,55 @@ def test_the_grid_is_small_and_coarse_on_purpose():
     names = [v.name for v in grid]
     assert "looser levels" in names and "tighter levels" in names and "three touches" in names
     assert all(isinstance(v, ShadowVariant) and v.bets == 0 for v in grid)
+
+
+def test_a_dropped_feed_is_reconnected_rather_than_ending_the_run(monkeypatch):
+    # the live run died after 27 minutes on a closed socket; over a night that is the difference between
+    # collecting evidence and collecting nothing
+    import clicktrader.runner as runner
+    from websocket import WebSocketConnectionClosedException
+
+    calls = {"n": 0}
+
+    def tick(i):
+        return TickRecord(tick=Tick(float(i), "1.00000", "1HZ25V"))
+
+    def fake_stream(symbol, *, app_id=None):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            yield tick(1)
+            yield tick(2)
+            raise WebSocketConnectionClosedException("Connection to remote host was lost.")
+        for i in (3, 4, 5, 6):
+            yield tick(i)
+
+    monkeypatch.setattr(runner, "stream_ticks", fake_stream)
+    monkeypatch.setattr(runner.time, "sleep", lambda _s: None)
+    said = []
+    feed = runner.resumable_stream("1HZ25V", emit=said.append)
+    got = [next(feed).tick.ts for _ in range(6)]
+    assert got == [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]  # it carried on past the drop, in order
+    assert calls["n"] == 2  # one reconnect, not a storm of them
+    assert any("feed dropped" in line and "reconnecting" in line for line in said)
+    # ("feed ended" is asserted in the test below: here the generator is still paused mid-stream, so the
+    # quiet-close path has not been reached yet)
+
+
+def test_a_feed_that_ends_without_an_error_is_reconnected_too(monkeypatch):
+    # a stream that simply stops (a server-side close) must not look like the run finishing
+    import clicktrader.runner as runner
+
+    calls = {"n": 0}
+
+    def fake_stream(symbol, *, app_id=None):
+        calls["n"] += 1
+        for i in range(calls["n"], calls["n"] + 1):
+            yield TickRecord(tick=Tick(float(i), "1.00000", symbol))
+
+    monkeypatch.setattr(runner, "stream_ticks", fake_stream)
+    monkeypatch.setattr(runner.time, "sleep", lambda _s: None)
+    said = []
+    feed = runner.resumable_stream("1HZ25V", emit=said.append)
+    assert [next(feed).tick.ts for _ in range(3)] == [1.0, 2.0, 3.0]
+    assert calls["n"] == 3
+    assert said.count("feed ended; reconnecting") == 2
