@@ -366,7 +366,7 @@ def cmd_smc_compare(args: argparse.Namespace) -> int:
     print(f"window {mk['from']} -> {mk['to']} ({len(idx)} bars of {minutes:g}m; typical candle range {typical:.2f}); marker: {mk.get('marker', '?')}")
 
     bands = [(b, born, died) for b, born, died in reading.levels if born <= last and (died is None or died >= first)]
-    hits = misses = 0
+    hits = misses = label_only = 0
     for lv in mk.get("levels", []):
         near = [(b, born, died) for b, born, died in bands if b.low - typical <= lv["price"] <= b.high + typical]
         hits += bool(near); misses += not near
@@ -382,8 +382,23 @@ def cmd_smc_compare(args: argparse.Namespace) -> int:
         want = "down" if ch["direction"] == "down" else "up"
         cand = [e for e in reading.events if e.kind is EventKind.CHOCH and abs(e.index - i) <= args.tolerance]
         same = [e for e in cand if e.direction.value == want]
-        hits += bool(same); misses += not same
-        print(f"CHOCH {want} ~{ch['at'][-5:]} @{ch.get('price', '?')}: " + (f"engine CHOCH at {when(same[0].index)} level {same[0].level:.2f}" if same else ("engine had a CHOCH the other way at " + when(cand[0].index) if cand else "engine had NO CHOCH within %d bars" % args.tolerance)))
+        if same:
+            hits += 1
+            print(f"CHOCH {want} ~{ch['at'][-5:]} @{ch.get('price', '?')}: engine CHOCH at {when(same[0].index)} level {same[0].level:.2f}")
+        else:
+            # the same break at the same price under another name is a different disagreement from no break at all
+            price = ch.get("price")
+            alt = [e for e in reading.events if e.kind in (EventKind.BOS, EventKind.CHOCH) and e.direction.value == want
+                   and abs(e.index - i) <= args.tolerance * 2 and price is not None and abs(e.level - float(price)) <= typical]
+            alt.sort(key=lambda e: abs(e.level - float(price)))  # the event at the marked level, not merely a nearby one
+            if alt:
+                label_only += 1
+                flipped = [e for e in reading.events if e.kind is EventKind.CHOCH and e.direction.value == want and e.index < alt[0].index][-1:]
+                print(f"CHOCH {want} ~{ch['at'][-5:]} @{price}: SAME BREAK, DIFFERENT LABEL — engine has a {alt[0].kind.value} at {when(alt[0].index)} level {alt[0].level:.2f}"
+                      + (f" (it had already called a CHOCH {want} at {when(flipped[0].index)}, so this one was a continuation)" if flipped else ""))
+            else:
+                misses += 1
+                print(f"CHOCH {want} ~{ch['at'][-5:]} @{price}: " + ("engine had a CHOCH the other way at " + when(cand[0].index) if cand else "engine had NO break there within %d bars" % (args.tolerance * 2)))
     for sw in mk.get("sweeps", []):
         i = at(sw["at"])
         found = [e for e in reading.events if e.kind is EventKind.SWEEP and abs(e.index - i) <= args.tolerance]
@@ -415,7 +430,7 @@ def cmd_smc_compare(args: argparse.Namespace) -> int:
     extra_tr = [o for o in reading.opportunities if in_win(o.armed_at) and o.is_true and not any(abs(o.armed_at - m) <= args.tolerance * 3 for m in marked_trades)]
     print(f"engine CHOCHs the marker did not mark: {len(extra_ch)} (of {sum(1 for e in reading.events if e.kind is EventKind.CHOCH and in_win(e.index))} in the window)")
     print(f"engine trades the marker did not mark: {len(extra_tr)} (of {sum(1 for o in reading.opportunities if in_win(o.armed_at) and o.is_true)} armed in the window)")
-    print(f"agreement on the marks given: {hits} of {hits + misses}")
+    print(f"agreement on the marks given: {hits} of {hits + misses + label_only}" + (f" (+{label_only} with the level right and a different label)" if label_only else ""))
     return 0
 
 

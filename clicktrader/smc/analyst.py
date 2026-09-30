@@ -315,13 +315,14 @@ def read_chart(
                 # A level is one object that GROWS as the market turns at it again — not a new level each time a
                 # swing joins the cluster. Match by kind and overlap with one already being tracked; only when
                 # nothing matches is this a newly found level.
-                match = next((k for k, rec in level_life.items() if k[0] == p.kind.value
-                              and rec[0].low <= p.high and p.low <= rec[0].high), None)
-                if match is not None:
-                    if level_life[match][2] is None:  # a level already deleted stays deleted, however often its swings are re-found
-                        level_life[match][0] = p
-                        level_life[match][2] = died
+                same = [k for k, rec in level_life.items() if k[0] == p.kind.value and rec[0].low <= p.high and p.low <= rec[0].high]
+                alive = next((k for k in same if level_life[k][2] is None), None)
+                if alive is not None:
+                    level_life[alive][0], level_life[alive][2] = p, died
+                elif any(p.last_index <= level_life[k][2] for k in same):
+                    continue  # the swings of a level already deleted, found again: it stays deleted
                 else:
+                    # the market has turned at this price again AFTER the old level was closed through: a new level
                     level_life[(p.kind.value, len(level_life))] = [p, t, died]
             reading.levels = [(rec[0], rec[1], rec[2]) for rec in level_life.values()]
 

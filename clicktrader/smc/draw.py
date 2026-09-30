@@ -106,7 +106,8 @@ def draw_reading(
     for e in reading.events:
         if e.index < lo or e.index >= n:
             continue
-        x0, x1 = max(0, e.level_from - lo, e.index - lo - 40), e.index - lo  # a line reaching back further than 40 bars is noise
+        reach = 14 if e.kind is EventKind.SWEEP else 40  # a sweep is one poke: its line should not span the chart
+        x0, x1 = max(0, e.level_from - lo, e.index - lo - reach), e.index - lo
         colour = {EventKind.BOS: _BLUE, EventKind.CHOCH: _GREEN, EventKind.SWEEP: _RED, EventKind.GAP_FILL: _ORANGE}[e.kind]
         segs.append(Segment(x0, e.level, x1, e.level, colour, e.kind is not EventKind.CHOCH))
         below = e.direction is Direction.DOWN
