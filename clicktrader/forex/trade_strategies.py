@@ -551,7 +551,10 @@ def _engulfs(previous: Candle, last: Candle, direction: Direction) -> bool:
 TRADE_REGISTRY: dict[str, TradeStrategyFactory] = {
     "sneaky-pivot": SneakyPivot,
     "supply-demand": SupplyDemand,
+    "smc": lambda: __import__("clicktrader.smc.strategy", fromlist=["SmcStrategy"]).SmcStrategy(),
 }
+"""`smc` is imported lazily because it depends on this module: the strategy trades a `TradePlan` and is
+graded by `trade_harness`, while `smc/` builds the identification layer that decides when to emit one."""
 
 
 def build(name: str, *, session_start_hour_utc: int | None = None) -> TradeStrategy:
