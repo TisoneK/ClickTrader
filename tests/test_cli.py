@@ -257,3 +257,22 @@ def test_smc_chart_zooms_drags_and_compares_a_hand_drawn_level(tmp_path, capsys)
     assert (tmp_path / "c.1m.png").exists() and (tmp_path / "c.5m.png").exists()
     text = capsys.readouterr().out
     assert "your level 104.00" in text and "structure by zoom:" in text
+
+
+def test_load_env_file_fills_only_what_is_missing_and_never_returns_values(tmp_path, monkeypatch):
+    from clicktrader.cli import load_env_file
+
+    env = tmp_path / ".env"
+    env.write_text("# a comment\nDERIV_APP_ID=123\nexport DERIV_API_TOKEN=\"s3cret\"\nDERIV_DEMO_ACCOUNT_ID='VRTC1'\nBROKEN LINE\n")
+    monkeypatch.delenv("DERIV_APP_ID", raising=False)
+    monkeypatch.delenv("DERIV_API_TOKEN", raising=False)
+    monkeypatch.setenv("DERIV_DEMO_ACCOUNT_ID", "already-set")  # an existing value wins
+    import os
+
+    loaded = load_env_file(str(env))
+    assert sorted(loaded) == ["DERIV_API_TOKEN", "DERIV_APP_ID"]
+    assert os.environ["DERIV_API_TOKEN"] == "s3cret" and os.environ["DERIV_APP_ID"] == "123"
+    assert os.environ["DERIV_DEMO_ACCOUNT_ID"] == "already-set"
+    assert "s3cret" not in " ".join(loaded)
+    monkeypatch.delenv("DERIV_APP_ID")
+    monkeypatch.delenv("DERIV_API_TOKEN")

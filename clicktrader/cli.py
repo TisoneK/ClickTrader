@@ -444,6 +444,33 @@ def cmd_smc_compare(args: argparse.Namespace) -> int:
     return 0
 
 
+def load_env_file(path: str = ".env") -> list[str]:
+    """Fill in environment variables from a `KEY=VALUE` file, only those not already set; return the names it set.
+
+    Values are never printed or returned. Understands `export KEY=value`, single or double quotes and `#` comments.
+    Exists so a demo run does not depend on remembering `set -a && source .env && set +a` in every new terminal."""
+    import os
+
+    file = Path(path)
+    if not file.is_file():
+        return []
+    loaded: list[str] = []
+    for raw in file.read_text().splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        if line.startswith("export "):
+            line = line[len("export "):].lstrip()
+        key, _, value = line.partition("=")
+        key, value = key.strip(), value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+            value = value[1:-1]
+        if key and key not in os.environ:
+            os.environ[key] = value
+            loaded.append(key)
+    return loaded
+
+
 def cmd_run_smc(args: argparse.Namespace) -> int:
     """Run the SMC engine on the live feed: PAPER by default (places nothing), or on the DEMO account with --place.
 
@@ -468,9 +495,12 @@ def cmd_run_smc(args: argparse.Namespace) -> int:
     print(f"{mode}: {args.symbol}, {args.minutes:g}m bars with slower clocks {'/'.join(f'{m:g}' for m in chain)}m, "
           f"stake {args.stake:g} x{args.multiplier}; {caps}", flush=True)
     if args.place:
+        loaded = load_env_file()
+        if loaded:
+            print(f"read {', '.join(loaded)} from .env (values not shown)", flush=True)
         missing = [n for n in ("DERIV_API_TOKEN", "DERIV_APP_ID", "DERIV_DEMO_ACCOUNT_ID") if not os.environ.get(n)]
         if missing:
-            print(f"missing {', '.join(missing)} — demo only. Nothing placed.")
+            print(f"missing {', '.join(missing)} — put them in .env in the project folder (KEY=value, one per line). Demo only. Nothing placed.")
             return 2
     try:
         if args.warm_bars:
