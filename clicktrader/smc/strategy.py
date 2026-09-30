@@ -18,10 +18,20 @@ What it does, in the material's own order:
    a break with no aligned higher timeframe, a block that failed the three-factor check. The difference
    between "no setup" and "a setup I declined" is the whole reason this package exists.
 
-**What is a reading rather than a quote.** The material states a *minimum* 1:2 risk-to-reward and targets
-"the next macro level"; the floor is implemented and the macro-level target is not, because the daily levels
-it refers to are a separate piece of work. The push threshold, the band, and the choice of clocks are all
-parameters with defaults, and none of them has been measured yet.
+**Nothing here gates on a number nobody stated.** The material states a *minimum* 1:2 risk-to-reward — that
+is implemented as a floor — and it describes three qualities of a valid zone without giving a threshold for
+any of them. So pushed distance is **measured and reported, and by default not gated at all**: an earlier
+version required three bands, a number invented here, and that single invented threshold was the entire
+difference between an engine that never fired in 42 days and one that fires. Gating a method on a made-up
+constant does not make it more faithful, it makes the constant the strategy.
+
+The clocks default to the ratio the material itself draws — a 1-hour view above a 15-minute trigger — rather
+than the 5m/60m first chosen here. The alignment reading defaults to two structural steps rather than three,
+because three was strict enough that on real EUR/USD the higher timeframe read "range" at every one of 1,797
+crossings, which is not a filter but an off switch. Both are still parameters, and both are still unmeasured.
+
+The macro-level target the material names is not implemented — it needs the daily key levels, which are their
+own piece of work.
 """
 
 from __future__ import annotations
@@ -54,10 +64,11 @@ class SmcStrategy:
     def __init__(
         self,
         *,
-        trigger_minutes: float = 5.0,
+        trigger_minutes: float = 15.0,
         higher_minutes: float = 60.0,
         band_bands: float = 1.0,
-        min_pushed: float = 3.0,
+        min_pushed: float = 0.0,
+        alignment_steps: int = 2,
         risk_reward: float = 2.0,
         strength: int = 2,
         lookback: int = 20,
@@ -75,6 +86,7 @@ class SmcStrategy:
         self._higher = TimeCandleBuilder(higher_minutes * 60.0)
         self._band_bands = band_bands
         self._min_pushed = min_pushed
+        self._alignment_steps = alignment_steps
         self._risk_reward = risk_reward
         self._strength = strength
         self._lookback = lookback
@@ -129,7 +141,9 @@ class SmcStrategy:
 
         higher = self._higher.last(self._window)
         if len(higher) >= self._strength * 2 + 1:
-            trend = trend_sequence(swing_points(higher, strength=self._strength))
+            trend = trend_sequence(
+                swing_points(higher, strength=self._strength), steps=self._alignment_steps
+            )
             agrees = (trend is Trend.DOWN and block.direction is Direction.DOWN) or (
                 trend is Trend.UP and block.direction is Direction.UP
             )
