@@ -1,5 +1,7 @@
 # Source material, transcribed page by page
 
+**Reading the originals yourself? Start with [`HOW-TO-READ-THE-MATERIAL.md`](HOW-TO-READ-THE-MATERIAL.md)** — view pages as images, treat a failed read as failed, and use the tools in `tools/`.
+
 Each folder holds one file per page of a deck the project owner generated (with NotebookLM) from trading courses and videos, **in this project's own words**, written from viewing the page images (the decks are image-only PDFs with no text layer). The decks themselves are not committed: the courses and videos they were generated from belong to their authors, and this repository is public and MIT-licensed, so the repo carries a description of what each page says and draws, enough to implement from without the source. Each file says where the page states a rule and where it only pictures one. Committing the generated PDFs is the owner's call, not an agent's.
 
 Read the page files, not the summaries elsewhere, when a rule matters: earlier notes in `docs/smc/` were written from a failed image read in places and have needed three corrections.
