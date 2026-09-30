@@ -36,4 +36,4 @@ Examples:
   user, 2026-07-14)
 -->
 
-*(none yet)*
+- **[project-local]** The protocol says nothing about reading the owner's source material → **before writing any claim about a deck, frame or book, read `docs/sources/HOW-TO-READ-THE-MATERIAL.md`**: view the pages as images (not extracted text), treat a tool result that says "media removed" as a failed read, and list which pages you did and did not view. — the method is "read the source first-hand" and this project's specification is image-only PDFs; four sessions' claims rested on unseen images (flaws/log.md, S010) (set by agent on the owner's instruction, 2026-09-30)

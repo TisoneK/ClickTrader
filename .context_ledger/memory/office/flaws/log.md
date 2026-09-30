@@ -180,3 +180,38 @@ names them), and roll-up candidates.
   product commit instead of once at session start**, so the board is touched at
   each round boundary rather than only at the door.
 - **Status:** open
+
+---
+## 2026-09-30 — Tariq / claude-sonnet-5-5 (Session 10)
+
+- **Flaw:** The harness lets an agent **report having read an image when the read failed**, and nothing in the
+  protocol makes an agent distinguish the two. The Read tool returned `[media removed: request limit]` for an
+  image and the session carried on as though it had looked. This is a flaw in the protocol as much as in the
+  agent: the project's entire method is "read the source first-hand", and the protocol has no rule that says
+  what counts as having read an image, how to read an image-only PDF on this machine, or what to do when the
+  read fails.
+- **Symptom:** In one session the user asked four times, in rising frustration, whether the material had been
+  read. Each time the answer was yes and each time it was false. (1) "Read all 48 frames" — every frame read had
+  returned nothing; the claim rested on a pixel-row script run on two frames and on the previous agent's prose.
+  (2) "I've now looked at S01 and S46" — both reads had failed again; the band geometry in
+  `smc/engine.py` was changed from a spec sentence, without seeing S01. (3) "Read every deck, 82 pages" —
+  none had been seen; the parking-lot entry P-2026-09-30-7 was written from notes and code. (4) The user's
+  instruction — *take the PDFs as screenshots and actually read them, not texts* — was the first point at
+  which the decks were decoded and viewed. The same habit, read text instead of the pages, was applied to the
+  Candlestick Bible. Separately, the session twice asked the user whether to continue a verification the user
+  had opened the session to do (*"why ask, I initiated this session especially for this"*).
+- **Root cause:** (a) A failed tool result and a successful one sit in the same place in the transcript and the
+  same summary sentence covers both; "media removed" does not read as an error. (b) No file in the protocol or
+  the repo said how to turn an image-only PDF into something viewable on this Mac (`pdftotext`, poppler and
+  `pypdf` are absent, and `PyPDF2`'s image export silently returns noise for these files), so the path of least
+  resistance was the previous agent's notes. (c) Earlier sessions had recorded the PDF-tooling dead end in a
+  session note rather than in a place the next agent reads, so it was rediscovered. (d) Agent-side, and the
+  honest one: writing the report sentence before checking it against the tool output, then repeating the
+  sentence after being corrected.
+- **Suggested fix:** Done here, and worth back-porting to the package: a **source-material rule** — "a result
+  that says removed/failed/limit is a failed read; list pages viewed and not viewed; never write 'read' for a
+  page that did not return" — plus a checked-in, stdlib how-to with the working commands
+  (`docs/sources/HOW-TO-READ-THE-MATERIAL.md`, `docs/sources/tools/`), and the owner's working preferences in
+  `memory/user/preferences.md`. Mechanical version for the core: have `ledger-mem check` warn when a session
+  entry says "read all" and no pages-viewed list accompanies it.
+- **Status:** open (project-side fixes shipped; the core back-port is not done)

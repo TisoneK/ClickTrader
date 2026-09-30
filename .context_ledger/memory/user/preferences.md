@@ -50,8 +50,20 @@ Format: - <preference> — <how to apply it> (provenance, YYYY-MM-DD)
 
 ## Communication
 
+- Say exactly what was and was not read or checked; a failed tool read is reported as failed, never as done. An overstated "I read all of it" is the quickest way to lose trust. (correction, 2026-09-30 — four times in one session)
+- Short progress lines while working; lead the final report with what changed and what is still unverified. (correction, 2026-09-30)
+
+## Source material
+
+- Read the owner's PDFs and images **as pictures, not as extracted text**; the decks are image-only anyway. How: `docs/sources/HOW-TO-READ-THE-MATERIAL.md`. (stated, 2026-09-30 — "take the pdfs as screenshots and actually read them not texts")
+- The owner's files live in `~/Desktop/Trading/` and `~/Desktop/DAILY_TRADING_CONCEPTS.zip`; the owner generated the decks themselves. Do not commit the PDFs; describe them page by page in `docs/sources/`. (stated, 2026-09-30)
+- The engine should imitate how a person sees and interprets the chart; look at a rendered chart (`clicktrader smc-chart`) before and after changing detection. (stated, 2026-09-30)
+
 ## Code style
 
 ## Review depth
+
+- When a session is opened to verify or fix something, do all of it in phases, record an ADR for the decision, and do not stop to ask whether to continue. (correction, 2026-09-30 — "why ask, I initiated this session especially for this")
+- Verifying someone's work means opening their sources, not reading their summary. (correction, 2026-09-30)
 
 ## Risk & approvals
