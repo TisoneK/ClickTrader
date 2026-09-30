@@ -148,7 +148,7 @@ def draw_reading(
             last = at(end_i)
             boxes.append(Box(stop_lo, stop_hi, start, last, _PINK, 0.30))
             boxes.append(Box(tgt_lo, tgt_hi, start, last, _TEAL, 0.30))
-            word = "SHORT" if o.direction is Direction.DOWN else "LONG"
+            word = ("ZONE " if o.source == "zone" else "") + ("SHORT" if o.direction is Direction.DOWN else "LONG")
             tag = f"{word} {o.reward_risk:.1f}R" + (f" {o.outcome.upper()}" if o.outcome else " ARMED")
             labels.append(Label(start, o.entry, tag, _GREEN if o.outcome != "loss" else _RED, 2, "above" if o.direction is Direction.UP else "below"))
         else:

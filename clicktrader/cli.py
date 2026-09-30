@@ -300,8 +300,8 @@ def cmd_smc_chart(args: argparse.Namespace) -> int:
         if len(candles) < 30:
             print(f"{minutes:g}m: only {len(candles)} closed bar(s) in that recording — nothing worth reading")
             continue
-        higher_minutes = args.higher_minutes if args.higher_minutes else None
-        higher = bars(higher_minutes) if higher_minutes and higher_minutes > minutes else None
+        chain = [m for m in (args.higher_minutes or []) if m and m > minutes]
+        higher = [bars(m) for m in chain] or None
         reading = read_chart(candles, higher=higher)
         first = next((i for i, c in enumerate(candles) if lo_ts is None or c.opened_at >= lo_ts), 0)
         stop = next((i for i, c in enumerate(candles) if hi_ts is not None and c.opened_at >= hi_ts), len(candles))
@@ -348,10 +348,14 @@ def cmd_smc_compare(args: argparse.Namespace) -> int:
     for record in read_recording(args.recording):
         builder.feed(record.tick.ts, float(record.tick.price))
     candles = builder.last(10**7)
-    higher_builder = TimeCandleBuilder(args.higher_minutes * 60.0)
-    for record in read_recording(args.recording):
-        higher_builder.feed(record.tick.ts, float(record.tick.price))
-    reading = read_chart(candles, higher=higher_builder.last(10**7) if args.higher_minutes > minutes else None)
+    clocks = []
+    for hm in args.higher_minutes:
+        if hm > minutes:
+            hb = TimeCandleBuilder(hm * 60.0)
+            for record in read_recording(args.recording):
+                hb.feed(record.tick.ts, float(record.tick.price))
+            clocks.append(hb.last(10**7))
+    reading = read_chart(candles, higher=clocks or None)
     ts = lambda text: _parse_utc(text)  # noqa: E731
     lo_ts, hi_ts = ts(mk["from"]), ts(mk["to"])
     idx = [i for i, c in enumerate(candles) if lo_ts <= c.opened_at <= hi_ts]
@@ -438,6 +442,65 @@ def cmd_smc_compare(args: argparse.Namespace) -> int:
     print(f"engine trades the marker did not mark: {len(extra_tr)} (of {sum(1 for o in reading.opportunities if in_win(o.armed_at) and o.is_true)} armed in the window)")
     print(f"agreement on the marks given: {hits} of {hits + misses + label_only}" + (f" (+{label_only} with the level right and a different label)" if label_only else ""))
     return 0
+
+
+def cmd_run_smc(args: argparse.Namespace) -> int:
+    """Run the SMC engine on the live feed: PAPER by default (places nothing), or on the DEMO account with --place.
+
+    There is no real-money option: the broker session is opened with require_demo=True and reads only
+    DERIV_DEMO_ACCOUNT_ID. Paper mode needs no credentials at all."""
+    import os
+
+    from .api.deriv import DerivAPIError
+    from .api.deriv.ticks import stream_ticks
+    from .multipliers import DerivMultiplierBroker, run as run_multipliers
+    from .smc.live import paper_run, warm_from_history
+    from .smc.strategy import SmcStrategy
+
+    chain = tuple(args.higher_minutes) if args.higher_minutes else (60.0,)
+    strategy = SmcStrategy(trigger_minutes=args.minutes, higher_minutes=chain, risk_reward=args.risk_reward)
+    max_loss = args.max_loss_per_trade if args.max_loss_per_trade is not None else args.stake
+    mode = "DEMO ACCOUNT (virtual money)" if args.place else "PAPER (nothing is placed)"
+    print(f"{mode}: {args.symbol}, {args.minutes:g}m bars with slower clocks {'/'.join(f'{m:g}' for m in chain)}m, "
+          f"stake {args.stake:g} x{args.multiplier}, at most {args.max_trades} trade(s), {args.max_seconds:.0f}s, "
+          f"max {max_loss:g} at risk per trade", flush=True)
+    if args.place:
+        missing = [n for n in ("DERIV_API_TOKEN", "DERIV_APP_ID", "DERIV_DEMO_ACCOUNT_ID") if not os.environ.get(n)]
+        if missing:
+            print(f"missing {', '.join(missing)} — demo only. Nothing placed.")
+            return 2
+    try:
+        if args.warm_bars:
+            warm_from_history(strategy, args.symbol, minutes=1.0, bars=args.warm_bars, decimals=args.decimals)
+        feed = stream_ticks(args.symbol)
+        log = args.log or ("recordings/smc-demo-trades.jsonl" if args.place else "recordings/smc-paper-trades.jsonl")
+        if not args.place:
+            paper_run(symbol=args.symbol, log_path=log, stake=args.stake, multiplier=args.multiplier, strategy=strategy,
+                      ticks=feed, max_trades=args.max_trades, max_seconds=args.max_seconds, max_loss_per_trade=max_loss,
+                      report_every=args.report_every)
+            return 0
+        broker = DerivMultiplierBroker(symbol=args.symbol, stake=args.stake, multiplier=args.multiplier)
+        try:
+            run_multipliers(symbol=args.symbol, log_path=log, stake=args.stake, multiplier=args.multiplier, strategy=strategy,
+                            max_trades=args.max_trades, max_seconds=args.max_seconds, max_loss_per_trade=max_loss,
+                            ticks=feed, broker=broker, report_every=args.report_every)
+        finally:
+            broker.close()
+    except DerivAPIError as exc:
+        print(f"Deriv API error: {exc}")
+        return 2
+    except KeyboardInterrupt:
+        print("stopped by you; whatever was logged is written.")
+    return 0
+
+
+def cmd_smc_readiness(args: argparse.Namespace) -> int:
+    """Say, in plain words, whether the logs of a live test are enough evidence. Exit code 0 only when READY."""
+    from .smc.readiness import report
+
+    ready, text = report(args.logs)
+    print(text)
+    return 0 if ready else 1
 
 
 def cmd_forex_replay_all(args: argparse.Namespace) -> int:
@@ -797,7 +860,7 @@ def main(argv: list[str] | None = None) -> int:
     smc_chart.add_argument("recording")
     smc_chart.add_argument("out", help="PNG path to write (several --minutes write out.<m>m.png)")
     smc_chart.add_argument("--minutes", type=float, nargs="+", help="bar length(s) in minutes — the zoom (default 15)")
-    smc_chart.add_argument("--higher-minutes", type=float, default=60.0, help="slower clock that must not contradict a trade; 0 disables (default 60)")
+    smc_chart.add_argument("--higher-minutes", type=float, nargs="*", default=[60.0], help="slower clock(s) that must not contradict a trade — give several for a chain, none to disable (default 60)")
     smc_chart.add_argument("--from", dest="start", help="drag: first moment to show, UTC ('2026-09-30 07:00') or epoch")
     smc_chart.add_argument("--to", dest="end", help="drag: last moment to show (exclusive), UTC or epoch")
     smc_chart.add_argument("--bars", type=int, default=160, help="without --from/--to, how many of the latest bars to draw (default 160)")
@@ -809,9 +872,30 @@ def main(argv: list[str] | None = None) -> int:
     smc_cmp = sub.add_parser("smc-compare", help="compare a person's markup of a chart (JSON) with what the engine read, mark by mark")
     smc_cmp.add_argument("markup", help="markup JSON, see docs/evidence/markup/")
     smc_cmp.add_argument("recording", help="recording of the same instrument and window (history-deriv makes one)")
-    smc_cmp.add_argument("--higher-minutes", type=float, default=5.0, help="slower clock for the higher-timeframe veto (default 5)")
+    smc_cmp.add_argument("--higher-minutes", type=float, nargs="*", default=[5.0], help="slower clock(s) for the higher-timeframe veto (default 5)")
     smc_cmp.add_argument("--tolerance", type=int, default=8, help="bars either side within which an engine event counts as the marked one (default 8)")
     smc_cmp.set_defaults(func=cmd_smc_compare)
+
+    run_smc = sub.add_parser("run-smc", help="run the SMC engine on the live feed: PAPER by default, --place for the DEMO account (never real money)")
+    run_smc.add_argument("--symbol", default="R_100", help="Deriv symbol (default R_100; 1HZ100V is the 1-second index)")
+    run_smc.add_argument("--minutes", type=float, default=1.0, help="trigger bar length in minutes (default 1, the view the owner charts)")
+    run_smc.add_argument("--higher-minutes", type=float, nargs="+", default=[5.0, 15.0], help="slower clocks that must not contradict a trade (default 5 15)")
+    run_smc.add_argument("--risk-reward", type=float, default=2.0, help="minimum reward:risk (default 2, the material's floor)")
+    run_smc.add_argument("--stake", type=float, default=1.0)
+    run_smc.add_argument("--multiplier", type=int, default=100)
+    run_smc.add_argument("--max-trades", type=int, default=3)
+    run_smc.add_argument("--max-seconds", type=float, default=7200.0)
+    run_smc.add_argument("--max-loss-per-trade", type=float, default=None, help="refuse a plan whose stop is worth more than this (default: the stake)")
+    run_smc.add_argument("--warm-bars", type=int, default=1000, help="one-minute bars of history to start with (default 1000; 0 = start blind)")
+    run_smc.add_argument("--decimals", type=int, default=2)
+    run_smc.add_argument("--report-every", type=float, default=120.0, help="seconds between status lines saying what the engine sees (default 120)")
+    run_smc.add_argument("--log", default=None)
+    run_smc.add_argument("--place", action="store_true", help="actually place orders on the DEMO account (default is paper: nothing placed)")
+    run_smc.set_defaults(func=cmd_run_smc)
+
+    smc_ready = sub.add_parser("smc-readiness", help="is the evidence from a live test enough? plain words; exit 0 only when READY")
+    smc_ready.add_argument("logs", nargs="+", help="trade log file(s), paper and/or placed")
+    smc_ready.set_defaults(func=cmd_smc_readiness)
 
     fx_rep_all = sub.add_parser(
         "forex-replay-all",

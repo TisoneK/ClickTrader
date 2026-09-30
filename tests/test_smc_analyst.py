@@ -194,3 +194,73 @@ def test_every_zone_has_one_of_three_verdicts_true_false_or_broken():
     assert true.verdict == "TRUE"
     (broken,) = _zones((12.5, 12.6, 12.3, 12.4), (12.4, 12.45, 9.9, 10.05))
     assert broken.verdict == "BROKEN"  # it was valid, then a bar closed through it
+
+
+# --- the rest of the decks' zone rules, tested on the pure pieces --------------------------------------------
+from clicktrader.forex.structure import SwingKind, SwingPoint  # noqa: E402
+from clicktrader.smc.analyst import Structure, Zone, _mark_weaker, _zone_opportunity, fib_zone, read_structure  # noqa: E402
+from clicktrader.smc.engine import Control  # noqa: E402
+
+
+def _z(low, high, *, direction=Direction.UP, anchor=3, origin=5):
+    z = Zone(direction, low, high, origin, origin + 1, origin + 3, origin + 3, has_gap=True, has_bos=True)
+    z.leg_anchor = anchor
+    return z
+
+
+def test_the_lowest_demand_in_a_leg_is_strongest_and_the_others_are_weaker():
+    a, b, c = _z(10.0, 10.3), _z(9.0, 9.3), _z(9.5, 9.8, anchor=99)  # c is in another leg
+    _mark_weaker([a, b, c])
+    assert (a.weaker, b.weaker, c.weaker) == (True, False, False)
+
+
+def test_the_highest_supply_in_a_leg_is_strongest():
+    a, b = _z(20.0, 20.3, direction=Direction.DOWN), _z(21.0, 21.3, direction=Direction.DOWN)
+    _mark_weaker([a, b])
+    assert (a.weaker, b.weaker) == (True, False)
+
+
+def test_the_fibonacci_band_is_the_618_to_786_retracement():
+    lo, hi = fib_zone(top=110.0, bottom=100.0, demand=True)  # measured down from the top
+    assert (round(lo, 3), round(hi, 3)) == (102.14, 103.82)
+    lo, hi = fib_zone(top=110.0, bottom=100.0, demand=False)  # measured up from the bottom
+    assert (round(lo, 3), round(hi, 3)) == (106.18, 107.86)
+
+
+_ROOM = [SwingPoint(0, 14.0, SwingKind.HIGH), SwingPoint(1, 11.0, SwingKind.LOW)]
+
+
+def _opp(z, *, control=Control.DEMAND, structure=Structure.UP, clocks=()):
+    return _zone_opportunity([Candle(10, 11, 9, 10)] * 20, 19, z, _ROOM, list(clocks), 1, 2.0, control, structure)
+
+
+def test_a_fresh_true_demand_zone_with_the_trend_and_room_is_armed_with_the_decks_levels():
+    opp = _opp(_z(10.0, 10.5))
+    assert opp.state is State.ARMED and opp.source == "zone"
+    assert (opp.entry, opp.stop) == (10.5, 10.0)  # limit at the near edge, stop just outside the far edge
+    assert opp.target == 14.0 and opp.reward_risk == 7.0  # the nearest level leaving the floor
+
+
+def test_a_demand_zone_in_a_down_trend_is_declined_because_the_decks_only_look_for_supply():
+    opp = _opp(_z(10.0, 10.5), control=Control.SUPPLY, structure=Structure.DOWN)
+    assert opp.state is State.DECLINED and "against the trend" in opp.reason
+
+
+def test_a_weaker_zone_is_declined_in_favour_of_the_lowest_one():
+    z = _z(10.0, 10.5)
+    z.weaker = True
+    opp = _opp(z)
+    assert opp.state is State.DECLINED and "weaker zone" in opp.reason
+
+
+def test_a_trade_with_no_level_leaving_the_floor_is_declined_for_room():
+    z = _z(10.0, 12.9)  # a huge risk: no swing is 2x that far away
+    assert "no room" in _opp(z).reason
+
+
+def test_every_clock_in_a_chain_gets_a_say():
+    down = [Candle(40 - o, 40 - l, 40 - h, 40 - c) for o, h, l, c in UP]  # the same zig-zag mirrored: a clear downtrend
+    zigzag = [Candle(*b) for b in UP]  # another that reads up
+    assert _opp(_z(10.0, 10.5), clocks=[zigzag]).state is State.ARMED  # agrees with the long
+    blocked = _opp(_z(10.0, 10.5), clocks=[zigzag, down])
+    assert blocked.state is State.DECLINED and "higher timeframe" in blocked.reason

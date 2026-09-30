@@ -69,7 +69,7 @@ class SmcStrategy:
         self,
         *,
         trigger_minutes: float = 15.0,
-        higher_minutes: float = 60.0,
+        higher_minutes: float | tuple[float, ...] = 60.0,
         risk_reward: float = 2.0,
         strength: int = 2,
         lookback: int = 20,
@@ -78,9 +78,10 @@ class SmcStrategy:
     ) -> None:
         if risk_reward < 1:
             raise ValueError("the material's floor is a minimum of 1:2; anything below 1 risks more than it targets")
-        self.name = f"smc(trigger={trigger_minutes:g}m, higher={higher_minutes:g}m, rr>={risk_reward:g})"
+        chain = tuple(higher_minutes) if isinstance(higher_minutes, (tuple, list)) else (higher_minutes,)
+        self.name = f"smc(trigger={trigger_minutes:g}m, higher={'/'.join(f'{m:g}' for m in chain)}m, rr>={risk_reward:g})"
         self._trigger = TimeCandleBuilder(trigger_minutes * 60.0)
-        self._higher = TimeCandleBuilder(higher_minutes * 60.0)
+        self._higher = [TimeCandleBuilder(m * 60.0) for m in chain]
         self._risk_reward = risk_reward
         self._strength = strength
         self._lookback = lookback
@@ -96,11 +97,29 @@ class SmcStrategy:
             return None
         tick = history[-1]
         price = float(tick.price)
-        self._higher.feed(tick.ts, price)
+        for builder in self._higher:
+            builder.feed(tick.ts, price)
         closed = self._trigger.feed(tick.ts, price)
         if closed is not None:
             self._on_trigger_bar(closed)
         return self._fill(price)
+
+    def warm(self, ticks) -> int:
+        """Feed historical ticks into the bar builders WITHOUT reading the chart or placing anything.
+
+        A live run starts with no bars, and the reading needs hours of them: this is how it starts with the
+        chart a person would already have on screen. Nothing armed before the last warm-up tick can exist, so
+        the first live bar is read as a fresh one. Returns how many ticks were fed."""
+        fed = 0
+        for tick in ticks:
+            price = float(tick.price)
+            for builder in self._higher:
+                builder.feed(tick.ts, price)
+            self._trigger.feed(tick.ts, price)
+            fed += 1
+        self._armed = None
+        self.last_view = f"warmed with {fed} historical tick(s)"
+        return fed
 
     def _on_trigger_bar(self, closed: Candle) -> None:
         candles = self._trigger.last(self._window)
@@ -114,7 +133,7 @@ class SmcStrategy:
                 self._armed = None
                 self.last_view = "dropped: the bar closed through the block's far edge — dead zone"
         reading = read_chart(
-            candles, higher=self._higher.last(self._window) or None, strength=self._strength,
+            candles, higher=[b.last(self._window) for b in self._higher] or None, strength=self._strength,
             lookback=self._lookback, risk_reward=self._risk_reward,
         )
         last = len(candles) - 1

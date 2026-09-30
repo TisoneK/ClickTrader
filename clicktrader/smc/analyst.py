@@ -122,7 +122,7 @@ class Opportunity:
     entry: float
     stop: float
     target: float | None
-    event: Event
+    event: Event | None
     gap: FairValueGap | None
     pushed: float
     reward_risk: float | None
@@ -132,6 +132,10 @@ class Opportunity:
     closed_at: int | None = None
     outcome: str | None = None
     """HINDSIGHT — "win", "loss" or "open" once filled. Nothing decides on this; it is for the picture."""
+    source: str = "choch"
+    """"choch" (the block left by a change of character) or "zone" (a fresh true supply/demand zone)."""
+    impulse_from: int | None = None
+    """First bar of the impulse that made the zone/block; the falling-knife test compares the return with it."""
 
     @property
     def is_true(self) -> bool:
@@ -171,6 +175,16 @@ class Zone:
     died_at: int | None = None
     knife: bool = False
     """The bar that first tapped it was itself as large as the impulse: the violent return the decks say to skip."""
+    leg_anchor: int | None = None
+    """The major swing (of the opposite kind) that began the move this zone formed in; zones sharing it are one leg."""
+    weaker: bool = False
+    """Another true zone of the same kind in the same leg is lower (demand) / higher (supply): "lowest = strongest"."""
+    stacked: bool = False
+    """A level that had been closed through the other way sits under it: resistance turned support (or the reverse)
+    — the decks' "flip zone" / level stack, their strongest confirmation."""
+    fib: str = ""
+    """"" or e.g. "61.8-78.6": the zone lies in the deep discount (premium) of the leg before it, the decks' Fibonacci
+    confluence. Reported as a flag; it never changes the stake."""
 
     @property
     def valid(self) -> bool:
@@ -343,10 +357,27 @@ def _merge_bands(pools: list[LiquidityPool]) -> list[LiquidityPool]:
     return merged
 
 
+def _as_clocks(higher) -> list[Sequence[Candle]]:
+    """One slower clock, or a chain of them (daily -> 4H -> 1H), as a list of candle sequences."""
+    if not higher:
+        return []
+    return [higher] if isinstance(higher[0], Candle) else [h for h in higher if h]
+
+
+def _veto(clocks, short: bool, strength: int) -> str:
+    """Why a trade is against the slower clocks, or "" — every clock in the chain gets a say."""
+    for htf in clocks:
+        if len(htf) >= strength * 2 + 2:
+            reading = read_structure(major_swings(swing_points(htf, strength=strength)))
+            if (reading is Structure.UP and short) or (reading is Structure.DOWN and not short):
+                return f"against the higher timeframe, which reads {reading.value}"
+    return ""
+
+
 def read_chart(
     candles: Sequence[Candle],
     *,
-    higher: Sequence[Candle] | None = None,
+    higher: Sequence[Candle] | Sequence[Sequence[Candle]] | None = None,
     strength: int = 2,
     lookback: int = 20,
     risk_reward: float = 2.0,
@@ -362,7 +393,7 @@ def read_chart(
 
     all_swings = swing_points(candles, strength=strength)
     reading.swings = label_swings(all_swings, strength)
-    higher_swings = swing_points(higher, strength=strength) if higher else []
+    clocks = _as_clocks(higher)
 
     gaps_all = fair_value_gaps(candles)
     major_ever: set[int] = set()
@@ -462,7 +493,7 @@ def read_chart(
                         z.end = en
                         z.has_gap, z.has_bos = has_gap, has_bos
                         z.aggressive = z.aggressive or aggressive  # once the growing run is far larger than ordinary, it stays so
-                        rng = _median([c.range for c in candles[max(0, t - lookback) : t + 1]]) or 1e-12
+        rng = _median([c.range for c in candles[max(0, t - lookback) : t + 1]]) or 1e-12
         for z in reading.zones:
             if z.status == "dead" or t <= z.end:
                 continue
@@ -475,6 +506,37 @@ def read_chart(
                 impulse = _median([_body(c) for c in candles[z.start : z.end + 1]]) or 1e-12
                 z.knife = _body(bar) >= impulse and ((bar.close < bar.open) if demand else (bar.close > bar.open))
 
+        # -- once a zone's run has ended: which leg it belongs to, whether it is a flip zone, where it sits on the Fibonacci
+        for z in reading.zones:
+            if t != z.end + 1:
+                continue
+            demand = z.direction is Direction.UP
+            prior = major_swings([sw for sw in all_swings if sw.index + strength <= z.start])
+            top_kind, bottom_kind = (SwingKind.HIGH, SwingKind.LOW) if demand else (SwingKind.LOW, SwingKind.HIGH)
+            anchors = [sw for sw in prior if sw.kind is top_kind]
+            z.leg_anchor = anchors[-1].index if anchors else -1
+            # flip zone: a level closed through the OTHER way before this zone formed sits under it
+            for band, _born, died in reading.levels:
+                if died is not None and died <= z.start and band.kind is (SwingKind.HIGH if demand else SwingKind.LOW) and band.low <= z.high and z.low <= band.high:
+                    z.stacked = True
+            # Fibonacci: the zone inside the 61.8-78.6 retracement of the leg before it (the decks' "deep discount")
+            if anchors:
+                far = [sw for sw in prior if sw.kind is bottom_kind and sw.index < anchors[-1].index][-1:]
+                if far:
+                    lo_f, hi_f = fib_zone(anchors[-1].price, far[0].price, demand=demand) if demand else fib_zone(far[0].price, anchors[-1].price, demand=False)
+                    if z.low <= hi_f and lo_f <= z.high:
+                        z.fib = "61.8-78.6"
+        _mark_weaker(reading.zones)
+
+        # -- a fresh true zone is itself an opportunity: limit at its near edge, stop beyond its far edge
+        for z in reading.zones:
+            if t != z.end + 1 or not z.valid or z.status != "fresh":
+                continue
+            opp = _zone_opportunity(candles, t, z, known, clocks, strength, risk_reward, control, structure)
+            reading.opportunities.append(opp)
+            if opp.state is State.ARMED:
+                armed.append(opp)
+
         # -- opportunities waiting for a retrace: dead zone, first tap, falling knife
         for opp in list(armed):
             blk = opp.block
@@ -486,7 +548,7 @@ def read_chart(
                 continue
             reached = bar.high >= opp.entry if short else bar.low <= opp.entry
             if reached and t > opp.armed_at:
-                impulse = candles[opp.event.level_from : opp.armed_at + 1]
+                impulse = candles[(opp.impulse_from if opp.impulse_from is not None else opp.event.level_from) : opp.armed_at + 1]
                 impulse_med = _median([_body(c) for c in impulse]) or 1e-12
                 if _body(bar) >= impulse_med and (bar.close < bar.open if not short else bar.close > bar.open):
                     opp.state, opp.closed_at = State.CANCELLED, t
@@ -565,6 +627,20 @@ def read_chart(
         if result.kind is not BreakKind.CHANGE_OF_CHARACTER:
             reading.control.append(control)
             continue
+        # The material's last invalidator: a visible stop cluster to the left. If the level being broken sits INSIDE a
+        # stacked level and the close has not left that stack, the stops under it were taken — the level held.
+        cluster = next((rec[0] for rec in level_life.values() if rec[2] is None and rec[0].touches >= 2
+                        and rec[0].kind is (SwingKind.LOW if ups else SwingKind.HIGH) and rec[0].low <= against.price <= rec[0].high), None)
+        if cluster is not None and ((bar.close >= cluster.low) if ups else (bar.close <= cluster.high)):
+            if key not in swept:
+                swept.add(key)
+                reading.events.append(Event(
+                    t, EventKind.SWEEP, Verdict.FALSE, against.price, against.index, brk,
+                    f"the level sits inside a stack the market had turned at {cluster.touches} times and the close did not leave it: the stops were taken, not a reversal",
+                    strength_x,
+                ))
+            reading.control.append(control)
+            continue
 
         consumed.add(key)
         event = Event(t, EventKind.CHOCH, Verdict.TRUE, against.price, against.index, brk, result.reason, strength_x)
@@ -573,7 +649,7 @@ def read_chart(
         reading.control.append(control)
 
         # -- the opportunity this change of character leaves behind
-        opp = _opportunity(candles, t, event, known, higher, higher_swings, strength, risk_reward)
+        opp = _opportunity(candles, t, event, known, clocks, strength, risk_reward)
         reading.opportunities.append(opp)
         if opp.state is State.ARMED:
             armed.append(opp)
@@ -589,7 +665,7 @@ def read_chart(
 
 def _opportunity(
     candles: Sequence[Candle], t: int, event: Event, known: Sequence[SwingPoint],
-    higher: Sequence[Candle] | None, higher_swings: Sequence[SwingPoint], strength: int, risk_reward: float,
+    clocks, strength: int, risk_reward: float,
 ) -> Opportunity:
     short = event.direction is Direction.DOWN
     same = (lambda c: c.close < c.open) if short else (lambda c: c.close > c.open)
@@ -615,12 +691,8 @@ def _opportunity(
     gaps = [g for g in fair_value_gaps(candles[: t + 1]) if origin_index <= g.formed_index <= t - 1]
     gap = next((g for g in gaps if gap_untouched(g, candles[: t + 1])), None)
 
-    # higher timeframe must not contradict the trade
-    why_not = ""
-    if higher and len(higher) >= strength * 2 + 2:
-        htf = read_structure(higher_swings)
-        if (htf is Structure.UP and short) or (htf is Structure.DOWN and not short):
-            why_not = f"against the higher timeframe, which reads {htf.value}"
+    # the slower clock(s) must not contradict the trade
+    why_not = _veto(clocks, short, strength)
 
     # next level with room: nearest opposing swing beyond the entry that leaves at least the floor
     want = [s for s in known if (s.kind is SwingKind.LOW if short else s.kind is SwingKind.HIGH)]
@@ -629,7 +701,7 @@ def _opportunity(
     rr = abs(entry - target) / risk if target is not None else None
     if not why_not and target is None:
         why_not = f"no room to move: no opposing level leaves {risk_reward:g}:1 from the block"
-    opp = Opportunity(t, event.direction, blk, entry, stop, target, event, gap, pushed, rr)
+    opp = Opportunity(t, event.direction, blk, entry, stop, target, event, gap, pushed, rr, impulse_from=event.level_from)
     if why_not:
         opp.state, opp.reason = State.DECLINED, why_not
     else:
@@ -644,4 +716,70 @@ def _declined(t: int, event: Event, reason: str, blk: OrderBlock | None = None) 
     blk = blk or OrderBlock(0.0, 0.0, t, event.direction)
     opp = Opportunity(t, event.direction, blk, blk.price_low, blk.price_high, None, event, None, 0.0, None)
     opp.state, opp.reason = State.DECLINED, reason
+    return opp
+
+
+def _mark_weaker(zones: Sequence[Zone]) -> None:
+    """"Lowest = strongest": among the true zones of one kind formed in one leg, only the lowest demand (highest supply)
+    keeps the deepest liquidity; every other one is marked `weaker` and is not traded."""
+    groups: dict[tuple[str, int], list[Zone]] = {}
+    for z in zones:
+        if z.verdict == "TRUE" and z.leg_anchor is not None:
+            groups.setdefault((z.kind, z.leg_anchor), []).append(z)
+    for (kind, _anchor), members in groups.items():
+        best = min(members, key=lambda q: q.low) if kind == "DEMAND" else max(members, key=lambda q: q.high)
+        for q in members:
+            q.weaker = q is not best
+
+
+def fib_zone(top: float, bottom: float, *, demand: bool) -> tuple[float, float]:
+    """The 61.8%-78.6% retracement band of the leg from `bottom` to `top`: for demand it is measured down from the
+    top, for supply up from the bottom. The decks' "deep discount" / premium where a zone has the most confluence."""
+    span = abs(top - bottom)
+    a, b = (top - 0.618 * span, top - 0.786 * span) if demand else (bottom + 0.618 * span, bottom + 0.786 * span)
+    return (min(a, b), max(a, b))
+
+
+def _zone_opportunity(
+    candles: Sequence[Candle], t: int, z: Zone, known: Sequence[SwingPoint], clocks, strength: int, risk_reward: float,
+    control: Control | None, structure: Structure,
+) -> Opportunity:
+    """The trade a fresh, true zone offers, or the reason it is not taken.
+
+    The decks' rules, in their order: trade only with the trend ("if in an uptrend, only look for demand zones"),
+    take the lowest demand / highest supply of a leg, never against the slower clock, limit at the zone's near edge,
+    stop just outside its far edge, target the nearest opposing level that leaves the 1:2 floor. Fibonacci and a flip
+    zone are reported on the opportunity as conviction; they never change the stake."""
+    short = z.direction is Direction.DOWN
+    blk = OrderBlock(z.low, z.high, z.origin_index, z.direction)
+    entry = z.low if short else z.high
+    stop = z.high if short else z.low
+    risk = abs(stop - entry)
+    with_trend = (control is Control.DEMAND and not short) or (control is Control.SUPPLY and short) if control is not None else (
+        (structure is Structure.UP and not short) or (structure is Structure.DOWN and short)
+    )
+    why_not = ""
+    if not with_trend:
+        why_not = f"against the trend: in {'an up' if not short else 'a down'}-trend the decks only look for {'demand' if not short else 'supply'}"
+    elif z.weaker:
+        why_not = f"a weaker zone: another {z.kind.lower()} zone in the same leg is {'lower' if not short else 'higher'} and holds the deeper liquidity"
+    elif risk <= 0:
+        why_not = "the zone has no width to risk"
+    if not why_not:
+        why_not = _veto(clocks, short, strength)
+    want = [sw for sw in known if (sw.kind is SwingKind.LOW if short else sw.kind is SwingKind.HIGH)]
+    cands = sorted({sw.price for sw in want if (sw.price < entry if short else sw.price > entry)}, reverse=short)
+    target = next((q for q in cands if risk > 0 and abs(entry - q) >= risk * risk_reward), None)
+    rr = abs(entry - target) / risk if (target is not None and risk > 0) else None
+    if not why_not and target is None:
+        why_not = f"no room to move: no opposing level leaves {risk_reward:g}:1 from the zone"
+    opp = Opportunity(t, z.direction, blk, entry, stop, target, None, None, z.pushed, rr, source="zone", impulse_from=z.start)
+    if why_not:
+        opp.state, opp.reason = State.DECLINED, why_not
+    else:
+        extras = ", ".join(x for x in (("flip zone" if z.stacked else ""), (f"Fibonacci {z.fib}" if z.fib else "")) if x)
+        opp.reason = (
+            f"fresh {z.kind.lower()} zone {z.low:.5f}-{z.high:.5f}; limit {entry:.5f}, stop {stop:.5f}, target {target:.5f} "
+            f"({rr:.1f}:1)" + (f"; conviction: {extras}" if extras else "")
+        )
     return opp
