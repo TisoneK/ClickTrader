@@ -125,4 +125,3 @@ re-seeded into the new office explicitly, and nothing else carries over.
 - **Notes:** none
 - **Report:** none (fix session)
 - **Round 2 (after the user asked "did you even read the zip"):** no — the first pass listed `DAILY_TRADING_CONCEPTS.zip` without opening an image and viewed one of ten `DIGITS.zip` images. Then read all 48 frames and the Candlestick Bible text. **Findings:** (1) P-2026-09-30-5 (Femi's strategies test the shape alone; the book conditions them on trend, level and timeframe). (2) **Lena's spec was wrong on the worked example** — P-2026-09-30-6: S46/S47 draw a short position box (stop 153.78, entry 153.34, target 151.54, about 1:4.2) that price reaches; the pink fill had been mislabelled as the order block. Corrected in `docs/smc/spec.md` and `04-video-walkthrough.md` with dated notes. Her other frame measurements were not re-checked and are not vouched for.
-
