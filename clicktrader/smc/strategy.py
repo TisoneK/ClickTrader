@@ -45,7 +45,7 @@ from ..forex.structure import Trend, swing_points, trend_sequence
 from ..forex.trade_strategies import TradeDecision
 from ..strategies import History
 from .components import OrderBlock, order_block
-from .engine import Control, ControlMachine
+from .engine import Control, ControlMachine, liquidity_pools
 from .quality import assess
 
 
@@ -87,6 +87,7 @@ class SmcStrategy:
         self._band_bands = band_bands
         self._min_pushed = min_pushed
         self._alignment_steps = alignment_steps
+        self._min_touches = 2
         self._risk_reward = risk_reward
         self._strength = strength
         self._lookback = lookback
@@ -117,9 +118,19 @@ class SmcStrategy:
         band = self._band_bands * _typical_range(candles, self._lookback)
         if self._machine is None:
             self._machine = ControlMachine(band=band, strength=self._strength)
+        # Count what is actually in view *before* asking whether anything crossed. Without this the
+        # message below cannot tell "no level was crossed" from "I found no levels at all", and it asserted
+        # the first for both — a log claiming the chart was quiet when the engine may simply have been
+        # blind, which is the one thing a status line must never do.
+        pools = liquidity_pools(
+            candles, strength=self._strength, band=band, min_touches=self._min_touches
+        )
         result = self._machine.consider(candles, index=len(candles) - 1)
         if result is None:
-            self.last_view = f"{self._machine.control.value} control; last bar threatened no level"
+            found = f"{len(pools)} level(s) in view, none crossed"
+            if not pools:
+                found = "NO levels found at all — the band is too tight for this bar size, not a quiet chart"
+            self.last_view = f"{self._machine.control.value} control; {found}"
             return
         if not result.flips_control:
             self.last_view = f"declined: {result.reason}"
