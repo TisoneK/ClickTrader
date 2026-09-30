@@ -35,3 +35,32 @@ the engine's state feeds the operating manual, and the output is one execution s
 - **Everything is measured against what is to the left.** Unmitigated gaps, obvious stop clusters, clean
   versus messy structure. A pattern is not a signal; the same pattern with a different left-hand side is a
   trap.
+
+## How a perception becomes code
+
+This whole package is an attempt to transcribe what an experienced trader sees into something executable, with
+the discipline and the emotion left out. That only works if the transcription is *faithful*, and the failure
+mode is quiet: a judgement that is not stated anywhere gets replaced by a number, and the number then quietly
+becomes the strategy. It happened here — "great pushed distance" became "at least three candle ranges", and
+that single invented constant was the whole difference between an engine that never fired in six weeks of data
+and one that fires.
+
+So three rules, in order, for turning anything seen into something computed:
+
+1. **If the source states it, implement it as stated.** The gap's strict no-wick-overlap, the order block as the
+   single opposite candle, the two invalidations, the 1:2 floor. These are transcriptions and they are checked
+   against the material rather than against intuition.
+2. **If the word is comparative — big, far, clean, obvious — decode it as a comparison, never as a constant.**
+   A trader's sense of a big candle comes from the candles around it, so "in the top tenth of the bars in view"
+   is a representation of that perception, while "at least 0.6 of its own range" is a rule of somebody else's
+   invention wearing the same name. An absolute threshold is legitimate only where the source gives the number.
+3. **If the source leaves it to the eye, it is absent and must be *marked* absent — never filled in.** "Clean
+   structure to the left" and "obvious liquidity" are judgements with no stated test. Inventing tests for them
+   produces an engine that answers a different question while looking like it answers this one. The honest
+   options are to leave the criterion out and say so, or to recover it from reference examples — moments the
+   trader calls a signal or a miss, with a sentence saying why. Those examples are the specification for the
+   criteria nobody wrote down; a threshold chosen here instead is the thing this section exists to prevent.
+
+The point of stating it: rule 2 is the difference between decoding a perception and replacing it, and rule 3 is
+the difference between an honest incomplete engine and a confident wrong one. Both failures have already
+happened in this repository once.
