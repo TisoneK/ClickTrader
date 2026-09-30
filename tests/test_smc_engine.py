@@ -188,3 +188,33 @@ def test_a_bar_that_closes_back_above_before_the_next_one_is_still_a_crossing():
     candles = _bars(*_TWO_LOWS, (100.5, 100.7, 97.6, 100.5))
     result = machine.consider(candles, index=5)
     assert result is not None and result.kind is BreakKind.LIQUIDITY_SWEEP
+
+
+def test_a_level_is_a_band_around_the_candles_that_formed_it_not_a_line_at_their_mean():
+    (pool,) = liquidity_pools(_bars(*_TWO_LOWS), strength=1, band=_BAND, min_touches=2)
+    # from the lowest wick (100.0) up to the highest of the member bodies' bottoms (100.8): a thin band at
+    # the lows of the cluster that covers the lower wicks, both edges read off the candles themselves
+    assert pool.low == pytest.approx(100.0)
+    assert pool.high == pytest.approx(100.8)
+    assert pool.far_edge == pytest.approx(100.0)  # the edge a break of a floor has to get through
+
+
+def test_a_ceiling_is_the_mirror_image():
+    mirrored = _bars(*[(200 - o, 200 - l, 200 - h, 200 - c) for o, h, l, c in _TWO_LOWS])
+    (pool,) = liquidity_pools(mirrored, strength=1, band=_BAND, min_touches=2)
+    assert pool.kind is SwingKind.HIGH
+    assert pool.high == pytest.approx(100.0)
+    assert pool.low == pytest.approx(99.2)
+    assert pool.far_edge == pytest.approx(pool.high)  # a ceiling is broken through its top
+
+
+def test_reaching_into_the_band_is_not_a_break_but_leaving_it_is():
+    # demand in control; the floor band is 100.0-100.8. A bar that dips to 100.3 has entered the band and
+    # has not left it, so it threatens nothing; the next bar, through 100.0, is a crossing of the far edge.
+    candles = _bars(*_TWO_LOWS, (100.9, 101.0, 100.3, 100.9))
+    machine = ControlMachine(band=_BAND, strength=1)
+    assert machine.consider(candles, index=5) is None
+    candles = _bars(*_TWO_LOWS, (100.9, 101.0, 100.3, 100.9), (100.9, 100.9, 97.6, 98.2))
+    result = machine.consider(candles, index=6)
+    assert result is not None and result.flips_control
+    assert result.level == pytest.approx(100.0)

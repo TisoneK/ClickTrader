@@ -70,3 +70,24 @@ So three rules, in order, for turning anything seen into something computed:
 The point of stating it: rule 2 is the difference between decoding a perception and replacing it, and rule 3 is
 the difference between an honest incomplete engine and a confident wrong one. Both failures have already
 happened in this repository once.
+
+## Looking at what the engine sees
+
+```bash
+clicktrader smc-chart recordings/forex/live-eurusd-20260928.jsonl chart.png --minutes 5 --bars 160
+```
+
+draws the bars with every level band, unfilled gap and swing point the engine holds laid on top
+(`clicktrader/smc/render.py`; the colour legend is `render.LEGEND`; no dependencies, no text in the image).
+Until this existed nothing the engine found had ever been compared with a picture. **Use it before changing
+any detection rule and again after**: the EUR/USD chart showed in one look that level clusters were chaining
+into bands as tall as the whole range, which the mean-price representation had hidden for the life of the
+package. A level is now drawn — and broken — as a band around the candles that formed it (`LiquidityPool.low`
+/ `.high` / `.far_edge`): a floor runs from its lowest wick to the top of the lowest member body, mirrored for
+a ceiling, and a break means leaving the band through its far edge rather than touching its middle.
+
+What it does **not** settle, and should not be tuned by eye alone (rule 3 above): on a consolidation the
+engine now draws several overlapping bands where a person would circle one zone, and it gives a 120-bar-old
+level the same weight as yesterday's. Whether overlapping bands merge and whether recency matters are
+judgements the material leaves to the trader; they need the trader's own reference examples.
+

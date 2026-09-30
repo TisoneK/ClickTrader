@@ -265,6 +265,35 @@ def cmd_forex_replay(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_smc_chart(args: argparse.Namespace) -> int:
+    """Draw a recording as candles with what the SMC engine sees laid over it, to a PNG."""
+    from .forex.candles import TimeCandleBuilder
+    from .forex.structure import SwingKind, fair_value_gaps, gap_untouched, swing_points
+    from .smc.engine import liquidity_pools
+    from .smc.render import Box, HLine, Mark, render_chart
+    from .smc.strategy import _typical_range
+
+    builder = TimeCandleBuilder(args.minutes * 60.0)
+    for record in read_recording(args.recording):
+        builder.feed(record.tick.ts, float(record.tick.price))
+    candles = builder.last(args.bars)
+    if len(candles) < 10:
+        print(f"only {len(candles)} closed bar(s) of {args.minutes:g} minutes in that recording — nothing worth drawing")
+        return 1
+    band = _typical_range(candles, 20)
+    pools = liquidity_pools(candles, strength=2, band=band, min_touches=2)
+    gaps = [g for g in fair_value_gaps(candles) if gap_untouched(g, candles)]
+    render_chart(
+        candles, args.out,
+        lines=[HLine(p.far_edge, p.first_index) for p in pools],
+        boxes=[Box(p.low, p.high, p.first_index) for p in pools]
+        + [Box(g.lower, g.upper, g.formed_index, None, (235, 190, 40), 0.3) for g in gaps],
+        marks=[Mark(s.index, s.price, s.kind is SwingKind.HIGH) for s in swing_points(candles, strength=2)],
+    )
+    print(f"wrote {args.out}: {len(candles)} bars, {len(pools)} level band(s), {len(gaps)} unfilled gap(s)")
+    return 0
+
+
 def cmd_forex_replay_all(args: argparse.Namespace) -> int:
     from .stats import bonferroni_z
 
@@ -617,6 +646,13 @@ def main(argv: list[str] | None = None) -> int:
              "prints the result as an answer instead of a hit rate",
     )
     fx_rep.set_defaults(func=cmd_forex_replay)
+
+    smc_chart = sub.add_parser("smc-chart", help="draw a recording with the SMC engine's levels and gaps laid over the candles (PNG)")
+    smc_chart.add_argument("recording")
+    smc_chart.add_argument("out", help="PNG path to write")
+    smc_chart.add_argument("--minutes", type=float, default=5.0, help="bar length in minutes (default 5)")
+    smc_chart.add_argument("--bars", type=int, default=160, help="how many of the most recent bars to draw (default 160)")
+    smc_chart.set_defaults(func=cmd_smc_chart)
 
     fx_rep_all = sub.add_parser(
         "forex-replay-all",

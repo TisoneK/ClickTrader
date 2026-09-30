@@ -75,6 +75,21 @@ class LiquidityPool:
     price: float
     kind: SwingKind
     touches: int
+    low: float = 0.0
+    high: float = 0.0
+    """The band the level occupies: a person draws it around the candles that formed it, not as a line.
+
+    For a floor it runs from the lowest wick in the cluster up to the top of the lowest body among them —
+    "a thin band at the lows of a cluster", one body tall, covering the lower wicks — and mirrored for a
+    ceiling. Both edges come from the member candles themselves; no width is chosen. A level read off the
+    mean price (`price`) alone sits in the middle of this band, and a bar that merely reaches the middle
+    has not left it."""
+    first_index: int = 0
+
+    @property
+    def far_edge(self) -> float:
+        """The edge a break has to get *through*: the bottom of a floor, the top of a ceiling."""
+        return self.low if self.kind is SwingKind.LOW else self.high
 
     @property
     def holds_stops(self) -> str:
@@ -105,10 +120,22 @@ def liquidity_pools(
     Delegates the geometry to `key_zones` — a level the market has turned at twice is the same measurement
     whichever question you are asking of it — and only changes what the object means.
     """
-    return [
-        LiquidityPool(price=zone.price, kind=zone.kind, touches=zone.touches)
-        for zone in key_zones(candles, strength=strength, band=band, min_touches=min_touches)
-    ]
+    return [_pool_of(zone, candles) for zone in key_zones(candles, strength=strength, band=band, min_touches=min_touches, max_span=band)]
+
+
+def _pool_of(zone, candles: Sequence[Candle]) -> LiquidityPool:
+    members = [candles[i] for i in zone.members] or []
+    if not members:
+        return LiquidityPool(zone.price, zone.kind, zone.touches, zone.price, zone.price, 0)
+    if zone.kind is SwingKind.LOW:
+        low = min(c.low for c in members)
+        high = max(min(c.open, c.close) for c in members)
+        high = max(high, low)
+    else:
+        high = max(c.high for c in members)
+        low = min(max(c.open, c.close) for c in members)
+        low = min(low, high)
+    return LiquidityPool(zone.price, zone.kind, zone.touches, low, high, min(zone.members))
 
 
 def classify_break(
@@ -239,14 +266,15 @@ class ControlMachine:
             )
             if not against_control:
                 continue
+            edge = pool.far_edge
             if pool.kind is SwingKind.LOW:
-                crossed = bar.low < pool.price <= previous.close
+                crossed = bar.low < edge <= previous.close
             else:
-                crossed = bar.high > pool.price >= previous.close
+                crossed = bar.high > edge >= previous.close
             if not crossed:
                 continue
             direction = Direction.DOWN if pool.kind is SwingKind.LOW else Direction.UP
-            result = classify_break(candles, index=index, level=pool.price, direction=direction)
+            result = classify_break(candles, index=index, level=edge, direction=direction)
             if result.flips_control:
                 self._control = self._control.other
             self._reason = f"bar {index}: {result.kind.value} — {result.reason}"

@@ -382,6 +382,11 @@ class KeyZone:
     price: float
     touches: int
     kind: SwingKind
+    members: tuple[int, ...] = ()
+    """Indexes (into the candles passed to `key_zones`) of the swing bars that make up the level.
+
+    Kept so a caller can draw the level the way the material does — as a band around the *candles* that
+    formed it — instead of only as their mean price."""
 
     @property
     def is_ceiling(self) -> bool:
@@ -392,12 +397,20 @@ class KeyZone:
         return abs(price - self.price) <= tolerance * self.price
 
 
+def _zone_of(cluster: Sequence[SwingPoint], kind: SwingKind) -> KeyZone:
+    return KeyZone(
+        sum(s.price for s in cluster) / len(cluster), len(cluster), kind,
+        members=tuple(sorted(s.index for s in cluster)),
+    )
+
+
 def key_zones(
     candles: Sequence[Candle], *,
     strength: int = 2,
     tolerance: float = 0.002,
     min_touches: int = 2,
     band: float | None = None,
+    max_span: float | None = None,
 ) -> list[KeyZone]:
     """Levels built by clustering swing points that sit within a band of each other.
 
@@ -413,6 +426,10 @@ def key_zones(
     """
     if min_touches < 2:
         raise ValueError("min_touches must be at least 2 — a single swing is a pivot, not a key zone")
+    # `max_span` bounds how far apart the swings *within one level* may be, end to end. Without it the
+    # clustering above chains: each swing only has to be near the previous one, so a run of swings each a
+    # little higher than the last becomes one "level" as tall as the whole range — which the mean price
+    # used to hide and a drawn band does not. A person groups swings that sit at roughly one price.
     by_kind: dict[SwingKind, list[SwingPoint]] = {SwingKind.HIGH: [], SwingKind.LOW: []}
     for swing in swing_points(candles, strength=strength):
         by_kind[swing.kind].append(swing)
@@ -424,13 +441,14 @@ def key_zones(
             if cluster:
                 last = cluster[-1].price
                 limit = (band * 4) if band is not None else (tolerance * last * 4)
-                if abs(swing.price - last) > limit:
+                too_wide = max_span is not None and swing.price - cluster[0].price > max_span
+                if abs(swing.price - last) > limit or too_wide:
                     if len(cluster) >= min_touches:
-                        zones.append(KeyZone(sum(s.price for s in cluster) / len(cluster), len(cluster), kind))
+                        zones.append(_zone_of(cluster, kind))
                     cluster = []
             cluster.append(swing)
         if len(cluster) >= min_touches:
-            zones.append(KeyZone(sum(s.price for s in cluster) / len(cluster), len(cluster), kind))
+            zones.append(_zone_of(cluster, kind))
     return sorted(zones, key=lambda z: z.price)
 
 

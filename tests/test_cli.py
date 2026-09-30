@@ -225,3 +225,17 @@ def test_buy_rise_fall_never_reaches_for_the_real_account(monkeypatch, capsys):
     source = __import__("inspect").getsource(cli.cmd_buy_rise_fall)
     assert "DERIV_REAL_ACCOUNT_ID" not in source
     assert "require_demo=True" in source
+
+
+def test_smc_chart_writes_a_png(tmp_path):
+    from clicktrader.cli import main
+    from clicktrader.model import Tick
+    from clicktrader.recording import Recorder, TickRecord
+
+    rec, out = tmp_path / "t.jsonl", tmp_path / "chart.png"
+    with Recorder(rec) as recorder:
+        for i in range(4000):
+            price = f"{1 + ((i * 7) % 97) / 1000:.5f}"
+            recorder.write(TickRecord(Tick(ts=1_700_000_000.0 + i * 5, price=price, symbol="X")))
+    assert main(["smc-chart", str(rec), str(out), "--minutes", "5", "--bars", "60"]) == 0
+    assert out.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"

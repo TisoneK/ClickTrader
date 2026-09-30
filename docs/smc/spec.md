@@ -552,7 +552,7 @@ files; the Python source was not read and is not judged here. Verified by a huma
 | concept (§) | frames | what `docs/smc/*.md` claims about the code |
 |---|---|---|
 | Supply/demand zone band (§2.1) | `S01`, `S04`–`S07`, `S25`, `S28` | The code's zone is **one candle, wick to wick** — the order-block reading, not the macro band (`01-components.md`, `04-video-walkthrough.md`). No multi-candle band object. |
-| Order block (§2.2) | `S30`–`S33`, `S39`, `S43`, `S46`, `S47` | **Implemented** as the single candle / the code's zone. No quality grade: the code treats a zone as an opportunity regardless (`04-video-walkthrough.md`). |
+| Order block (§2.2) | `S30`–`S33`, `S39`, `S43`, `S46`, `S47` | **Implemented** as the single candle / the code's zone. The *macro band* (§2.1) is now a band around the cluster's candles (`LiquidityPool.low/high`), broken at its far edge — see README "Looking at what the engine sees". No quality grade: the code treats a zone as an opportunity regardless (`04-video-walkthrough.md`). |
 | Inefficiency / FVG (§2.3) | `S01`, `S10`, `S20`, `S31`, `S43`, `S46` | **Implemented and matches the strict definition exactly** — `fair_value_gaps`, no wick overlap (`01-components.md`). |
 | Break of structure (§2.4) | `S01`, `S02`, `S10`, `S14`, `S15`, `S19`, `S26`–`S28` | **Implemented** — `broke_structure` (`01-components.md`). |
 | Pushed distance (§2.5) | `S01`, `S08` | **Not implemented at all** — nothing asks how far price travelled away from the zone before returning (`01-components.md`). |
