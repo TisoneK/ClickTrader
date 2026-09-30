@@ -64,56 +64,122 @@ class MultiplierRun:
         )
 
 
+def _connection_errors() -> tuple[type[Exception], ...]:
+    """The exception types that mean 'the socket failed; reconnecting may fix it' — the same class of
+    transient failure `stream_ticks` retries through. A `DerivAPIError` is deliberately absent: the API
+    is up and has said something is wrong, and a fresh session cannot fix a request that is wrong on
+    its face."""
+    import websocket
+
+    return (websocket.WebSocketException, TimeoutError, ConnectionError)
+
+
 class DerivMultiplierBroker:
-    """The live side: open a session, place a plan, and watch the position until the broker says it is sold."""
+    """The live side: open a session, place a plan, and watch the position until the broker says it is sold.
+
+    The OTP session is one websocket, and it can drop like any other — seen live, a mid-session drop
+    killed a demo run. So reads (`balance`, and every `watch` poll while a position is open) reconnect
+    through a fresh OTP URL and carry on: the position and its stop and target live at the broker, not
+    in this socket. A `place` is deliberately different — see its docstring.
+    """
 
     def __init__(self, *, symbol: str, stake: float, multiplier: int, app_id: int | None = None) -> None:
+        self.symbol = symbol
+        self.stake = stake
+        self.multiplier = multiplier
+        self._token, app, self._account = (
+            os.environ[n] for n in ("DERIV_API_TOKEN", "DERIV_APP_ID", "DERIV_DEMO_ACCOUNT_ID")
+        )
+        self._app_id = app_id if app_id is not None else app
+        self._ws = self._connect()
+
+    def _connect(self, *, retries: int = 5, backoff: float = 2.0, sleep=time.sleep):
+        """A fresh OTP-authenticated websocket, retrying transient connection failures like `stream_ticks`.
+
+        A reconnect needs a *new* one-time URL — the old one is spent — so every attempt re-asks the OTP
+        endpoint, which is why the credentials are kept on the instance.
+        """
         import websocket
 
         from .api.deriv.trading import get_otp_url
 
-        self.symbol = symbol
-        self.stake = stake
-        self.multiplier = multiplier
-        token, app, account = (
-            os.environ[n] for n in ("DERIV_API_TOKEN", "DERIV_APP_ID", "DERIV_DEMO_ACCOUNT_ID")
-        )
-        self._ws = websocket.create_connection(
-            get_otp_url(account, token, app_id or app, require_demo=True), timeout=25
-        )
+        attempt = 0
+        while True:
+            try:
+                url = get_otp_url(self._account, self._token, self._app_id, require_demo=True)
+                return websocket.create_connection(url, timeout=25)
+            except _connection_errors():
+                attempt += 1
+                if attempt >= retries:
+                    raise
+                sleep(backoff)
+
+    def _reconnect(self, *, sleep=time.sleep) -> None:
+        """Drop the current socket and open a fresh session (transient failures retried)."""
+        try:
+            self._ws.close()
+        except Exception:
+            pass  # a socket that is already gone has nothing left to close
+        self._ws = self._connect(sleep=sleep)
 
     def balance(self) -> tuple[float, str]:
-        """(balance, currency) of the demo account right now."""
+        """(balance, currency) of the demo account right now; reconnects once if the socket dropped."""
         from .api.deriv.trading import get_balance
 
-        return get_balance(self._ws)
+        try:
+            return get_balance(self._ws)
+        except _connection_errors():
+            self._reconnect()
+            return get_balance(self._ws)
 
     def place(self, plan: TradePlan, entry: float) -> tuple[int, float, float]:
-        """Place the plan with its own stop and target. Returns (contract id, price, currency)."""
-        from .api.deriv.trading import get_balance, place_multiplier
+        """Place the plan with its own stop and target. Returns (contract id, price, currency).
 
-        _balance, currency = get_balance(self._ws)
-        bought = place_multiplier(
-            self._ws, plan.direction.value == "up", symbol=self.symbol, stake=self.stake,
-            multiplier=self.multiplier, stop_loss=plan.stop, take_profit=plan.target, currency=currency,
-        )
+        Transport failures here are **not** retried with a re-buy: a buy whose response was lost cannot
+        be told from a buy that never landed, and re-placing on a fresh socket risks opening a second
+        position. The session is refreshed for later calls and the failure surfaces — a position that
+        did land still carries its stop and target at the broker.
+        """
+        from .api.deriv.trading import place_multiplier
+
+        _balance, currency = self.balance()  # also proves the session is alive before we buy
+        try:
+            bought = place_multiplier(
+                self._ws, plan.direction.value == "up", symbol=self.symbol, stake=self.stake,
+                multiplier=self.multiplier, stop_loss=plan.stop, take_profit=plan.target, currency=currency,
+            )
+        except _connection_errors():
+            self._reconnect()
+            raise
         return bought.contract_id, bought.buy_price, currency
 
     def watch(self, contract_id: int, *, timeout: float, poll_every: float, sleep=time.sleep) -> float:
-        """Poll the broker's record until the position is closed, and return its realised profit."""
+        """Poll the broker's record until the position is closed, and return its realised profit.
+
+        A socket drop between polls must not end the run while a position is open: reconnect (a fresh
+        OTP session) and keep polling the same contract — the broker still holds the stop and target
+        through every reconnect.
+        """
         from .api.deriv.trading import get_contract_status
 
         waited, delay = 0.0, max(poll_every, 60.0)  # the first minute is closed to selling anyway
         while waited < timeout:
             sleep(delay)
             waited += delay
-            record = get_contract_status(self._ws, contract_id)
+            try:
+                record = get_contract_status(self._ws, contract_id)
+            except _connection_errors():
+                self._reconnect(sleep=sleep)
+                continue
             if record.get("is_sold"):
                 return float(record.get("profit", 0.0))
         raise TimeoutError(f"contract {contract_id} was still open after {timeout:.0f}s")
 
     def close(self) -> None:
-        self._ws.close()
+        try:
+            self._ws.close()
+        except Exception:
+            pass  # a socket that already died has nothing left to close
 
 
 def run(
@@ -146,6 +212,10 @@ def run(
     history: list = []
     started = now()
     last_report = started
+    # a fresh clone has no recordings/ (it is not in git) — the log must not be the thing that kills a run
+    parent = os.path.dirname(log_path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
     log = open(log_path, "a", encoding="utf-8")
     def money() -> str:
         """The account's balance, when the broker can say — a live run must always show it."""

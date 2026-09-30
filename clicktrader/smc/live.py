@@ -73,6 +73,10 @@ def paper_run(
     open_pos: _Paper | None = None
     started = last_report = now()
     exposure = stake * multiplier
+    # a fresh clone has no recordings/ (it is not in git) — the log must not be the thing that kills a run
+    parent = os.path.dirname(log_path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
     log = open(log_path, "a", encoding="utf-8")
     emit("connecting to the live feed; the first tick should arrive within a few seconds...")
     try:
