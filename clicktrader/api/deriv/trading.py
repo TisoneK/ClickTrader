@@ -213,6 +213,21 @@ def place_multiplier(
             f"stake {stake:g} at multiplier {multiplier} is {notional:g} of exposure, and this account "
             f"refuses anything above {MAX_MULTIPLIER_NOTIONAL:g} — lower the stake or the multiplier"
         )
+    # The stop and target go in as *money*, not as the price levels a plan is written in, and each is
+    # capped at 50x the stake — both learned from live refusals ("Enter an amount equal to or lower than
+    # 50.00" for a 1 stake, 500.00 for a 10 stake). So the levels are converted here, against the spot,
+    # because a Multipliers position of `notional` moves `distance / spot * notional` in currency.
+    spot = _spot(ws, symbol=symbol, stake=stake, multiplier=multiplier, currency=currency,
+                 rise=rise, contract_type="MULTUP" if rise else "MULTDOWN")
+    risk_money = abs(spot - stop_loss) / spot * notional
+    reward_money = abs(take_profit - spot) / spot * notional
+    for label, value in (("stop", risk_money), ("target", reward_money)):
+        if value > MULTIPLIER_LIMIT_MULTIPLE * stake:
+            raise DerivAPIError(
+                f"the {label} works out at {value:.2f} of currency, over the "
+                f"{MULTIPLIER_LIMIT_MULTIPLE:g}x stake limit this account enforces — move the level closer or "
+                "lower the multiplier"
+            )
     ws.send(
         json.dumps(
             {
@@ -223,7 +238,7 @@ def place_multiplier(
                 "currency": currency,
                 "underlying_symbol": symbol,
                 "multiplier": multiplier,
-                "limit_order": {"stop_loss": stop_loss, "take_profit": take_profit},
+                "limit_order": {"stop_loss": round(risk_money, 2), "take_profit": round(reward_money, 2)},
             }
         )
     )
@@ -238,6 +253,32 @@ def place_multiplier(
         balance_after=bought["balance_after"],
         purchase_time=bought["purchase_time"],
     )
+
+
+MULTIPLIER_LIMIT_MULTIPLE = 50.0
+"""A Multipliers stop or target is capped at this many times the stake — 50.00 for a 1 stake, 500.00 for a
+10 stake, both read off live refusals. It is the account's rule, not a preference."""
+
+
+def _spot(ws: websocket.WebSocket, *, symbol: str, stake: float, multiplier: int, currency: str, rise: bool,
+          contract_type: str) -> float:
+    """The current spot, from a throwaway proposal — needed before the real one, because the stop and target
+    have to be converted to money and the conversion needs to know where price is."""
+    ws.send(
+        json.dumps(
+            {
+                "proposal": 1,
+                "amount": stake,
+                "basis": "stake",
+                "contract_type": contract_type,
+                "currency": currency,
+                "underlying_symbol": symbol,
+                "multiplier": multiplier,
+            }
+        )
+    )
+    priced = _recv_or_raise(ws)["proposal"]
+    return float(priced.get("spot") or priced.get("underlying_spot") or 0.0)
 
 
 def get_contract_status(ws: websocket.WebSocket, contract_id: int) -> dict[str, Any]:
