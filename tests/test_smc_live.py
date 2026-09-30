@@ -114,9 +114,22 @@ def test_a_small_clearly_positive_sample_is_still_not_ready(tmp_path):
     path.write_text("\n".join(json.dumps(_row(1.2)) for i in range(20)) + "\n")
     ready, text = report([str(path)])
     assert not ready and f"only 20 of the {MIN_TRADES}" in text
+    ready, text = report([str(path)], min_trades=10)  # the count is a parameter, not a fixed cap
+    assert ready
 
 
 def test_summary_expresses_results_in_units_of_risk_so_stakes_and_multipliers_compare():
     big = {"entry": 100.0, "stop": 99.0, "stake": 10.0, "multiplier": 100, "profit": 20.0}  # risks 10.00, won 2R
     small = {"entry": 100.0, "stop": 99.0, "stake": 1.0, "multiplier": 100, "profit": 2.0}  # risks 1.00, won 2R
     assert summarise([big, small]).mean_r == pytest.approx(2.0)
+
+
+def test_run_smc_has_no_default_caps_so_it_trades_what_it_finds_until_stopped(monkeypatch):
+    from clicktrader import cli
+
+    seen = {}
+    monkeypatch.setattr(cli, "cmd_run_smc", lambda args: seen.setdefault("args", args) and 0)
+    cli.main(["run-smc"])
+    args = seen["args"]
+    assert args.max_trades is None and args.max_seconds is None and args.max_loss_per_trade is None
+    assert args.place is False  # and it is still paper unless --place is given

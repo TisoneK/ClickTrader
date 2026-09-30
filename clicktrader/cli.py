@@ -459,11 +459,14 @@ def cmd_run_smc(args: argparse.Namespace) -> int:
 
     chain = tuple(args.higher_minutes) if args.higher_minutes else (60.0,)
     strategy = SmcStrategy(trigger_minutes=args.minutes, higher_minutes=chain, risk_reward=args.risk_reward)
-    max_loss = args.max_loss_per_trade if args.max_loss_per_trade is not None else args.stake
+    max_loss = args.max_loss_per_trade
     mode = "DEMO ACCOUNT (virtual money)" if args.place else "PAPER (nothing is placed)"
+    caps = ", ".join(x for x in (
+        f"at most {args.max_trades} trade(s)" if args.max_trades is not None else "",
+        f"{args.max_seconds:.0f}s" if args.max_seconds is not None else "",
+        f"max {max_loss:g} at risk per trade" if max_loss is not None else "") if x) or "no caps: it trades what it finds until you stop it (Ctrl-C)"
     print(f"{mode}: {args.symbol}, {args.minutes:g}m bars with slower clocks {'/'.join(f'{m:g}' for m in chain)}m, "
-          f"stake {args.stake:g} x{args.multiplier}, at most {args.max_trades} trade(s), {args.max_seconds:.0f}s, "
-          f"max {max_loss:g} at risk per trade", flush=True)
+          f"stake {args.stake:g} x{args.multiplier}; {caps}", flush=True)
     if args.place:
         missing = [n for n in ("DERIV_API_TOKEN", "DERIV_APP_ID", "DERIV_DEMO_ACCOUNT_ID") if not os.environ.get(n)]
         if missing:
@@ -498,7 +501,7 @@ def cmd_smc_readiness(args: argparse.Namespace) -> int:
     """Say, in plain words, whether the logs of a live test are enough evidence. Exit code 0 only when READY."""
     from .smc.readiness import report
 
-    ready, text = report(args.logs)
+    ready, text = report(args.logs, min_trades=args.min_trades)
     print(text)
     return 0 if ready else 1
 
@@ -883,9 +886,9 @@ def main(argv: list[str] | None = None) -> int:
     run_smc.add_argument("--risk-reward", type=float, default=2.0, help="minimum reward:risk (default 2, the material's floor)")
     run_smc.add_argument("--stake", type=float, default=1.0)
     run_smc.add_argument("--multiplier", type=int, default=100)
-    run_smc.add_argument("--max-trades", type=int, default=3)
-    run_smc.add_argument("--max-seconds", type=float, default=7200.0)
-    run_smc.add_argument("--max-loss-per-trade", type=float, default=None, help="refuse a plan whose stop is worth more than this (default: the stake)")
+    run_smc.add_argument("--max-trades", type=int, default=None, help="stop after this many trades (default: no cap — it trades what it finds until you stop it)")
+    run_smc.add_argument("--max-seconds", type=float, default=None, help="stop after this many seconds (default: no cap)")
+    run_smc.add_argument("--max-loss-per-trade", type=float, default=None, help="optional: refuse a plan whose stop is worth more than this (default: no limit)")
     run_smc.add_argument("--warm-bars", type=int, default=1000, help="one-minute bars of history to start with (default 1000; 0 = start blind)")
     run_smc.add_argument("--decimals", type=int, default=2)
     run_smc.add_argument("--report-every", type=float, default=120.0, help="seconds between status lines saying what the engine sees (default 120)")
@@ -895,6 +898,7 @@ def main(argv: list[str] | None = None) -> int:
 
     smc_ready = sub.add_parser("smc-readiness", help="is the evidence from a live test enough? plain words; exit 0 only when READY")
     smc_ready.add_argument("logs", nargs="+", help="trade log file(s), paper and/or placed")
+    smc_ready.add_argument("--min-trades", type=int, default=500, help="settled placed trades before a result can be told from luck (default 500; not a cap on the test)")
     smc_ready.set_defaults(func=cmd_smc_readiness)
 
     fx_rep_all = sub.add_parser(

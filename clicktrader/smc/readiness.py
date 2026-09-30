@@ -1,6 +1,10 @@
-"""Is the evidence there? A plain-words gate over the logs a live test produces.
+"""Is the evidence there? A plain-words reading of the logs a live test produces.
 
-It does not decide to trade, it says what the logs do and do not show. The bar is the project's own: at least
+It is **not a cap or a gate on the test**: the test trades whatever it finds. It only says what the logs do and do not
+show, and the trade count it asks for is a statistical fact about how many settled trades it takes before a result can
+be told from luck, not a rule carried over from the old digit work — pass `--min-trades` to change it.
+
+It does not decide to trade. The bar is the project's own: at least
 `MIN_TRADES` settled trades (the same 500 every verdict here needs), and the 95% interval of the mean result per unit
 of risk sitting wholly above zero. Two kinds of rows are kept apart on purpose:
 
@@ -77,7 +81,7 @@ def load(paths: Iterable[str]) -> list[dict]:
     return rows
 
 
-def report(paths: Iterable[str]) -> tuple[bool, str]:
+def report(paths: Iterable[str], *, min_trades: int = MIN_TRADES) -> tuple[bool, str]:
     rows = load(paths)
     paper = summarise(r for r in rows if r.get("mode") == "paper")
     placed = summarise(r for r in rows if r.get("mode") != "paper")
@@ -90,15 +94,15 @@ def report(paths: Iterable[str]) -> tuple[bool, str]:
                 f"(95% interval {e.low:+.2f} to {e.high:+.2f})")
 
     lines += [line("paper (no orders, no costs)   ", paper), line("placed on the demo account      ", placed), ""]
-    ready = placed.clears
+    ready = placed.n >= min_trades and placed.low > 0
     if ready:
         lines.append(f"READY on demo evidence: {placed.n} placed trades and the whole interval is above zero.")
         lines.append("That clears this project's bar on a demo account. It is not a promise about real money, and there is "
                      "no real-money path in this repository.")
     else:
         why = []
-        if placed.n < MIN_TRADES:
-            why.append(f"only {placed.n} of the {MIN_TRADES} placed demo trades the project needs before it reads a result"
+        if placed.n < min_trades:
+            why.append(f"only {placed.n} of the {min_trades} placed demo trades it takes before a result can be told from luck"
                        + (f" ({paper.n} paper trades do not count: they carry no commission or slippage)" if paper.n else ""))
         elif placed.low <= 0:
             why.append(f"the interval ({placed.low:+.2f} to {placed.high:+.2f}) includes zero, so the result is not distinguishable from no edge")
