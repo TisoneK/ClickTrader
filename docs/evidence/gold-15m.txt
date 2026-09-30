@@ -1,5 +1,5 @@
 15m -> docs/evidence/gold-15m.png
-  287 bars, 66 swings; events: 10 BOS, 12 CHOCH, 38 sweep, 0 gap fill; opportunities: 3 true (0 won, 2 lost in hindsight), 9 rejected
+  287 bars, 66 swings; events: 10 BOS, 12 CHOCH, 41 sweep, 0 gap fill; zones: 4 true (3 fresh, 1 used), 19 false, 4 broken; opportunities: 3 true (0 won, 2 lost in hindsight), 9 rejected
     bar 31: down declined — against the higher timeframe, which reads up
     bar 68: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
     bar 73: down declined — against the higher timeframe, which reads up

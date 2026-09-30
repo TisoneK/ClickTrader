@@ -1,5 +1,5 @@
 1m -> docs/evidence/gold-1m-market-closing.png
-  498 bars, 143 swings; events: 26 BOS, 16 CHOCH, 55 sweep, 0 gap fill; opportunities: 4 true (0 won, 2 lost in hindsight), 12 rejected
+  498 bars, 143 swings; events: 26 BOS, 16 CHOCH, 55 sweep, 0 gap fill; zones: 6 true (4 fresh, 2 used), 28 false, 8 broken; opportunities: 4 true (0 won, 2 lost in hindsight), 12 rejected
     bar 134: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
     bar 142: down declined — against the higher timeframe, which reads up
     bar 188: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order

@@ -91,10 +91,14 @@ in the picture is a verdict:
 | `CHOCH` (green) | a **true** change of character: a close through the level the current control had to hold |
 | `SWEEP` (red) | the wick took the stops and the close came back — **not** a reversal |
 | `GAP FILL` (orange) | price rebalancing an open gap — **not** a reversal |
+| green / rose box `DEMAND`/`SUPPLY` | a **TRUE zone**: the origin of an aggressive move (the last opposite-coloured candle before a run of far-larger-than-usual same-coloured candles, wick to wick) that left a fair value gap and broke structure; `FRESH` until price first comes back, then `USED` (`KNIFE` if it came back violently); deleted (BROKEN) when a bar closes through its far edge |
+| grey `X FALSE ...` | a **FALSE zone**: a run that looked like one but failed a rule of the decks' validation matrix, with the rule it failed — `NOT AGGRESSIVE` (ordinary-sized candles), `NO GAP`, `NO BOS`. Drawn while still standing so it can be argued with |
 | orange box | the order block: the last opposite-coloured candle before the leg, wick to wick |
 | pink / teal boxes | stop zone / target zone of an opportunity the engine would take, `LONG`/`SHORT n.nR`, then `WIN`/`LOSS` (hindsight, never used to decide) or `ARMED` |
 | grey `X ...` | an opportunity it **rejected**: `NO ROOM` (no level leaves 1:2), `HTF` (against the slower clock), `KNIFE` (violent approach), `DEAD` (closed through the zone first) |
 | top strip | who is in control: teal demand, red supply |
+
+**Levels are not zones.** The blue bands are *levels*: stacks of swing points where the market turned (support / resistance, liquidity). A *zone* is different: the origin of an aggressive move, found and judged by the rules above. Earlier versions drew only levels and found an order block only after a change of character; it now scans for zones continuously and classifies each as TRUE, FALSE or BROKEN.
 
 `smc/strategy.py` trades exactly what this reading calls true, so the picture and the trades cannot disagree.
 `--readings` prints the few choices the reading makes that are the project's own (`analyst.READINGS`).

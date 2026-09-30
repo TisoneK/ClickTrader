@@ -54,3 +54,13 @@ screenshot (20:51 peak, fall, lower low at 21:17, bounce). My markup of that vie
   lines are now capped at 14 bars of reach so they no longer span the picture.
 - **Also seen:** gold's daily 21:00-22:00 GMT closure (the feed and the bars stop at ~20:58), and the owner's RSI panel,
   which nothing here uses.
+
+## True zones and false zones (added after the owner asked whether the engine "just marks")
+The blue bands in these pictures are **levels**, stacks of swing points. **Zones** are separate, and are the decks' and
+S01's object: the origin of an aggressive move. In the owner's zoomed-in V100 view (`r100-1m-test-live.png`) the engine
+finds a **SUPPLY FRESH** zone at 636.39-637.51 (the last up candle before the drop from the 20:51 peak; it left a gap,
+broke structure, and price never came back to it) and a **SUPPLY USED KNIFE** zone at 633.48-634.39 (price came back to
+it violently at 21:18). It finds **no demand zone** under the 21:17 low, correctly by the decks' rules: the bounce
+from there did not break structure, so it fails the break-of-structure rule. Over the 999 one-minute bars read there
+are 4 true zones standing, 31 broken and 60 false. `smc-compare` now reports zones as well as levels. The zone
+detector has not yet been compared with the owner's own marks of zones, which is the test that matters.

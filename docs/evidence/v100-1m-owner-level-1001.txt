@@ -1,5 +1,5 @@
 1m -> docs/evidence/v100-1m-owner-level-1001.png
-  1499 bars, 393 swings; events: 71 BOS, 56 CHOCH, 131 sweep, 0 gap fill; opportunities: 11 true (3 won, 8 lost in hindsight), 45 rejected
+  1499 bars, 393 swings; events: 71 BOS, 56 CHOCH, 193 sweep, 0 gap fill; zones: 15 true (9 fresh, 6 used), 85 false, 37 broken; opportunities: 11 true (3 won, 8 lost in hindsight), 45 rejected
     bar 29: up declined — against the higher timeframe, which reads down
     bar 38: down declined — no room to move: no opposing level leaves 2:1 from the block
     bar 81: up declined — against the higher timeframe, which reads down
@@ -56,4 +56,4 @@
     bar 1164: down cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
     bar 1214: up declined — against the higher timeframe, which reads down
     bar 1329: down cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
-  your level 1001.00: 58 swing(s) within one typical candle range (2.14), 42 of them lows; engine level(s) there: 1000.84-1001.10 (5 touches)
+  your level 1001.00: 58 swing(s) within one typical candle range (2.14), 42 of them lows; engine level(s) there: 1000.62-1001.05 (25 touches), 999.52-1000.06 (17 touches), 999.52-1000.06 (17 touches), 1001.39-1001.75 (23 touches)

@@ -1,5 +1,5 @@
 15m -> docs/evidence/eurusd-15m.png
-  278 bars, 72 swings; events: 12 BOS, 12 CHOCH, 19 sweep, 0 gap fill; opportunities: 3 true (0 won, 2 lost in hindsight), 9 rejected
+  279 bars, 72 swings; events: 12 BOS, 12 CHOCH, 21 sweep, 0 gap fill; zones: 2 true (2 fresh, 0 used), 12 false, 6 broken; opportunities: 3 true (0 won, 2 lost in hindsight), 9 rejected
     bar 65: up filled (loss) — CHOCH then a block at 1.13641-1.13676; limit 1.13676, stop 1.13641, target 1.13808 (3.8:1); gap no; pushed 3.6 bands
     bar 75: down declined — against the higher timeframe, which reads up
     bar 88: up dead — closed through the zone's far edge before the tap — dead zone, deleted

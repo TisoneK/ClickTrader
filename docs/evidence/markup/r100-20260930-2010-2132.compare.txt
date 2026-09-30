@@ -1,6 +1,6 @@
 window 2026-09-30 20:10 -> 2026-09-30 21:32 (83 bars of 1m; typical candle range 1.13); marker: Tariq (an AI agent) - NOT the owner. Written before the engine's output was looked at.
 level 637.85: engine found 638.22-638.48 (3 touches, alive); 636.58-637.11 (10 touches, deleted at 20:33); 637.47-637.98 (7 touches, alive); 636.58-636.88 (10 touches, deleted at 20:49)
-zone 630.40-631.40: 4 engine band(s) overlap it, e.g. 631.22-631.77, 631.05-631.12, 630.46-630.87
+zone 630.40-631.40: 4 level band(s), e.g. 631.22-631.77, 631.05-631.12, 630.46-630.87
 CHOCH down ~20:54 @634.2: SAME BREAK, DIFFERENT LABEL — engine has a BOS at 20:55 level 634.20 (it had already called a CHOCH down at 20:44, so this one was a continuation)
 no-trade 21:18-21:32: engine called 1 CHOCH and armed 0 trade(s) there
 engine CHOCHs the marker did not mark: 3 (of 3 in the window)

@@ -1,5 +1,5 @@
 5m -> docs/evidence/r100-zoomed-out.5m.png
-  200 bars, 44 swings; events: 6 BOS, 6 CHOCH, 20 sweep, 0 gap fill; opportunities: 1 true (0 won, 0 lost in hindsight), 5 rejected
+  200 bars, 44 swings; events: 6 BOS, 6 CHOCH, 20 sweep, 0 gap fill; zones: 2 true (1 fresh, 1 used), 8 false, 4 broken; opportunities: 1 true (0 won, 0 lost in hindsight), 5 rejected
     bar 20: up armed — CHOCH then a block at 608.33000-610.47000; limit 610.47000, stop 608.33000, target 623.50000 (6.1:1); gap yes; pushed 2.3 bands
     bar 73: down declined — against the higher timeframe, which reads up
     bar 87: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
@@ -7,7 +7,7 @@
     bar 130: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
     bar 144: down declined — against the higher timeframe, which reads up
 15m -> docs/evidence/r100-zoomed-out.15m.png
-  67 bars, 17 swings; events: 1 BOS, 2 CHOCH, 5 sweep, 0 gap fill; opportunities: 0 true (0 won, 0 lost in hindsight), 2 rejected
+  67 bars, 17 swings; events: 1 BOS, 2 CHOCH, 5 sweep, 0 gap fill; zones: 0 true (0 fresh, 0 used), 3 false, 1 broken; opportunities: 0 true (0 won, 0 lost in hindsight), 2 rejected
     bar 44: up declined — no room to move: no opposing level leaves 2:1 from the block
     bar 65: down declined — against the higher timeframe, which reads up
 structure by zoom: 5m up, 15m range

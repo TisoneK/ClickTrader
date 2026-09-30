@@ -1,7 +1,7 @@
-window 2026-09-30 07:00 -> 2026-09-30 12:20 (321 bars of 1m; typical candle range 1.85); marker: Tariq (an AI agent) - NOT the owner. Written before the engine's output was looked at. Replace or add t
-level 1001.00: engine found 999.67-1000.06 (21 touches, deleted at 11:24); 1002.80-1003.63 (7 touches, deleted at 07:21); 1001.55-1001.87 (14 touches, deleted at 07:39); 1000.26-1000.54 (26 touches, d
-level 1010.80: engine found 1009.20-1009.83 (17 touches, deleted at 08:02); 1010.39-1010.53 (10 touches, deleted at 08:02); 1011.07-1011.46 (9 touches, deleted at 08:03); 1011.03-1011.62 (3 touches, d
-zone 1021.00-1025.00: 5 engine band(s) overlap it, e.g. 1020.25-1021.54, 1022.11-1022.81, 1023.04-1023.39
+window 2026-09-30 07:00 -> 2026-09-30 12:20 (321 bars of 1m; typical candle range 1.85); marker: Tariq (an AI agent) - NOT the owner. Written before the engine's output was looked at. Replace or add the owner's own marks in this same format.
+level 1001.00: engine found 999.67-1000.06 (21 touches, deleted at 11:24); 1002.80-1003.63 (7 touches, deleted at 07:21); 1001.55-1001.87 (14 touches, deleted at 07:39); 1000.26-1000.54 (26 touches, deleted at 11:24)
+level 1010.80: engine found 1009.20-1009.83 (17 touches, deleted at 08:02); 1010.39-1010.53 (10 touches, deleted at 08:02); 1011.07-1011.46 (9 touches, deleted at 08:03); 1011.03-1011.62 (3 touches, deleted at 09:16)
+zone 1021.00-1025.00: 5 level band(s), e.g. 1020.25-1021.54, 1022.11-1022.81, 1023.04-1023.39
 CHOCH down ~10:22 @1011.0: engine CHOCH at 10:22 level 1011.60
 sweep ~11:24 @998.82: engine SWEEP at 11:17 level 1004.84
 trade up ~11:26: engine saw it and REJECTED it — declined: against the higher timeframe, which reads down

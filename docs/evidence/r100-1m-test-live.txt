@@ -1,5 +1,5 @@
 1m -> docs/evidence/r100-1m-test-live.png
-  999 bars, 247 swings; events: 47 BOS, 47 CHOCH, 126 sweep, 0 gap fill; opportunities: 22 true (10 won, 10 lost in hindsight), 25 rejected
+  999 bars, 247 swings; events: 47 BOS, 47 CHOCH, 126 sweep, 0 gap fill; zones: 4 true (3 fresh, 1 used), 60 false, 31 broken; opportunities: 22 true (10 won, 10 lost in hindsight), 25 rejected
     bar 62: up filled (win) — CHOCH then a block at 610.11000-611.15000; limit 611.15000, stop 610.11000, target 613.59000 (2.3:1); gap no; pushed 0.9 bands
     bar 86: down declined — no room to move: no opposing level leaves 2:1 from the block
     bar 100: up armed — CHOCH then a block at 611.75000-612.44000; limit 612.44000, stop 611.75000, target 614.20000 (2.6:1); gap yes; pushed 2.9 bands
