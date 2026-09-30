@@ -53,7 +53,6 @@ is your stable session tag.
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
 | Amara | S002 | claude-sonnet-5 | Forex tie-rate verdict fix landed (2d5ebf1); now built `risk_replay.py` — session-by-session RiskGuard-vs-unbounded replay (B-2026-09-24-2) | Working | 175 tests passing; new `clicktrader risk-replay` CLI + DESIGN.md measured finding (real 8k-tick Deriv run: guard capped worst session at -$7.68 vs -$39.23 unbounded); about to commit+push |
-| Lena | S009 | deepseek/deepseek-flash | Wrote the SMC specification from the 48 source frames (`docs/smc/spec.md`) so the method is stated, drawn and absent-marked instead of invented | Done | Shipped `docs/smc/spec.md` + two frame-wins corrections to the existing notes (b48059b, e6227a1). **This row said "Building smc/strategy.py … Round 18" while the session ran to Round 19 — the staleness is logged in `flaws/log.md` (Session 9).** 452 tests green, exit gate passed. Live SMC runner stopped at 0 plans; restart blocked on B-2026-09-30-1 |
 
 **Keep your Status cells current — that is what the board is for.** The
 next live worker reads it to know at a glance what a peer has finished,
