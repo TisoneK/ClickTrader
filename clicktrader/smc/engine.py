@@ -85,6 +85,8 @@ class LiquidityPool:
     mean price (`price`) alone sits in the middle of this band, and a bar that merely reaches the middle
     has not left it."""
     first_index: int = 0
+    last_index: int = 0
+    """The bar of the newest swing in the cluster — a level cannot have been broken before it existed."""
 
     @property
     def far_edge(self) -> float:
@@ -126,7 +128,7 @@ def liquidity_pools(
 def _pool_of(zone, candles: Sequence[Candle]) -> LiquidityPool:
     members = [candles[i] for i in zone.members] or []
     if not members:
-        return LiquidityPool(zone.price, zone.kind, zone.touches, zone.price, zone.price, 0)
+        return LiquidityPool(zone.price, zone.kind, zone.touches, zone.price, zone.price, 0, 0)
     if zone.kind is SwingKind.LOW:
         low = min(c.low for c in members)
         high = min(min(c.open, c.close) for c in members)  # the lowest body bottom: the band covers wicks only
@@ -135,7 +137,7 @@ def _pool_of(zone, candles: Sequence[Candle]) -> LiquidityPool:
         high = max(c.high for c in members)
         low = max(max(c.open, c.close) for c in members)  # the highest body top
         low = min(low, high)
-    return LiquidityPool(zone.price, zone.kind, zone.touches, low, high, min(zone.members))
+    return LiquidityPool(zone.price, zone.kind, zone.touches, low, high, min(zone.members), max(zone.members))
 
 
 def classify_break(

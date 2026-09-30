@@ -266,31 +266,32 @@ def cmd_forex_replay(args: argparse.Namespace) -> int:
 
 
 def cmd_smc_chart(args: argparse.Namespace) -> int:
-    """Draw a recording as candles with what the SMC engine sees laid over it, to a PNG."""
+    """Read a recording the way a person reads a chart, and draw what the analyst saw (PNG) with a summary."""
     from .forex.candles import TimeCandleBuilder
-    from .forex.structure import SwingKind, fair_value_gaps, gap_untouched, swing_points
-    from .smc.engine import liquidity_pools
-    from .smc.render import Box, HLine, Mark, render_chart
-    from .smc.strategy import _typical_range
+    from .smc.analyst import READINGS, read_chart
+    from .smc.draw import draw_reading
 
-    builder = TimeCandleBuilder(args.minutes * 60.0)
-    for record in read_recording(args.recording):
-        builder.feed(record.tick.ts, float(record.tick.price))
-    candles = builder.last(args.bars)
-    if len(candles) < 10:
-        print(f"only {len(candles)} closed bar(s) of {args.minutes:g} minutes in that recording — nothing worth drawing")
+    def bars(minutes: float):
+        builder = TimeCandleBuilder(minutes * 60.0)
+        for record in read_recording(args.recording):
+            builder.feed(record.tick.ts, float(record.tick.price))
+        return builder.last(10**7)
+
+    candles = bars(args.minutes)
+    if len(candles) < 30:
+        print(f"only {len(candles)} closed bar(s) of {args.minutes:g} minutes in that recording — nothing worth reading")
         return 1
-    band = _typical_range(candles, 20)
-    pools = liquidity_pools(candles, strength=2, band=band, min_touches=2)
-    gaps = [g for g in fair_value_gaps(candles) if gap_untouched(g, candles)]
-    render_chart(
-        candles, args.out,
-        lines=[HLine(p.far_edge, p.first_index) for p in pools],
-        boxes=[Box(p.low, p.high, p.first_index) for p in pools]
-        + [Box(g.lower, g.upper, g.formed_index, None, (235, 190, 40), 0.3) for g in gaps],
-        marks=[Mark(s.index, s.price, s.kind is SwingKind.HIGH) for s in swing_points(candles, strength=2)],
-    )
-    print(f"wrote {args.out}: {len(candles)} bars, {len(pools)} level band(s), {len(gaps)} unfilled gap(s)")
+    higher = bars(args.higher_minutes) if args.higher_minutes else None
+    reading = read_chart(candles, higher=higher)
+    draw_reading(reading, args.out, bars=args.bars)
+    print(f"wrote {args.out}")
+    print(reading.summary())
+    for opp in reading.opportunities[-args.list :]:
+        print(f"  bar {opp.armed_at}: {opp.direction.value} {opp.state.value}" + (f" ({opp.outcome})" if opp.outcome else "") + f" — {opp.reason}")
+    if args.readings:
+        print("choices this reading makes that are the project's own:")
+        for line in READINGS:
+            print("  -", line)
     return 0
 
 
@@ -647,11 +648,14 @@ def main(argv: list[str] | None = None) -> int:
     )
     fx_rep.set_defaults(func=cmd_forex_replay)
 
-    smc_chart = sub.add_parser("smc-chart", help="draw a recording with the SMC engine's levels and gaps laid over the candles (PNG)")
+    smc_chart = sub.add_parser("smc-chart", help="read a recording like a trader (swings, levels, gaps, breaks, opportunities) and draw it (PNG)")
     smc_chart.add_argument("recording")
     smc_chart.add_argument("out", help="PNG path to write")
-    smc_chart.add_argument("--minutes", type=float, default=5.0, help="bar length in minutes (default 5)")
+    smc_chart.add_argument("--minutes", type=float, default=15.0, help="bar length in minutes (default 15)")
+    smc_chart.add_argument("--higher-minutes", type=float, default=60.0, help="slower clock that must not contradict a trade; 0 disables (default 60)")
     smc_chart.add_argument("--bars", type=int, default=160, help="how many of the most recent bars to draw (default 160)")
+    smc_chart.add_argument("--list", type=int, default=12, help="how many of the latest opportunities to print (default 12)")
+    smc_chart.add_argument("--readings", action="store_true", help="also print the choices this reading makes that are the project's own")
     smc_chart.set_defaults(func=cmd_smc_chart)
 
     fx_rep_all = sub.add_parser(

@@ -1,5 +1,11 @@
 """Pillar 3: the operating manual — top-down alignment, the order-block entry, and a 1:2 floor.
 
+**Perception now lives in `analyst.py`.** This class no longer has its own idea of what a level, a break or a block
+is: on every closed trigger bar it asks `read_chart` what the chart says — the same reading `smc-chart` draws — and
+trades only an opportunity that reading calls true and has just armed. What stays here is the tick path: holding the
+order, filling it on the retrace, and dropping it when the zone dies. The constants this class used to own
+(`band_bands`, `min_pushed`, `alignment_steps`) are gone; see `analyst.READINGS` for the few choices that remain.
+
 This is the assembly the other three modules feed, and it is deliberately the *last* thing built rather
 than the first: it consumes a control state, a graded order block and a break classification, and there is
 nothing useful it could have said before those existed.
@@ -41,12 +47,10 @@ from dataclasses import dataclass
 
 from ..forex.candles import Candle, TimeCandleBuilder
 from ..forex.model import Direction, TradePlan
-from ..forex.structure import Trend, swing_points, trend_sequence
 from ..forex.trade_strategies import TradeDecision
 from ..strategies import History
-from .components import OrderBlock, order_block
-from .engine import Control, ControlMachine, liquidity_pools
-from .quality import assess
+from .components import OrderBlock
+from .analyst import read_chart
 
 
 @dataclass
@@ -59,16 +63,13 @@ class _Armed:
 
 
 class SmcStrategy:
-    """The assembled method: arm on a validated change of character, fill on the retrace into the block."""
+    """The assembled method: arm on an opportunity the analyst calls true, fill on the retrace into the block."""
 
     def __init__(
         self,
         *,
         trigger_minutes: float = 15.0,
         higher_minutes: float = 60.0,
-        band_bands: float = 1.0,
-        min_pushed: float = 0.0,
-        alignment_steps: int = 2,
         risk_reward: float = 2.0,
         strength: int = 2,
         lookback: int = 20,
@@ -77,23 +78,14 @@ class SmcStrategy:
     ) -> None:
         if risk_reward < 1:
             raise ValueError("the material's floor is a minimum of 1:2; anything below 1 risks more than it targets")
-        self.name = (
-            f"smc(trigger={trigger_minutes:g}m, higher={higher_minutes:g}m, rr>={risk_reward:g}, "
-            f"pushed>={min_pushed:g})"
-        )
-        self._trigger_interval = trigger_minutes * 60.0
-        self._trigger = TimeCandleBuilder(self._trigger_interval)
+        self.name = f"smc(trigger={trigger_minutes:g}m, higher={higher_minutes:g}m, rr>={risk_reward:g})"
+        self._trigger = TimeCandleBuilder(trigger_minutes * 60.0)
         self._higher = TimeCandleBuilder(higher_minutes * 60.0)
-        self._band_bands = band_bands
-        self._min_pushed = min_pushed
-        self._alignment_steps = alignment_steps
-        self._min_touches = 2
         self._risk_reward = risk_reward
         self._strength = strength
         self._lookback = lookback
         self._window = window
         self._stake = stake
-        self._machine: ControlMachine | None = None
         self._armed: _Armed | None = None
         self.last_view = "nothing seen yet"
 
@@ -107,85 +99,38 @@ class SmcStrategy:
         self._higher.feed(tick.ts, price)
         closed = self._trigger.feed(tick.ts, price)
         if closed is not None:
-            self._on_trigger_bar()
+            self._on_trigger_bar(closed)
         return self._fill(price)
 
-    def _on_trigger_bar(self) -> None:
+    def _on_trigger_bar(self, closed: Candle) -> None:
         candles = self._trigger.last(self._window)
         if len(candles) < self._lookback + self._strength * 2 + 2:
             self.last_view = f"warming up ({len(candles)} bars)"
             return
-        band = self._band_bands * _typical_range(candles, self._lookback)
-        if self._machine is None:
-            self._machine = ControlMachine(band=band, strength=self._strength)
-        # Count what is actually in view *before* asking whether anything crossed. Without this the
-        # message below cannot tell "no level was crossed" from "I found no levels at all", and it asserted
-        # the first for both — a log claiming the chart was quiet when the engine may simply have been
-        # blind, which is the one thing a status line must never do.
-        pools = liquidity_pools(
-            candles, strength=self._strength, band=band, min_touches=self._min_touches
+        armed = self._armed
+        if armed is not None:
+            dead = closed.close > armed.block.price_high if armed.block.direction is Direction.DOWN else closed.close < armed.block.price_low
+            if dead:
+                self._armed = None
+                self.last_view = "dropped: the bar closed through the block's far edge — dead zone"
+        reading = read_chart(
+            candles, higher=self._higher.last(self._window) or None, strength=self._strength,
+            lookback=self._lookback, risk_reward=self._risk_reward,
         )
-        result = self._machine.consider(candles, index=len(candles) - 1)
-        if result is None:
-            found = f"{len(pools)} level(s) in view, none crossed"
-            if not pools:
-                found = "NO levels found at all — the band is too tight for this bar size, not a quiet chart"
-            self.last_view = f"{self._machine.control.value} control; {found}"
+        last = len(candles) - 1
+        fresh = [o for o in reading.opportunities if o.armed_at == last]
+        if not fresh:
+            latest = reading.events[-1] if reading.events else None
+            what = f"{reading.structure[-1].value} structure" + (f"; last event {latest.kind.value} {latest.verdict.value} at bar {latest.index}" if latest else "")
+            self.last_view = what if self._armed is None else f"waiting for the retrace; {what}"
             return
-        if not result.flips_control:
-            self.last_view = f"declined: {result.reason}"
+        opp = fresh[0]
+        if not opp.is_true or opp.target is None:
+            self.last_view = f"declined: {opp.reason}"
             return
-        self._arm(candles, result, band, band_bands=self._band_bands)
-
-    def _arm(self, candles, result, band: float, *, band_bands: float) -> None:
-        """Turn a valid change of character into a waiting order, or say why it will not."""
-        index = len(candles) - 1
-        leg_is_bearish = result.direction is Direction.DOWN
-        same_direction = (lambda c: not c.bullish) if leg_is_bearish else (lambda c: c.bullish)
-        start = index
-        while start - 1 >= 0 and same_direction(candles[start - 1]):
-            start -= 1
-        if start - 1 < 0:
-            self.last_view = "declined: the breaking leg has no origin candle to box"
-            return
-        block = order_block(candles, index=start - 1)
-
-        higher = self._higher.last(self._window)
-        if len(higher) >= self._strength * 2 + 1:
-            trend = trend_sequence(
-                swing_points(higher, strength=self._strength), steps=self._alignment_steps
-            )
-            agrees = (trend is Trend.DOWN and block.direction is Direction.DOWN) or (
-                trend is Trend.UP and block.direction is Direction.UP
-            )
-            if not agrees:
-                self.last_view = (
-                    f"declined: a {block.direction.value} break, but the higher timeframe reads "
-                    f"{trend.value} — the funnel has to align"
-                )
-                return
-        quality = assess(candles, block=block, band=band, min_pushed=self._min_pushed)
-        if not quality.complete:
-            self.last_view = f"declined: {quality.reason}"
-            return
-
-        entry = block.price_low if block.direction is Direction.DOWN else block.price_high
-        stop = block.stop_level
-        risk = abs(entry - stop)
-        if risk <= 0:
-            self.last_view = "declined: the block has no width to risk"
-            return
-        target = entry - risk * self._risk_reward if block.direction is Direction.DOWN else entry + risk * self._risk_reward
-        plan = TradePlan(block.direction, stop=stop, target=target)
-        self._armed = _Armed(
-            plan=plan, block=block,
-            reason=(
-                f"smc: change of character with {self._machine.control.value} now in control; {quality.reason}; "
-                f"limit at {entry:.5f}, stop {stop:.5f} beyond the block wick, target {target:.5f} at "
-                f"{self._risk_reward:g}:1"
-            ),
-        )
-        self.last_view = f"armed: {self._armed.reason}"
+        plan = TradePlan(opp.direction, stop=opp.stop, target=opp.target)
+        self._armed = _Armed(plan=plan, block=opp.block, reason=f"smc: {opp.reason}")
+        self.last_view = f"armed: {opp.reason}"
 
     def _fill(self, price: float) -> TradeDecision | None:
         """Fill the waiting order the moment price trades back into the block."""
