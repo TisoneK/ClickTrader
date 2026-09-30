@@ -56,7 +56,9 @@ def stream_ticks(
 ) -> Iterator[TickRecord]:
     """`iter_ticks`, reconnecting through a dropped connection instead of dying on the first one.
 
-    Only `websocket.WebSocketException` (a real connection problem) is treated as recoverable; a
+    Only real connection problems are treated as recoverable — `websocket.WebSocketException`, and the
+    socket-level `TimeoutError`/`ConnectionError` a dropped or refused reconnect surfaces as (seen live:
+    a reconnect whose TCP connect timed out died as a bare `TimeoutError`, bypassing the retry). A
     `DerivAPIError` (the API is up and told us something is wrong — a bad symbol, an invalid app_id) is
     not retried, since reconnecting won't fix a request that's wrong on its face.
     """
@@ -68,7 +70,7 @@ def stream_ticks(
                 yield from iter_ticks(ws, symbol)
             finally:
                 ws.close()
-        except websocket.WebSocketException:
+        except (websocket.WebSocketException, TimeoutError, ConnectionError):
             attempt += 1
             if attempt >= retries:
                 raise

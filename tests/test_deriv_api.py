@@ -82,6 +82,20 @@ def test_stream_ticks_reconnects_on_a_dropped_connection(monkeypatch):
     assert record.tick.price == "9530.98"
 
 
+def test_stream_ticks_reconnects_when_the_socket_connect_times_out(monkeypatch):
+    connections = [TimeoutError("timed out"), FakeWS([{"msg_type": "tick", "tick": SAMPLE_TICK}])]
+
+    def flaky_connect(app_id=deriv.DEFAULT_APP_ID):
+        item = connections.pop(0)
+        if isinstance(item, Exception):
+            raise item
+        return item
+
+    monkeypatch.setattr(deriv.ticks, "connect", flaky_connect)
+    record = next(deriv.stream_ticks("1HZ10V", retries=3))
+    assert record.tick.price == "9530.98"
+
+
 def test_stream_ticks_does_not_retry_api_errors(monkeypatch):
     ws = FakeWS([{"error": {"code": "InvalidAppID", "message": "bad app_id"}}])
     monkeypatch.setattr(deriv.ticks, "connect", lambda app_id=deriv.DEFAULT_APP_ID: ws)
