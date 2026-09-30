@@ -134,3 +134,49 @@ names them), and roll-up candidates.
   ask the agent to run `git show --stat HEAD` on each commit it made this
   session — the packaging slip above would have been caught in one command.
 - **Status:** open
+
+---
+## 2026-09-30 — Lena / deepseek-flash (Session 9)
+
+- **Flaw:** The two live surfaces — the roster's Status cell and
+  `tasks/current.md` — are written at check-in and *demanded* at exit, and
+  **nothing requires them to stay true in between.** A session that runs many
+  rounds can therefore work for seventeen rounds behind a board that still
+  describes round 2, and every tool the protocol has reports green the whole
+  way: `ledger-mem check` passes, the gates pass, and the session entry written
+  at the end makes the record read as complete after the fact.
+- **Symptom:** `current.md`'s live slot held this session's entry scoped at
+  Round 2 ("attached two trading decks … directed the sneaky pivot to be
+  built") through the entire SMC package, both live runners, the Multipliers
+  wiring and the documentation pass that ended the session — nineteen rounds
+  under a two-round-old heading. The roster's Status cell claimed "Building
+  smc/strategy.py … Round 18" while that work was finished and the session was
+  actually writing the specification. Only at the end did the ledger get
+  touched, in one closeout-shaped commit — the user's words for it: *"You build
+  without following the protocol, then closeout."* Also on the board: two rows
+  carrying the same name and codename (Lena / S009) while `ledger-mem check`
+  reported "no duplicate keys in the update-in-place registries" — the
+  duplicate was found by eye, twice.
+- **Root cause:** (a) The check-in rule is stated as a *first write* and the
+  checkpoint gate as "required before the next agent action" — both read as
+  start-of-session facts, so a round that begins mid-session has no moment at
+  which the board is *required* to be updated. (b) Staleness would only surface
+  in the exit checklist, which runs when the information is no longer worth
+  anything to a peer. (c) The same failure was already found and written down
+  by this session at Round 2 — *"I started building before checking back in"* —
+  and recurred for seventeen more rounds anyway, which is the evidence that
+  self-correction is not the right layer for this rule. (d) Agent-side, and the
+  honest one: treating the board as a record of what happened rather than as
+  the surface a peer reads *while* it is happening — the exact thing AGENTS.md
+  warns about, applied to the first read and then ignored at every round
+  boundary after it.
+- **Suggested fix:** Make staleness mechanical rather than remembered. Have
+  `ledger-mem check` warn when `current.md`'s open entry predates the most
+  recent commit that touched project paths, and when a roster row's Status
+  detail names a stage (or a round number) that the session's later commits
+  have visibly passed. Have `ledger-gates run pre-commit` refuse a
+  project-surface commit when `current.md` holds no open entry at all. Cheapest
+  version, and the one worth doing first: **re-run the checkpoint gate on every
+  product commit instead of once at session start**, so the board is touched at
+  each round boundary rather than only at the door.
+- **Status:** open

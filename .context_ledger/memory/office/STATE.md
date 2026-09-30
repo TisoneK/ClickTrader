@@ -5,10 +5,10 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-09-30T18:44:04Z_
+_Regenerated: 2026-09-30T18:51:33Z_
 
 ## Standing params
-- **Core:** 2.0.4 (locked, verified 2026-09-29)
+- **Core:** 2.0.4 (locked, verified 2026-09-30)
 - **Target:** build DESIGN.md's layers in order — recorder, then replay harness, then a gated executor; a target in the user's chat message overrides this
 - **Scope:** free — the user names the task per session
 - **Push policy:** push to main directly after each commit
@@ -16,7 +16,7 @@ _Regenerated: 2026-09-30T18:44:04Z_
 
 ## Office — who's in, right now
 - **Amara** (S002) — Working — Forex tie-rate verdict fix landed (2d5ebf1); now built `risk_replay.py` — session-by-se…
-- **Lena** (S009) — Working — Writing the SMC specification from the 48 video frames (`docs/smc/spec.md`) so the method…
+- **Lena** (S009) — Done — Wrote the SMC specification from the 48 source frames (`docs/smc/spec.md`) so the method …
 
 ## Current task
 - **2026-09-24/25 — Amara / claude-sonnet-5 (S002)** — **Digit-contract side (CryptonicHub + Deriv): stable, considered done for now.** All 3 layers built, live-verified (real demo trades placed… — *open (roster row stale since 2026-09-26 — logged flaw). New active thread: forex, scoped to fixed-stake Rise/Fall-style options on a forex underlying. Next: let the real EUR/USD recording keep accumulating, then run `forex-replay` for a real read once there's enough data. No forex live-trading/executor code exists yet.*
@@ -27,7 +27,7 @@ _Regenerated: 2026-09-30T18:44:04Z_
 _3 medium, 0 low priority row(s) — see tasks/backlog.md_
 
 ## Logs at a glance — open only if your task touches these
-- flaws/log.md (protocol/.context_ledger friction): 3 entries, last added 2026-09-26
+- flaws/log.md (protocol/.context_ledger friction): 4 entries, last added 2026-09-30
 - inefficiencies/log.md (project code/env friction): 3 entries, last added 2026-09-28
 - plans/decisions.md (ADRs in force — respected, not relitigated): 3 entries, last added 2026-09-28
 
