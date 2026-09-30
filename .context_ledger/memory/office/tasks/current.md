@@ -12,6 +12,10 @@ and backlog before starting.
 - **Status:** blocked (push not permitted from this session; target platform unknown — P-2026-09-24-1) | done | blocked (<blocker>)
 -->
 
+- **Session:** 2026-09-30 — Tariq / claude-sonnet-5-5 (S010)
+- **Task:** Review of the Sonnet sessions' work (Amara S002, Femi), then fix everything found, in phases: (1) `risk_replay` ignores `Decision.duration` (stale since Zara's S008 change) — share the harness's settle rule; (2) `risk_replay` ends a session on any guard refusal where the live executor/runner skips the refused bet and stops only on a latched halt; (3) forex verdict compares the strategy's interval to the control's *point* rate, ignoring the control's own sampling error — use the paired difference of proportions; (4) ADR-4 recording (3) and the ledger record (Femi's S003/S006 codename mismatch appended as a correction).
+- **Status:** in progress — Phase 1.
+
 **Below — the previous sessions' threads, kept as reference, not as a live task.**
 
 - **Session:** 2026-09-28 → 09-30 — Lena / deepseek/deepseek-flash (S009) — **clocked out**
