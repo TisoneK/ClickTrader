@@ -130,3 +130,67 @@ def test_a_reading_draws_to_a_png_with_every_kind_of_mark(tmp_path):
     out = tmp_path / "reading.png"
     draw_reading(r, str(out), bars=40, width=800, height=400)
     assert out.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n" and out.stat().st_size > 2000
+
+
+# --- supply / demand zones: the ORIGIN of an aggressive move, not a stack of swings -------------------------------
+_BASE = [(10.3, 10.6, 10.0, 10.2), (10.2, 10.3, 10.0, 10.1)] * 6  # quiet: bodies ~0.1, a swing high at 10.6
+_ORIGIN = (10.3, 10.35, 10.15, 10.2)  # the last bearish candle before the run
+_RUN = [(10.3, 11.05, 10.3, 11.0), (11.0, 11.9, 10.95, 11.85), (11.85, 12.6, 11.3, 12.5)]  # three big bullish bars, a gap 11.05-11.3
+
+
+def _zone_chart(*tail, base=None):
+    return [Candle(*b) for b in (*(base or _BASE), _ORIGIN, *_RUN, *tail)]
+
+
+def _zones(*tail, **kw):
+    return read_chart(_zone_chart(*tail, **kw), lookback=6, strength=1).zones
+
+
+def test_the_last_opposite_candle_before_an_aggressive_run_is_a_valid_demand_zone():
+    (z,) = _zones()
+    assert (z.kind, z.low, z.high) == ("DEMAND", 10.15, 10.35)  # wick to wick, on the candle before the run
+    assert z.has_gap and z.has_bos and z.valid and z.status == "fresh"
+
+
+def test_a_zone_is_fresh_until_price_first_comes_back_and_then_it_is_used():
+    (z,) = _zones((12.5, 12.6, 12.3, 12.4), (12.4, 12.45, 10.3, 10.6), (10.6, 10.9, 10.4, 10.8))
+    assert z.status == "used" and z.tapped_at is not None
+
+
+def test_a_close_through_the_far_edge_kills_the_zone():
+    (z,) = _zones((12.5, 12.6, 12.3, 12.4), (12.4, 12.45, 9.9, 10.05))
+    assert z.status == "dead" and z.died_at is not None
+
+
+def test_a_violent_return_is_flagged_as_a_falling_knife():
+    (z,) = _zones((12.5, 12.6, 12.3, 12.4), (12.4, 12.45, 10.3, 10.4))  # one huge bearish bar straight into the zone
+    assert z.status == "used" and z.knife
+
+
+def test_a_run_that_does_not_break_structure_is_not_a_valid_zone():
+    # a spike to 13 earlier means the run (to 12.6) never takes out the last swing high: no break of structure
+    base = _BASE[:6] + [(10.3, 13.0, 10.2, 10.4), (10.4, 10.5, 10.1, 10.2)] + _BASE[6:]
+    zs = _zones(base=base)
+    assert zs and not zs[-1].has_bos and not zs[-1].valid and "no break of structure" in zs[-1].why_not
+
+
+def test_ordinary_candles_make_no_zone():
+    assert read_chart([Candle(*b) for b in _BASE * 3], lookback=6, strength=1).zones == []
+
+
+def test_ordinary_candles_that_break_structure_make_a_false_zone_that_fails_aggression():
+    # three bullish bars the size of the quiet base, still clearing the 10.6 swing high: the decks' "invalid: fails the
+    # aggression rule". It is reported as a FALSE zone with the rule it failed, not silently dropped.
+    weak = [(10.25, 10.45, 10.2, 10.35), (10.35, 10.55, 10.3, 10.45), (10.45, 10.7, 10.4, 10.55)]
+    zs = read_chart([Candle(*b) for b in (*_BASE, _ORIGIN, *weak)], lookback=6, strength=1).zones
+    assert zs and zs[-1].verdict == "FALSE" and not zs[-1].aggressive and zs[-1].has_bos
+    assert "not aggressive" in zs[-1].why_not
+
+
+def test_every_zone_has_one_of_three_verdicts_true_false_or_broken():
+    base = _BASE[:6] + [(10.3, 13.0, 10.2, 10.4), (10.4, 10.5, 10.1, 10.2)] + _BASE[6:]
+    assert _zones(base=base)[-1].verdict == "FALSE"  # no break of structure
+    (true,) = _zones()
+    assert true.verdict == "TRUE"
+    (broken,) = _zones((12.5, 12.6, 12.3, 12.4), (12.4, 12.45, 9.9, 10.05))
+    assert broken.verdict == "BROKEN"  # it was valid, then a bar closed through it

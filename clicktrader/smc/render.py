@@ -297,6 +297,7 @@ def render_chart(
             if not any(tx < px + pw and tx + w > px and ty < py + ph and ty + h > py for px, py, pw, ph in placed):
                 break
             ty += dy
+        ty = max(top, min(ty, height - bottom - h - 14))  # keep the text on the canvas
         placed.append((tx, ty, w, h))
         canvas.text(tx, ty, lab.text, lab.color, lab.scale)
     for idx, text in xticks:

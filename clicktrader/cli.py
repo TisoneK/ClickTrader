@@ -373,9 +373,15 @@ def cmd_smc_compare(args: argparse.Namespace) -> int:
         print(f"level {lv['price']:.2f}: " + ("engine found " + "; ".join(f"{b.low:.2f}-{b.high:.2f} ({b.touches} touches, {'alive' if d is None else 'deleted at ' + when(d)})" for b, _, d in near[:4]) if near else "NO engine level within one candle range of it"))
     for z in mk.get("zones", []):
         over = [(b, born, died) for b, born, died in bands if b.low <= z["high"] and z["low"] <= b.high]
-        hits += bool(over); misses += not over
-        print(f"zone {z['low']:.2f}-{z['high']:.2f}: " + (f"{len(over)} engine band(s) overlap it, e.g. " + ", ".join(f"{b.low:.2f}-{b.high:.2f}" for b, _, _ in over[:3]) if over else "NO engine band overlaps it"))
-
+        dz = [d for d in reading.zones if d.valid and d.origin_index <= last and d.low <= z["high"] and z["low"] <= d.high
+              and (d.died_at is None or d.died_at >= first) and (z.get("kind") is None or d.kind.lower() == z["kind"])]
+        hits += bool(over or dz); misses += not (over or dz)
+        said = []
+        if dz:
+            said.append(f"{len(dz)} supply/demand zone(s): " + ", ".join(f"{d.kind} {d.low:.2f}-{d.high:.2f} ({d.status})" for d in dz[:3]))
+        if over:
+            said.append(f"{len(over)} level band(s), e.g. " + ", ".join(f"{b.low:.2f}-{b.high:.2f}" for b, _, _ in over[:3]))
+        print(f"zone {z['low']:.2f}-{z['high']:.2f}: " + ("; ".join(said) if said else "NO engine zone or band overlaps it"))
     marked_choch = []
     for ch in mk.get("changes_of_character", []):
         i = at(ch["at"]); marked_choch.append(i)

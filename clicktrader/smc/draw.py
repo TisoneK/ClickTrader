@@ -14,6 +14,11 @@ Colour and word carry the verdict, so a person can disagree with a specific mark
 - pink / teal     stop zone / target zone of an opportunity the analyst would have taken, with `WIN`/`LOSS`
                   shown from hindsight only
 - grey label      an opportunity it rejected, and why (`NO ROOM`, `KNIFE`, `DEAD`, `HTF`)
+- `DEMAND`/`SUPPLY` green / rose box  a TRUE zone: the origin of an aggressive move (last opposite-coloured candle before a
+                  displacement that left a gap and broke structure), `FRESH` until price first comes back,
+                  `USED` after; a zone closed through (BROKEN) is deleted and not drawn
+- `X FALSE ...` grey box  a FALSE zone: a run that looked like one but failed the decks' rules, with the rule it failed
+                  (`NOT AGGRESSIVE`, `NO GAP`, `NO BOS`). Shown while still standing, so it can be argued with
 - top strip       who is in control: teal demand, red supply
 """
 
@@ -102,6 +107,21 @@ def draw_reading(
         if filled is not None and filled < lo:
             continue
         boxes.append(Box(gap.lower, gap.upper, max(0, gap.formed_index - lo), None if filled is None else at(filled), _YELLOW, 0.32 if filled is None else 0.14))
+
+    for z in reading.zones:
+        if z.born >= n or z.origin_index >= n or (z.died_at is not None and z.died_at < n):
+            continue  # not found yet at this window's end, or closed through: deleted, as the material says
+        status = "fresh" if (z.tapped_at is None or z.tapped_at >= n) else z.status
+        if not z.valid:
+            reason = {"not aggressive": "NOT AGGRESSIVE", "no imbalance": "NO GAP", "no break of structure": "NO BOS"}
+            short = " ".join(reason[r] for r in z.why_not.split(", "))
+            boxes.append(Box(z.low, z.high, max(0, z.origin_index - lo), None, (120, 120, 120), 0.10 if status != "fresh" else 0.16))
+            labels.append(Label(max(0, z.origin_index - lo), z.high if z.direction is Direction.DOWN else z.low, f"X FALSE {z.kind} {short}", (120, 120, 120), 1, "above" if z.direction is Direction.DOWN else "below"))
+            continue
+        colour = (20, 160, 105) if z.direction is Direction.UP else (215, 60, 90)
+        boxes.append(Box(z.low, z.high, max(0, z.origin_index - lo), None, colour, 0.30 if status == "fresh" else 0.12))
+        tag = z.kind + (" FRESH" if status == "fresh" else " USED") + (" KNIFE" if z.knife and status != "fresh" else "")
+        labels.append(Label(max(0, z.origin_index - lo), z.high if z.direction is Direction.DOWN else z.low, tag, colour, 2, "above" if z.direction is Direction.DOWN else "below"))
 
     for e in reading.events:
         if e.index < lo or e.index >= n:

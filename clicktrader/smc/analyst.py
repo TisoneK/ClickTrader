@@ -48,6 +48,7 @@ from .engine import BreakKind, Control, LiquidityPool, classify_break, liquidity
 from .quality import pushed_distance
 
 READINGS = (
+    "a supply/demand ZONE is the last opposite-coloured candle before a run of 3+ same-coloured candles whose bodies are at least 1.5x the median body before them (the decks' \"3+ large\"; the SOP says 4+), boxed wick to wick; valid only with a fair value gap in the run and a break of the last major swing; fresh until first tapped; dead on a close through its far edge",
     "structure is read from MAJOR swings: a leg smaller than the median leg among the recent swings is noise and its two ends are dropped (comparison, not a constant)",
     "a wick through a stacked level that closes back inside it on the same bar is a SWEEP of that level, whatever swing control is watching; several closes beyond it are a break or an undercut, not a sweep",
     "a swing is a fractal pivot: the extreme of `strength` bars on each side (the convention every SMC reference uses)",
@@ -138,6 +139,62 @@ class Opportunity:
 
 
 @dataclass
+class Zone:
+    """A supply or demand zone in the sense the decks and S01 use: the ORIGIN of an aggressive move.
+
+    Not a stack of swing points. It is the last opposite-coloured candle before a displacement — a run of
+    same-coloured candles far larger than the chart's own — boxed wick to wick. The decks make it valid only when
+    the run left an imbalance (a fair value gap) and broke structure; it is tradeable only while **fresh** (price has
+    not come back to it yet) and is deleted when a bar closes through its far edge.
+    """
+
+    direction: Direction
+    """UP = demand (the run went up from it), DOWN = supply."""
+    low: float
+    high: float
+    origin_index: int
+    start: int
+    end: int
+    """The displacement run, `start..end` (grows while the run continues)."""
+    born: int
+    """The bar on which the run first qualified — when a person could first have drawn it."""
+    has_gap: bool = False
+    has_bos: bool = False
+    aggressive: bool = True
+    """The run was far larger than the chart's own candles. A run that breaks structure with ordinary-sized candles
+    is the decks' "invalid: fails the aggression rule"."""
+    pushed: float = 0.0
+    """How far price travelled from the zone since, in typical candle ranges. Reported, never gated."""
+    status: str = "fresh"
+    """fresh -> used (price has come back once) -> dead (a bar closed through the far edge)."""
+    tapped_at: int | None = None
+    died_at: int | None = None
+    knife: bool = False
+    """The bar that first tapped it was itself as large as the impulse: the violent return the decks say to skip."""
+
+    @property
+    def valid(self) -> bool:
+        """Passed all three of the decks' rules when it formed: aggression, imbalance, break of structure."""
+        return self.aggressive and self.has_gap and self.has_bos
+
+    @property
+    def verdict(self) -> str:
+        """TRUE (valid and still standing), FALSE (failed a rule at birth), or BROKEN (was valid, then closed through)."""
+        if not self.valid:
+            return "FALSE"
+        return "BROKEN" if self.status == "dead" else "TRUE"
+
+    @property
+    def kind(self) -> str:
+        return "DEMAND" if self.direction is Direction.UP else "SUPPLY"
+
+    @property
+    def why_not(self) -> str:
+        missing = [n for n, ok in (("not aggressive", self.aggressive), ("no imbalance", self.has_gap), ("no break of structure", self.has_bos)) if not ok]
+        return ", ".join(missing)
+
+
+@dataclass
 class Reading:
     candles: Sequence[Candle]
     swings: list[LabeledSwing] = field(default_factory=list)
@@ -150,11 +207,15 @@ class Reading:
     """(gap, bar that filled it or None)."""
     events: list[Event] = field(default_factory=list)
     opportunities: list[Opportunity] = field(default_factory=list)
+    zones: list[Zone] = field(default_factory=list)
     major: set[int] = field(default_factory=set)
     """Bars whose swing was ever part of the structure the analyst read; the rest are drawn as bare dots."""
 
     def summary(self) -> str:
         opp = self.opportunities
+        zt = [z for z in self.zones if z.verdict == 'TRUE']
+        zf = [z for z in self.zones if z.verdict == 'FALSE']
+        zb = [z for z in self.zones if z.verdict == 'BROKEN']
         true = [o for o in opp if o.is_true]
         declined = [o for o in opp if not o.is_true]
         by = lambda k: sum(1 for e in self.events if e.kind is k)  # noqa: E731
@@ -163,6 +224,8 @@ class Reading:
         return (
             f"{len(self.candles)} bars, {len(self.swings)} swings; events: {by(EventKind.BOS)} BOS, "
             f"{by(EventKind.CHOCH)} CHOCH, {by(EventKind.SWEEP)} sweep, {by(EventKind.GAP_FILL)} gap fill; "
+            f"zones: {len(zt)} true ({sum(1 for z in zt if z.status == 'fresh')} fresh, {sum(1 for z in zt if z.status == 'used')} used), "
+            f"{len(zf)} false, {len(zb)} broken; "
             f"opportunities: {len(true)} true ({won} won, {lost} lost in hindsight), {len(declined)} rejected"
         )
 
@@ -174,6 +237,30 @@ def _median(values: Sequence[float]) -> float:
 
 def _body(c: Candle) -> float:
     return abs(c.close - c.open)
+
+
+def _run_ending_at(candles: Sequence[Candle], t: int, *, min_candles: int, lookback: int, size_multiple: float = 1.5) -> tuple[int, int] | None:
+    """The longest run of same-coloured candles ending exactly at bar `t` whose bodies, taken together, are at least
+    `size_multiple` times what the same number of ordinary candles (the median body of the `lookback` bars before the
+    run) would add up to — "far larger than this chart's own". Returns (start, end) or None. Checks only runs ending at
+    `t`, so it is cheap enough to ask on every bar."""
+    bullish = candles[t].close > candles[t].open
+    if candles[t].close == candles[t].open:
+        return None
+    stretch = t
+    while stretch - 1 >= 0 and (candles[stretch - 1].close > candles[stretch - 1].open) == bullish and candles[stretch - 1].close != candles[stretch - 1].open:
+        stretch -= 1
+    for length in range(min(t - stretch + 1, lookback), min_candles - 1, -1):
+        start = t - length + 1
+        base = candles[max(0, start - lookback) : start]
+        if len(base) < 5:
+            continue
+        median = _median([_body(c) for c in base])
+        if median <= 0:
+            continue
+        if sum(_body(c) for c in candles[start : t + 1]) >= size_multiple * length * median:
+            return start, t
+    return None
 
 
 def label_swings(swings: Sequence[SwingPoint], strength: int) -> list[LabeledSwing]:
@@ -263,6 +350,7 @@ def read_chart(
     strength: int = 2,
     lookback: int = 20,
     risk_reward: float = 2.0,
+    zone_min_candles: int = 3,
 ) -> Reading:
     """Read `candles` bar by bar. `higher` is the slower clock's candles, used only to confirm direction."""
     n = len(candles)
@@ -283,6 +371,7 @@ def read_chart(
     control: Control | None = None
     armed: list[Opportunity] = []
     level_life: dict[tuple[str, int], list] = {}
+    zone_by_start: dict[int, Zone] = {}
 
     for t in range(n):
         bar = candles[t]
@@ -342,6 +431,49 @@ def read_chart(
                         f"wick through a level the market had turned at {p0.touches} times and closed back: the stops were taken, the level held",
                         _body(bar) / body_med,
                     ))
+
+        # -- supply / demand zones: the ORIGIN of an aggressive move, not a stack of swings
+        if t >= lookback:
+            run = _run_ending_at(candles, t, min_candles=zone_min_candles, lookback=lookback)
+            aggressive = run is not None
+            if run is None:
+                run = _run_ending_at(candles, t, min_candles=zone_min_candles, lookback=lookback, size_multiple=0.0)
+            if run is not None:
+                st, en = run
+                up = candles[t].close > candles[t].open
+                o = st - 1
+                while o >= 0 and (candles[o].close == candles[o].open or ((candles[o].close > candles[o].open) == up)):
+                    o -= 1
+                if o >= 0:
+                    want = Direction.UP if up else Direction.DOWN
+                    has_gap = any(g.direction is want and st <= g.formed_index <= en - 1 for g in fair_value_gaps(candles[: en + 1], from_index=st))
+                    prior = major_swings([sw for sw in all_swings if sw.index + strength <= st])
+                    ref = [sw for sw in prior if sw.kind is (SwingKind.HIGH if up else SwingKind.LOW)][-1:]
+                    has_bos = bool(ref) and any((c.high > ref[0].price) if up else (c.low < ref[0].price) for c in candles[st : en + 1])
+                    z = zone_by_start.get(st)
+                    # An aggressive run is always a candidate. An ordinary-sized one only when it still breaks structure —
+                    # the decks' "invalid: fails the aggression rule" — otherwise it is just noise and is not a zone at all.
+                    if z is None and (aggressive or has_bos):
+                        origin = candles[o]
+                        z = Zone(Direction.UP if up else Direction.DOWN, origin.low, origin.high, o, st, en, t, aggressive=aggressive)
+                        zone_by_start[st] = z
+                        reading.zones.append(z)
+                    if z is not None:
+                        z.end = en
+                        z.has_gap, z.has_bos = has_gap, has_bos
+                        z.aggressive = z.aggressive or aggressive  # once the growing run is far larger than ordinary, it stays so
+                        rng = _median([c.range for c in candles[max(0, t - lookback) : t + 1]]) or 1e-12
+        for z in reading.zones:
+            if z.status == "dead" or t <= z.end:
+                continue
+            demand = z.direction is Direction.UP
+            z.pushed = ((max(c.high for c in candles[z.origin_index : t + 1]) - z.high) if demand else (z.low - min(c.low for c in candles[z.origin_index : t + 1]))) / rng
+            if (bar.close < z.low) if demand else (bar.close > z.high):
+                z.status, z.died_at = "dead", t
+            elif z.status == "fresh" and bar.low <= z.high and bar.high >= z.low:
+                z.status, z.tapped_at = "used", t
+                impulse = _median([_body(c) for c in candles[z.start : z.end + 1]]) or 1e-12
+                z.knife = _body(bar) >= impulse and ((bar.close < bar.open) if demand else (bar.close > bar.open))
 
         # -- opportunities waiting for a retrace: dead zone, first tap, falling knife
         for opp in list(armed):
