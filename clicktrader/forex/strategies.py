@@ -240,6 +240,10 @@ class EngulfingBar:
     Candle-shape patterns have no tick-level analog the way a moving average does; see `candles.py`'s
     docstring for the synthetic-bar gap this and `PinBar` share. Rule per the standard engulfing-candle
     definition used across candlestick price-action trading, not any one book's specific wording.
+
+    Checked against the book this was extracted from (S010, P-2026-09-30-5): this is the shape alone. The
+    book makes the setup depend on trend direction, a key level and a higher timeframe, none of which are
+    tested here, so a result for this strategy is not a result for the book's method.
     """
 
     def __init__(self, *, bar_size: int = 10, horizon_ticks: int = 10, stake: float = 1.0) -> None:
@@ -280,6 +284,10 @@ class PinBar(_ZoneEdgeStrategy):
     time-based candle compares to this project's synthetic tick-count bar (see `candles.py`). Rule per
     the standard pin-bar / hammer / shooting-star definition used across candlestick price-action
     trading, not any one book's specific wording.
+
+    Checked against the book this was extracted from (S010, P-2026-09-30-5): this is the shape alone. The
+    book makes the setup depend on trend direction, a key level and a higher timeframe, none of which are
+    tested here, so a result for this strategy is not a result for the book's method.
     """
 
     def __init__(
@@ -331,6 +339,10 @@ class InsideBar:
     bar's edge is not inside and leaves the current watch alone. Rule per the standard inside-bar /
     mother-bar breakout definition used across candlestick price-action trading, not any one book's
     specific wording.
+
+    Checked against the book this was extracted from (S010, P-2026-09-30-5): this is the shape alone. The
+    book makes the setup depend on trend direction, a key level and a higher timeframe, none of which are
+    tested here, so a result for this strategy is not a result for the book's method.
     """
 
     def __init__(self, *, bar_size: int = 10, horizon_ticks: int = 10, stake: float = 1.0) -> None:
