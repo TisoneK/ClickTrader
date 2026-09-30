@@ -90,4 +90,3 @@ What it does **not** settle, and should not be tuned by eye alone (rule 3 above)
 engine now draws several overlapping bands where a person would circle one zone, and it gives a 120-bar-old
 level the same weight as yesterday's. Whether overlapping bands merge and whether recency matters are
 judgements the material leaves to the trader; they need the trader's own reference examples.
-
