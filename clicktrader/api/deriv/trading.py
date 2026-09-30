@@ -177,6 +177,69 @@ def place_rise_fall(
     )
 
 
+MAX_MULTIPLIER_NOTIONAL = 500.0
+"""The demo account refuses a Multipliers position whose stake times multiplier exceeds this — found by
+proposing 10 at multiplier 100 and reading `LimitOrderAmountTooHigh: Enter an amount equal to or lower
+than 500.00`. Kept here as a named constant so the guard and the message agree."""
+
+
+def place_multiplier(
+    ws: websocket.WebSocket,
+    rise: bool,
+    *,
+    symbol: str,
+    stake: float,
+    multiplier: int,
+    stop_loss: float,
+    take_profit: float,
+    currency: str,
+) -> BuyResult:
+    """Price then buy one Multipliers contract carrying a stop and a target, on an authenticated connection.
+
+    This is the product that can hold the shape this project's trade plans are actually written in: a
+    `TradePlan` has an entry, a stop and a target, and a Rise/Fall binary has none of those — it expires
+    and pays. Multipliers take the stop and the target as *price levels* inside a `limit_order`, which is
+    where the platform wants them; `stop_loss` and `take_profit` at the top level are rejected outright.
+
+    **The risk is not the stake, and that is the important difference.** A multiplier of 100 on a 10 stake
+    is a 1,000 position: the stop is what bounds the loss, not the money put up. `RiskGuard`'s central
+    assumption — that the most a trade can lose is the stake — does not hold here, so anything calling this
+    has to size from the stop distance rather than from the stake. The notional cap below is the account's
+    own, not a preference.
+    """
+    notional = stake * multiplier
+    if notional > MAX_MULTIPLIER_NOTIONAL:
+        raise DerivAPIError(
+            f"stake {stake:g} at multiplier {multiplier} is {notional:g} of exposure, and this account "
+            f"refuses anything above {MAX_MULTIPLIER_NOTIONAL:g} — lower the stake or the multiplier"
+        )
+    ws.send(
+        json.dumps(
+            {
+                "proposal": 1,
+                "amount": stake,
+                "basis": "stake",
+                "contract_type": "MULTUP" if rise else "MULTDOWN",
+                "currency": currency,
+                "underlying_symbol": symbol,
+                "multiplier": multiplier,
+                "limit_order": {"stop_loss": stop_loss, "take_profit": take_profit},
+            }
+        )
+    )
+    priced = _recv_or_raise(ws)["proposal"]
+    ws.send(json.dumps({"buy": priced["id"], "price": priced["ask_price"]}))
+    bought = _recv_or_raise(ws)["buy"]
+    return BuyResult(
+        contract_id=bought["contract_id"],
+        transaction_id=bought["transaction_id"],
+        buy_price=bought["buy_price"],
+        payout=bought.get("payout", 0.0),
+        balance_after=bought["balance_after"],
+        purchase_time=bought["purchase_time"],
+    )
+
+
 def get_contract_status(ws: websocket.WebSocket, contract_id: int) -> dict[str, Any]:
     """A one-off (non-subscribed) ``proposal_open_contract`` lookup for one contract's current state.
     Same reasoning as `get_balance`: a plain request-response, not `subscribe: 1`, to avoid interleaving

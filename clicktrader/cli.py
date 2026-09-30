@@ -36,6 +36,54 @@ def _load(path: str):
     return [r.tick for r in records]
 
 
+def cmd_buy_multiplier(args: argparse.Namespace) -> int:
+    """Place ONE Multipliers contract carrying a stop and a target — the product this project's trade plans
+    are actually written for. Rise/Fall expires and pays; only this one accepts the two levels a plan is
+    made of, which is why the SMC engine could never be traded without it."""
+    import os
+
+    import websocket
+
+    from .api.deriv import DerivAPIError, get_otp_url
+    from .api.deriv.trading import MAX_MULTIPLIER_NOTIONAL, get_balance, place_multiplier
+
+    if args.stake > args.max_stake:
+        print(f"stake {args.stake} exceeds --max-stake {args.max_stake}; refusing.")
+        return 2
+    if args.stake * args.multiplier > MAX_MULTIPLIER_NOTIONAL:
+        print(f"{args.stake:g} at multiplier {args.multiplier} is {args.stake * args.multiplier:g} of "
+              f"exposure; this account refuses more than {MAX_MULTIPLIER_NOTIONAL:g}.")
+        return 2
+    missing = [n for n in ("DERIV_API_TOKEN", "DERIV_APP_ID", "DERIV_DEMO_ACCOUNT_ID") if not os.environ.get(n)]
+    if missing:
+        print(f"missing {', '.join(missing)} — demo only. Nothing placed.")
+        return 2
+    token, app_id, account_id = (os.environ[n] for n in ("DERIV_API_TOKEN", "DERIV_APP_ID", "DERIV_DEMO_ACCOUNT_ID"))
+    print(f"demo account (id from .env): pricing {args.direction} {args.symbol} stake {args.stake} "
+          f"x{args.multiplier} = {args.stake * args.multiplier:g} exposure; stop {args.stop} target {args.take_profit}")
+
+    trade_ws = None
+    try:
+        trade_ws = websocket.create_connection(get_otp_url(account_id, token, app_id, require_demo=True), timeout=20)
+        balance, currency = get_balance(trade_ws)
+        bought = place_multiplier(
+            trade_ws, args.direction == "up", symbol=args.symbol, stake=args.stake,
+            multiplier=args.multiplier, stop_loss=args.stop, take_profit=args.take_profit, currency=currency,
+        )
+        print(f"bought contract {bought.contract_id}: {bought.buy_price:.2f} {currency} at risk, "
+              f"balance {balance:.2f} -> {bought.balance_after:.2f}, stop and target attached")
+    except DerivAPIError as exc:
+        print(f"Deriv API error: {exc}. Nothing further placed.")
+        return 2
+    except websocket.WebSocketException as exc:
+        print(f"socket error: {exc}")
+        return 2
+    finally:
+        if trade_ws is not None:
+            trade_ws.close()
+    return 0
+
+
 def cmd_run_rise_fall(args: argparse.Namespace) -> int:
     """Run the method live: place a Rise/Fall on every signal, log it, and score variants in the shadows."""
     import os
@@ -665,6 +713,19 @@ def main(argv: list[str] | None = None) -> int:
     )
     tl.add_argument("log")
     tl.set_defaults(func=cmd_trade_log)
+
+    bm = sub.add_parser(
+        "buy-multiplier",
+        help="place ONE Multipliers contract with a stop and a target (demo only) — the product a trade plan fits",
+    )
+    bm.add_argument("--direction", choices=("up", "down"), default="up")
+    bm.add_argument("--symbol", default="1HZ100V")
+    bm.add_argument("--stake", type=float, default=1.0)
+    bm.add_argument("--max-stake", type=float, default=1.0)
+    bm.add_argument("--multiplier", type=int, default=100)
+    bm.add_argument("--stop", type=float, required=True, help="stop-loss price level")
+    bm.add_argument("--take-profit", type=float, required=True, help="take-profit price level")
+    bm.set_defaults(func=cmd_buy_multiplier)
 
     hist = sub.add_parser(
         "history-deriv",
