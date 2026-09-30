@@ -1,5 +1,11 @@
 # The SMC trading architecture — reference notes
 
+> **Read [`spec.md`](spec.md) first if you are going to implement anything.** It is the concept-by-concept
+> specification: what the material *states*, what it *draws* (measured, frame by frame), and what it
+> *leaves to the eye*. This file set explains the method; `spec.md` is what an implementer is held to, and
+> the rules it restates in §3 are the reason — a single invented constant is enough to turn this method
+> into a different strategy.
+
 Notes on the "Smart Money Concepts" system as its own material lays it out, written up so future sessions
 can read the method without needing the source. **Provenance:** a course deck the project owner holds
 (named "The 2026 Day Trading Architecture — distilling Smart Money Concepts into a single, executable

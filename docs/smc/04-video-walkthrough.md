@@ -43,9 +43,17 @@ material, and it is the layer the code entirely lacks.
 ## Order blocks
 
 Defined as refined supply and demand zones where the significant pressure originated — and drawn
-concretely: the box covers **the last opposite-coloured candle before the impulse**, with the imbalance
-sitting above the move out of it. This is exactly what the code calls a zone (one candle, wick to wick),
-so that reading is now confirmed three times over.
+concretely: the box is **the single candle immediately before the displacement move, taken wick to wick**,
+with the imbalance sitting above the move out of it. Measured against the frames: in `S31`/`S32` the box
+matches that candle's own high-to-low to within 1–3 px, and on the real 1h chart in `S43` the same holds at
+29 pips. This is exactly what the code calls a zone (one candle, wick to wick).
+
+> **Correction (superseded reading).** An earlier version of this file said "the last **opposite-coloured**
+> candle before the impulse" and called it confirmed three times over. Across all 48 frames the material
+> never says "opposite-coloured", and in `S31`/`S32` the candle the box is pinned to is drawn the *same*
+> colour as the impulse. The frames support *the single candle before the move*; the colour constraint was
+> ours. See [`spec.md` §2.2](spec.md) for the measurements, and §2.1 there for the separate, larger object
+> this is often confused with — the macro zone band.
 
 The video also undercuts its own tool, on a slide of its own: *order blocks do not always work; they are
 not guarantees, but potential trading areas where price may show predictable behaviour.*
