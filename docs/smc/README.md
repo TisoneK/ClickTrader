@@ -130,3 +130,7 @@ changes of character, sweeps, trades, no-trade windows; see `docs/evidence/marku
 `clicktrader smc-compare markup.json recording.jsonl` says, for each mark, whether the engine said the same and what
 it said instead. The first markup was written by an AI agent, not the owner, and the file says so; the owner's own
 marks go in the same format.
+
+**Running it live.** See [`docs/live-demo-test.md`](../live-demo-test.md): paper first (`clicktrader run-smc`, places
+nothing), then the demo account (`--place`), then `smc-readiness` for whether the evidence is enough. There is no
+real-money path.
