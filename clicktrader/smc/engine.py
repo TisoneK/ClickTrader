@@ -56,6 +56,10 @@ class BreakKind(str, Enum):
     CHANGE_OF_CHARACTER = "change-of-character"
     LIQUIDITY_SWEEP = "liquidity-sweep"
     GAP_MITIGATION = "gap-mitigation"
+    NO_BREAK = "no-break"
+    """The bar never reached the level at all. Its own kind rather than being filed under mitigation: a
+    count that lumps "nothing happened here" in with "this break was a rebalancing" is a count that
+    misleads whoever reads it next, and it misled this session's own diagnostic script first."""
 
 
 @dataclass(frozen=True)
@@ -148,8 +152,7 @@ def classify_break(
                 "were taken, not the level itself",
             )
         return BreakResult(
-            BreakKind.GAP_MITIGATION, level, direction,
-            f"bar {index} never reached {level:.5f} at all",
+            BreakKind.NO_BREAK, level, direction, f"bar {index} never reached {level:.5f} at all"
         )
 
     for gap in fair_value_gaps(candles[: index + 1]):

@@ -110,7 +110,8 @@ def test_a_gap_that_was_already_filled_does_not_excuse_the_break():
 def test_a_bar_that_never_reached_the_level_is_reported_as_neither():
     candles = _bars(*_TWO_LOWS, (101.0, 101.5, 100.8, 101.2))
     result = classify_break(candles, index=5, level=100.0, direction=Direction.DOWN)
-    assert result.kind is BreakKind.GAP_MITIGATION
+    assert result.kind is BreakKind.NO_BREAK
+    assert not result.flips_control
     assert "never reached" in result.reason
 
 
