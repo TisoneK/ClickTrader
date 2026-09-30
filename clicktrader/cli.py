@@ -484,7 +484,7 @@ def cmd_run_smc(args: argparse.Namespace) -> int:
     from .smc.live import paper_run, warm_from_history
     from .smc.strategy import SmcStrategy
 
-    chain = tuple(args.higher_minutes) if args.higher_minutes else (60.0,)
+    chain = tuple(args.higher_minutes)  # an empty chain means no slower-clock veto at all
     strategy = SmcStrategy(trigger_minutes=args.minutes, higher_minutes=chain, risk_reward=args.risk_reward)
     max_loss = args.max_loss_per_trade
     mode = "DEMO ACCOUNT (virtual money)" if args.place else "PAPER (nothing is placed)"
@@ -492,7 +492,7 @@ def cmd_run_smc(args: argparse.Namespace) -> int:
         f"at most {args.max_trades} trade(s)" if args.max_trades is not None else "",
         f"{args.max_seconds:.0f}s" if args.max_seconds is not None else "",
         f"max {max_loss:g} at risk per trade" if max_loss is not None else "") if x) or "no caps: it trades what it finds until you stop it (Ctrl-C)"
-    print(f"{mode}: {args.symbol}, {args.minutes:g}m bars with slower clocks {'/'.join(f'{m:g}' for m in chain)}m, "
+    print(f"{mode}: {args.symbol}, {args.minutes:g}m bars with slower clocks {'/'.join(f'{m:g}' for m in chain) or 'none (no veto)'}m, "
           f"stake {args.stake:g} x{args.multiplier}; {caps}", flush=True)
     if args.place:
         loaded = load_env_file()
@@ -913,7 +913,7 @@ def main(argv: list[str] | None = None) -> int:
     run_smc = sub.add_parser("run-smc", help="run the SMC engine on the live feed: PAPER by default, --place for the DEMO account (never real money)")
     run_smc.add_argument("--symbol", default="R_100", help="Deriv symbol (default R_100; 1HZ100V is the 1-second index)")
     run_smc.add_argument("--minutes", type=float, default=1.0, help="trigger bar length in minutes (default 1, the view the owner charts)")
-    run_smc.add_argument("--higher-minutes", type=float, nargs="+", default=[5.0, 15.0], help="slower clocks that must not contradict a trade (default 5 15)")
+    run_smc.add_argument("--higher-minutes", type=float, nargs="*", default=[5.0], help="slower clock(s) that must not contradict a trade (default 5). Measured on 16-25h of data a 5+15 chain armed 0.9/h on R_100 and 0 on V100 (1s); 5 alone 0.6-0.9/h; none (`--higher-minutes` alone) 1.5-1.8/h but about half of those are cancelled as falling knives")
     run_smc.add_argument("--risk-reward", type=float, default=2.0, help="minimum reward:risk (default 2, the material's floor)")
     run_smc.add_argument("--stake", type=float, default=1.0)
     run_smc.add_argument("--multiplier", type=int, default=100)

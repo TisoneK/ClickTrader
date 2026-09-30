@@ -75,3 +75,42 @@ def test_a_run_that_places_nothing_says_so(tmp_path):
                  ticks=iter(_ticks(3)), broker=FakeBroker([]), emit=lambda _s: None)
     assert result.placed == 0
     assert "nothing placed yet" in result.readout()
+
+
+class BalanceBroker(FakeBroker):
+    """A broker that can say its balance, and can refuse an order once."""
+
+    def __init__(self, profits, *, refuse_first=False):
+        super().__init__(profits)
+        self._refuse = refuse_first
+        self._balance = 10_000.0
+
+    def balance(self):
+        return self._balance, "USD"
+
+    def place(self, plan, entry):
+        from clicktrader.api.deriv import DerivAPIError
+
+        if self._refuse:
+            self._refuse = False
+            raise DerivAPIError("InvalidContractProposal: stop loss is too close")
+        return super().place(plan, entry)
+
+
+def test_a_live_run_shows_the_balance_at_the_start_in_status_lines_and_after_each_trade(tmp_path):
+    said = []
+    run(symbol="R_100", log_path=str(tmp_path / "t.jsonl"), stake=1.0, multiplier=100,
+        strategy=FiresOnEveryTick(stop=99.0, target=102.0), max_trades=1, ticks=iter(_ticks(10)),
+        broker=BalanceBroker([1.0]), emit=said.append, report_every=1, now=iter(range(0, 10_000, 5)).__next__)
+    assert said[0].startswith("demo account balance 10,000.00 USD")
+    assert any(line.startswith("[") and "balance 10,000.00 USD" in line for line in said)  # a status line
+    assert any(line.startswith("closed") and "balance 10,000.00 USD" in line for line in said)  # and after a trade
+
+
+def test_a_broker_refusal_is_reported_and_does_not_end_the_run(tmp_path):
+    said = []
+    result = run(symbol="R_100", log_path=str(tmp_path / "t.jsonl"), stake=1.0, multiplier=100,
+                 strategy=FiresOnEveryTick(stop=99.0, target=102.0), max_trades=1, ticks=iter(_ticks(10)),
+                 broker=BalanceBroker([1.0], refuse_first=True), emit=said.append)
+    assert result.refused == 1 and result.placed == 1  # the first plan was refused, the next one was placed
+    assert any("BROKER REFUSED this plan: InvalidContractProposal: stop loss is too close" in line for line in said)

@@ -82,6 +82,12 @@ class DerivMultiplierBroker:
             get_otp_url(account, token, app_id or app, require_demo=True), timeout=25
         )
 
+    def balance(self) -> tuple[float, str]:
+        """(balance, currency) of the demo account right now."""
+        from .api.deriv.trading import get_balance
+
+        return get_balance(self._ws)
+
     def place(self, plan: TradePlan, entry: float) -> tuple[int, float, float]:
         """Place the plan with its own stop and target. Returns (contract id, price, currency)."""
         from .api.deriv.trading import get_balance, place_multiplier
@@ -141,6 +147,16 @@ def run(
     started = now()
     last_report = started
     log = open(log_path, "a", encoding="utf-8")
+    def money() -> str:
+        """The account's balance, when the broker can say — a live run must always show it."""
+        try:
+            bal, cur = broker.balance()
+            return f"balance {bal:,.2f} {cur}"
+        except Exception:  # a broker that cannot say, or a hiccup: never let the readout take the run down
+            return ""
+
+    if broker is not None and hasattr(broker, "balance"):
+        emit(f"demo account {money() or 'balance unavailable'}")
     emit("connecting to the live feed; the first tick should arrive within a few seconds...")
     try:
         for record in feed:
@@ -154,7 +170,8 @@ def run(
                 # that cannot be told from a dead one, and "it saw nothing" is as much of a result as "it
                 # took a trade" — the strategy already knows which and why in `last_view`.
                 last_report = now()
-                emit(f"[{now() - started:.0f}s] price {record.tick.price} — {run.readout()}")
+                emit(f"[{now() - started:.0f}s] price {record.tick.price} — {run.readout()}"
+                     + (f" — {money()}" if hasattr(broker, "balance") else ""))
                 seen = getattr(strategy, "last_view", None)
                 if seen:
                     emit(f"  what it sees: {seen}")
@@ -169,7 +186,13 @@ def run(
                 emit(f"refused: the stop is {risk:.2f} of exposure away, over the {max_loss_per_trade:.2f} limit")
                 continue
             emit(f"plan: {decision.reason[:160]}")
-            contract_id, price, currency = broker.place(decision.plan, entry)
+            try:
+                contract_id, price, currency = broker.place(decision.plan, entry)
+            except DerivAPIError as exc:
+                # One refused order must not end the run, and it must be said plainly what the broker objected to.
+                run.refused += 1
+                emit(f"BROKER REFUSED this plan: {exc} — carrying on with the next one")
+                continue
             emit(f"placed {contract_id}: {price:.2f} {currency} at risk, stop {decision.plan.stop}, "
                  f"target {decision.plan.target}")
             try:
@@ -188,7 +211,8 @@ def run(
                                   "reason": decision.reason}) + "\n")
             log.flush()
             os.fsync(log.fileno())
-            emit(f"closed {contract_id}: {profit:+.2f} {currency} — {run.readout()}")
+            emit(f"closed {contract_id}: {profit:+.2f} {currency} — {run.readout()}"
+                 + (f" — {money()}" if hasattr(broker, "balance") else ""))
             if max_trades is not None and run.placed >= max_trades:
                 emit(f"reached the cap of {max_trades} trades; stopping")
                 break

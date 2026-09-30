@@ -88,3 +88,19 @@ def test_describe_says_what_the_chart_reads_right_now():
     strategy.warm(ticks)
     text = strategy.describe()
     assert "structure" in text and "fresh true zones:" in text and "last close" in text
+
+
+def test_the_strategy_counts_what_it_passed_on_and_says_why():
+    s = SmcStrategy(trigger_minutes=1.0)
+    assert s.passes == {}
+    s._note_pass("against the higher timeframe, which reads down")
+    s._note_pass("against the higher timeframe, which reads up")
+    breakdown = s._note_pass("a weaker zone: another demand zone in the same leg is lower")
+    s._note_pass("no room to move: no opposing level leaves 2:1 from the zone")
+    assert s.passes == {"against the slower clock": 2, "a weaker zone": 1, "no room to 1:2": 1}
+    assert breakdown.startswith("2 against the slower clock")  # biggest first
+
+
+def test_an_empty_chain_means_no_slower_clock_veto():
+    s = SmcStrategy(trigger_minutes=1.0, higher_minutes=())
+    assert s._higher == []

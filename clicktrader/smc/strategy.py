@@ -89,6 +89,8 @@ class SmcStrategy:
         self._stake = stake
         self._armed: _Armed | None = None
         self.last_view = "nothing seen yet"
+        self.passes: dict[str, int] = {}
+        """Setups it saw and passed on, by reason: so \"it found nothing\" and \"it found things and said no\" read differently."""
 
     # --- the tick path --------------------------------------------------------------------------
 
@@ -120,6 +122,13 @@ class SmcStrategy:
         self._armed = None
         self.last_view = f"warmed with {fed} historical tick(s)"
         return fed
+
+    def _note_pass(self, reason: str) -> str:
+        """Count a setup it saw and passed on, by why; returns the running breakdown, biggest first."""
+        key = ("against the slower clock" if "higher timeframe" in reason else "against the trend" if "against the trend" in reason
+               else "a weaker zone" if "weaker zone" in reason else "no room to 1:2" if "no room" in reason else "other")
+        self.passes[key] = self.passes.get(key, 0) + 1
+        return ", ".join(f"{v} {k}" for k, v in sorted(self.passes.items(), key=lambda kv: -kv[1]))
 
     def describe(self) -> str:
         """What the chart says right now, in a few words — for the moment a live run starts, so the person watching can
@@ -161,7 +170,8 @@ class SmcStrategy:
             return
         opp = fresh[0]
         if not opp.is_true or opp.target is None:
-            self.last_view = f"declined: {opp.reason}"
+            total = self._note_pass(opp.reason)
+            self.last_view = f"passed on a setup — {opp.reason}. Passed on {sum(self.passes.values())} so far: {total}"
             return
         plan = TradePlan(opp.direction, stop=opp.stop, target=opp.target)
         self._armed = _Armed(plan=plan, block=opp.block, reason=f"smc: {opp.reason}")

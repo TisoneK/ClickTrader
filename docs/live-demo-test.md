@@ -8,7 +8,7 @@ There is no real-money path in this repository and none should be added on the s
 
 ```bash
 cd ~/Code/ClickTrader
-.venv/bin/clicktrader run-smc --symbol R_100 --minutes 1 --higher-minutes 5 15
+.venv/bin/clicktrader run-smc --symbol R_100 --minutes 1 --higher-minutes 5
 ```
 
 (`clicktrader` is installed inside the project's virtual environment, so it is not on your PATH: run it as
@@ -60,3 +60,20 @@ carry no costs. Exit code 0 means READY, 1 means not.
   slippage against the level the plan was written at.
 - Gold's market closes 21:00–22:00 GMT daily; the volatility indices trade around the clock. If the broker refuses a
   multiplier for a symbol, the error is printed and nothing is placed.
+
+## "It isn't trading" — how often to expect a trade, and the one setting that decides it
+
+Measured on 16 hours of R_100 and 25 hours of the 1-second V100 (hindsight readings, no orders), trades armed per hour:
+
+| slower-clock veto | R_100 | V100 (1s) |
+|---|---|---|
+| 5-minute **and** 15-minute (`--higher-minutes 5 15`) | 0.9 | **0.0** |
+| 5-minute only (**the default**) | 0.9 | 0.6 |
+| none (`--higher-minutes` with no values) | 1.8 | 1.5 |
+
+The veto (a trade may not go against a slower clock's structure) is the decks' "align across timeframes" and is what
+passes on most setups. With no veto it trades about twice as often, but about **half of those are then cancelled** as
+falling knives (the return into the zone was as violent as the move that made it), and the trades taken against the
+slower clock are the ones the decks say not to take. The run tells you what it passed on and why
+("Passed on 14 so far: 9 against the slower clock, 3 a weaker zone, …"), shows your balance at the start, in every status
+line and after each trade, and reports a broker refusal in plain words and carries on with the next plan.
