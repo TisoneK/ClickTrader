@@ -13,8 +13,8 @@ and backlog before starting.
 -->
 
 - **Session:** 2026-09-30 — Tariq / claude-sonnet-5-5 (S010)
-- **Task:** Review of the Sonnet sessions' work (Amara S002, Femi), then fix everything found, in phases: (1) `risk_replay` ignores `Decision.duration` (stale since Zara's S008 change) — share the harness's settle rule; (2) `risk_replay` ends a session on any guard refusal where the live executor/runner skips the refused bet and stops only on a latched halt; (3) forex verdict compares the strategy's interval to the control's *point* rate, ignoring the control's own sampling error — use the paired difference of proportions; (4) ADR-4 recording (3) and the ledger record (Femi's S003/S006 codename mismatch appended as a correction).
-- **Status:** done — all four phases shipped (see sessions.md Session 10, ADR-4); entry kept as reference, not a live task.
+- **Task:** Round 6: "fix all identified engine/docs issues and make sure the engine sees charts like a human would, can draw in its own language, identify opportunities and true from false positives as the documents and images describe; research online if possible."
+- **Status:** done — `smc/analyst.py` + `smc/draw.py` + strategy rewired on the reading, docs/smc corrected, ADR-5, P-2026-09-30-9; web search unavailable (model error), conventions checked against the open-source library instead. Open: the owner's markup of a chart.
 
 **Below — the previous sessions' threads, kept as reference, not as a live task.**
 
