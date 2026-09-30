@@ -1,0 +1,49 @@
+1m -> docs/evidence/r100-1m-test-live.png
+  999 bars, 247 swings; events: 47 BOS, 47 CHOCH, 126 sweep, 0 gap fill; opportunities: 22 true (10 won, 10 lost in hindsight), 25 rejected
+    bar 62: up filled (win) — CHOCH then a block at 610.11000-611.15000; limit 611.15000, stop 610.11000, target 613.59000 (2.3:1); gap no; pushed 0.9 bands
+    bar 86: down declined — no room to move: no opposing level leaves 2:1 from the block
+    bar 100: up armed — CHOCH then a block at 611.75000-612.44000; limit 612.44000, stop 611.75000, target 614.20000 (2.6:1); gap yes; pushed 2.9 bands
+    bar 131: down cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
+    bar 135: up filled (loss) — CHOCH then a block at 619.76000-620.90000; limit 620.90000, stop 619.76000, target 623.50000 (2.3:1); gap no; pushed 1.3 bands
+    bar 147: down filled (win) — CHOCH then a block at 621.95000-623.00000; limit 621.95000, stop 623.00000, target 619.71000 (2.1:1); gap yes; pushed 2.0 bands
+    bar 159: up filled (win) — CHOCH then a block at 620.63000-621.38000; limit 621.38000, stop 620.63000, target 622.89000 (2.0:1); gap no; pushed 0.7 bands
+    bar 177: down cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
+    bar 188: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
+    bar 262: down filled (loss) — CHOCH then a block at 632.44000-633.84000; limit 632.44000, stop 633.84000, target 623.60000 (6.3:1); gap no; pushed 0.7 bands
+    bar 284: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
+    bar 309: down cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
+    bar 331: up filled (loss) — CHOCH then a block at 629.08000-630.23000; limit 630.23000, stop 629.08000, target 634.44000 (3.7:1); gap no; pushed 0.8 bands
+    bar 353: down filled (win) — CHOCH then a block at 629.87000-631.16000; limit 629.87000, stop 631.16000, target 626.15000 (2.9:1); gap no; pushed 0.7 bands
+    bar 373: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
+    bar 381: down cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
+    bar 406: up filled (win) — CHOCH then a block at 615.17000-616.25000; limit 616.25000, stop 615.17000, target 618.42000 (2.0:1); gap yes; pushed 2.2 bands
+    bar 422: down dead — closed through the zone's far edge before the tap — dead zone, deleted
+    bar 433: up filled (loss) — CHOCH then a block at 617.74000-618.52000; limit 618.52000, stop 617.74000, target 622.28000 (4.8:1); gap no; pushed 0.2 bands
+    bar 447: down filled (win) — CHOCH then a block at 619.71000-620.48000; limit 619.71000, stop 620.48000, target 617.57000 (2.8:1); gap no; pushed 0.9 bands
+    bar 472: up filled (loss) — CHOCH then a block at 615.54000-617.40000; limit 617.40000, stop 615.54000, target 621.57000 (2.2:1); gap yes; pushed 1.4 bands
+    bar 481: down cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
+    bar 500: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
+    bar 559: down cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
+    bar 578: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
+    bar 602: down cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
+    bar 608: up filled (loss) — CHOCH then a block at 628.35000-629.21000; limit 629.21000, stop 628.35000, target 631.48000 (2.6:1); gap yes; pushed 1.3 bands
+    bar 612: down cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
+    bar 640: up filled (win) — CHOCH then a block at 627.18000-628.40000; limit 628.40000, stop 627.18000, target 631.77000 (2.8:1); gap yes; pushed 1.3 bands
+    bar 681: down armed — CHOCH then a block at 639.77000-640.80000; limit 639.77000, stop 640.80000, target 631.05000 (8.5:1); gap no; pushed 1.5 bands
+    bar 704: up filled (loss) — CHOCH then a block at 634.90000-635.79000; limit 635.79000, stop 634.90000, target 638.21000 (2.7:1); gap no; pushed 0.5 bands
+    bar 707: down filled (win) — CHOCH then a block at 635.41000-636.32000; limit 635.41000, stop 636.32000, target 632.51000 (3.2:1); gap yes; pushed 1.4 bands
+    bar 749: up dead — closed through the zone's far edge before the tap — dead zone, deleted
+    bar 796: down filled (win) — CHOCH then a block at 635.49000-636.91000; limit 635.49000, stop 636.91000, target 632.51000 (2.1:1); gap no; pushed 0.6 bands
+    bar 824: up dead — closed through the zone's far edge before the tap — dead zone, deleted
+    bar 826: down cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
+    bar 832: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
+    bar 855: down filled (loss) — CHOCH then a block at 628.73000-630.10000; limit 628.73000, stop 630.10000, target 625.86000 (2.1:1); gap no; pushed 0.5 bands
+    bar 870: up filled (win) — CHOCH then a block at 629.80000-630.67000; limit 630.67000, stop 629.80000, target 633.72000 (3.5:1); gap no; pushed 1.1 bands
+    bar 884: down cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
+    bar 891: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
+    bar 898: down filled (loss) — CHOCH then a block at 635.60000-637.54000; limit 635.60000, stop 637.54000, target 631.66000 (2.0:1); gap no; pushed 0.4 bands
+    bar 908: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
+    bar 911: down dead — closed through the zone's far edge before the tap — dead zone, deleted
+    bar 928: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
+    bar 947: down filled (loss) — CHOCH then a block at 635.88000-636.62000; limit 635.88000, stop 636.62000, target 634.17000 (2.3:1); gap no; pushed 1.2 bands
+    bar 987: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order

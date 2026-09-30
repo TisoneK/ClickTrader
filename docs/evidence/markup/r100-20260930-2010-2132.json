@@ -1,0 +1,22 @@
+{
+  "source": "the owner's test screenshot 'Screenshot 2026-10-01 002913.png' (Volatility 100 Index, 1m candles, RSI panel, about 20:20-21:30 GMT); prices read off the axis then checked against Deriv history (peak 638.0 vs data 637.98; lows 631.23 and 630.46)",
+  "marker": "Tariq (an AI agent) - NOT the owner. Written before the engine's output was looked at.",
+  "instrument": "R_100",
+  "minutes": 1,
+  "from": "2026-09-30 20:10",
+  "to": "2026-09-30 21:32",
+  "levels": [
+    {"price": 637.85, "note": "resistance: three highs, 637.80@20:33, 637.75@20:34, 637.98@20:51"}
+  ],
+  "zones": [
+    {"low": 630.4, "high": 631.4, "note": "support: lows 631.23@20:58 and 630.46@21:17"}
+  ],
+  "changes_of_character": [
+    {"at": "2026-09-30 20:54", "direction": "down", "price": 634.2, "note": "after the triple top, a close through the 634.2 higher low (20:45); then lower highs 635.96, 634.39, 634.55"}
+  ],
+  "sweeps": [],
+  "trades": [],
+  "no_trade": [
+    {"from": "2026-09-30 21:18", "to": "2026-09-30 21:32", "note": "small bounce inside the range, no structure yet"}
+  ]
+}

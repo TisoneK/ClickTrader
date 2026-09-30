@@ -18,3 +18,20 @@ Pure Price Action deck shows.
 The same instrument and platform on 29 Sep 2026 at about 13:13–13:21 GMT. A Rise position closed at a profit of
 **+8.85 USD** (95% of the $10 stake is 9.50, so this is again ~88.5%, not 95%); the Positions panel shows no open
 positions; balance 10,064.59. A tooltip shows a bar with open 953.92, high 953.98, low 951.56, close 952.28.
+
+## `test-live.zip` — five screenshots of the owner's test session, 30 Sep 2026 21:27-21:32 GMT
+Deriv DTrader, demo account. **How the owner sees the bars:** candles at the **1-minute** interval (the "1m" badge on
+every shot), teal up and crimson down, with an **RSI (14, C, Y)** panel under the chart (the engine ignores it; the
+decks are indicator-free), at two zooms: about 40 bars in view, and about ten hours (12:00-22:00).
+1. **Gold/USD, 21:27:44 GMT** — market **closed**: Rise/Fall greyed out, "will reopen at 10:00 pm GMT" (a 21:00-22:00
+   GMT daily gap; the last candle is about 20:58, price 4157.01, range about 4155-4160). Duration 5 min, stake $2.
+2. **Volatility 100 Index (2-second ticks, symbol `R_100`, not the 1s index of the earlier screenshots), zoomed in** —
+   tooltip for the 20:28 candle: open 634.60, high 634.88, low 633.81, close 633.84 (matches Deriv history exactly).
+   Price 633.34 at 21:29:05; peak near 638 around 20:50, lower lows to about 630.5 at 21:17. **Payout $3.78 on a $2
+   stake: 89.0% profit.**
+3. **The same instrument zoomed out, 12:00-22:00** — a fall to about 613 near 13:00, a rise to about 640 near 16:00,
+   then a range around 628-637. Price 633.04 at 21:29:34.
+4. **An open test trade**: Rise, $2, 2 minutes, 1:40 left, +$0.80; entry marker on the chart; balance 10,053.74 (the
+   stake is held).
+5. **The same trade at 0:00:02 left: -$2.00**; it settled as a loss. **The owner states this trade was random, with
+   no rules, purely to test the platform**, so it is a payout/mechanics data point and says nothing about any method.

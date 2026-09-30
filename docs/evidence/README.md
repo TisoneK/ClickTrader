@@ -33,3 +33,24 @@ at a finer zoom or carry a level across zooms (the material's daily → 4H → 1
 
 **What is not here:** the owner's screenshots and the course decks (public repo; the screenshots also show browser
 tabs and an account balance). They are described page by page in `docs/sources/`.
+
+## The owner's test-live screenshots (`r100-1m-test-live.*`, `r100-zoomed-out.*`, `gold-1m-market-closing.*`, `markup/r100-*`)
+Deriv history for the same instrument and windows matches the screens exactly (R_100 20:28 candle identical to the
+tooltip; gold's last price within 0.07). The engine's picture of the owner's zoomed-in view has the same shape as the
+screenshot (20:51 peak, fall, lower low at 21:17, bounce). My markup of that view (`markup/r100-20260930-2010-2132.*`):
+**3 of 4 marks agree, plus 1 with the level right and a different label.**
+- **Resistance 637.85:** found (engine band 637.47-637.98, 7 touches). **Support 630.4-631.4:** found *after a fix*
+  (below). **No-trade 21:18-21:32:** the engine armed nothing.
+- **The bearish break I marked at 634.2 (20:54):** the engine has it at the same price (a BOS at 20:55, level 634.20)
+  but names it BOS, because it had already called a CHOCH down at 20:44 (break of 635.08). The engine's story is
+  CHOCH 20:44 -> a sweep of the equal highs at 20:51 -> BOS 20:55; mine was one CHOCH. By the material's own logic the
+  engine's reading is arguably the better one (the 20:51 spike above 637.8 that closed back is a textbook sweep), but
+  a person who marks one CHOCH would not see it that way; only the owner's marks can say which they would call.
+- **A real engine defect, found and fixed:** the support was *found and then dropped*. Low-side pools at 630.46-630.87
+  (6 touches) and 631.54-631.77 (10 touches) existed, but an older level at that price had been closed through, and
+  the rule "a deleted level stays deleted" kept the market turning there again from ever becoming a new level. A level
+  that has been closed through and then gets fresh swings afterwards is now a new level.
+- **Over-labelling is still the main gap:** 47 BOS, 47 CHOCH and 126 sweeps over the 999 one-minute bars read. Sweep
+  lines are now capped at 14 bars of reach so they no longer span the picture.
+- **Also seen:** gold's daily 21:00-22:00 GMT closure (the feed and the bars stop at ~20:58), and the owner's RSI panel,
+  which nothing here uses.
