@@ -36,9 +36,4 @@ Two explicit checks fall out of that table, both stated as rules rather than hin
 - **A break below a swing low that sits inside a known liquidity area is usually a trap**, not a CHOCH.
   Smart money targets those stop pools deliberately.
 
-**Code status:** the code has **no notion of control at all**. It re-derives zones on every bar with no
-directional state, and it treats *any* close beyond a level as a breakout. So every liquidity sweep in the
-data has been counted as a breakout signal, and every gap-filling pullback likewise — the two traps the
-material specifically warns about are, in the current implementation, indistinguishable from the setup.
-This is the largest single difference between the code and the method, and it lives exactly where signal
-identification lives.
+**Code status (S010):** implemented in `smc/analyst.py` (and `smc/engine.py`). Control is a two-state machine seeded by the first clear structure and flipped only by a true change of character; every break is classified as BOS, CHOCH, SWEEP or GAP FILL with its reason, so the two traps the material warns about are no longer counted as setups. A sweep (wick through, close back) does not use the level up: a later close through it is a fresh break. The gap-fill classifier exists and is tested on fixtures, but has not fired on the real EUR/USD or gold bars read so far. Not implemented: the "visible stop cluster to the left" test, which the material leaves to the eye.

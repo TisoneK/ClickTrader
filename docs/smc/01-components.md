@@ -36,6 +36,4 @@ Three checks, and all three are meant to pass before a zone counts:
 
 The worked example marks the three as "gap created", "structure broken", "long distance achieved".
 
-**Code status:** checks 1 and 2 are implemented (`fair_value_gaps`, `broke_structure`). **Check 3 is not
-implemented at all** — nothing in the code asks how far price travelled away from the zone before coming
-back, which is likely part of why the identification layer behaves unlike the material.
+**Code status (S010):** all three are in `smc/analyst.py`: the gap and the structure break are implemented and used; pushed distance is **measured and reported but not gated**, because the material gives no number and a gate would be an invented constant.

@@ -14,10 +14,7 @@ The funnel is drawn as a filter: the daily decides *which direction and whether 
 the 4-hour confirms structure agrees with it, and the 1-hour produces the trigger. Its stated output is one
 "high-probability execution setup".
 
-**Code status:** **everything the code does runs on a single timeframe** — one-minute bars for the
-price-action method, fifteen-minute bars for others. There is no higher-timeframe bias and no alignment
-step. Since the material's whole funnel is that alignment, this is the second structural gap after the
-missing control state.
+**Code status (S010):** partly implemented. The slower clock (default 60 minutes over a 15-minute trigger) acts as a **veto** — a trade against its structure is rejected as `HTF` — but the daily → 4H → 1H chain is not built: the recordings are days long, not months.
 
 ## Execution: three steps
 
@@ -32,10 +29,7 @@ missing control state.
 Status at that point is "order pending", and the material's own phrase for it is that probability has been
 maximised by *waiting* rather than by acting.
 
-**Code status:** the limit-entry and the stop relative to the origin are implemented for one of the
-methods. The **1:2 minimum** is not enforced anywhere — the exits in the code aim at various targets
-(a swing, an imbalance, a structure extreme) chosen to make the trade well-formed, not against a
-risk-to-reward floor. The "next macro level" target needs the daily levels, which do not exist yet.
+**Code status (S010):** implemented in `smc/analyst.py` and traded by `smc/strategy.py`: limit at the block edge nearest price, stop beyond the block's far wick, and the 1:2 floor is **enforced** — if no opposing level leaves it, the opportunity is rejected as `NO ROOM`. The "next macro level" is approximated by the nearest opposing level on the same chart that leaves the floor, since no daily levels exist.
 
 ## Patience as a requirement
 

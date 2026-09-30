@@ -552,31 +552,33 @@ of data and one that fires.
 
 ## 4. What the current code does and does not implement
 
-Bookkeeping only. Every cell is taken from the "Code status" notes already written in this directory's
-files; the Python source was not read and is not judged here. Verified by a human afterwards.
+*Rewritten by S010 after the analyst (`clicktrader/smc/analyst.py`) was built and run on real EUR/USD and gold
+bars; it replaces an earlier table that was assembled from prose and said most of this was absent.* Read the
+picture (`clicktrader smc-chart`) before trusting any row.
 
-| concept (§) | frames | what `docs/smc/*.md` claims about the code |
+| concept (§) | frames | what the code does now |
 |---|---|---|
-| Supply/demand zone band (§2.1) | `S01`, `S04`–`S07`, `S25`, `S28` | The code's zone is **one candle, wick to wick** — the order-block reading, not the macro band (`01-components.md`, `04-video-walkthrough.md`). No multi-candle band object. |
-| Order block (§2.2) | `S30`–`S33`, `S39`, `S43`, `S46`, `S47` | **Implemented** as the single candle / the code's zone. The *macro band* (§2.1) is now a band around the cluster's candles (`LiquidityPool.low/high`), broken at its far edge — see README "Looking at what the engine sees". No quality grade: the code treats a zone as an opportunity regardless (`04-video-walkthrough.md`). |
-| Inefficiency / FVG (§2.3) | `S01`, `S10`, `S20`, `S31`, `S43`, `S46` | **Implemented and matches the strict definition exactly** — `fair_value_gaps`, no wick overlap (`01-components.md`). |
-| Break of structure (§2.4) | `S01`, `S02`, `S10`, `S14`, `S15`, `S19`, `S26`–`S28` | **Implemented** — `broke_structure` (`01-components.md`). |
-| Pushed distance (§2.5) | `S01`, `S08` | **Not implemented at all** — nothing asks how far price travelled away from the zone before returning (`01-components.md`). |
-| Market control, two states (§2.6) | `S23`, `S24`, `S28` | **Absent** — the code has no notion of control and no directional state; it re-derives zones on every bar (`02-engine.md`). |
-| Change of character (§2.7) | `S12`, `S15`, `S17`, `S21`, `S27`, `S46` | **No control state to change.** Treated as any close beyond a level, i.e. every sweep and every gap-fill counts as a breakout (`02-engine.md`). |
-| Liquidity-sweep invalidation (§2.8) | `S15`–`S19` | **Absent** — a break below a swing low inside a stop cluster is not distinguished (`02-engine.md`, `04-video-walkthrough.md`). |
-| FVG-mitigation invalidation (§2.8) | `S21`, `S22` | **Absent** — same; a gap-filling pullback is counted as a breakout signal (`02-engine.md`, `04-video-walkthrough.md`). |
-| Validator matrix (§2.9) | `S12`, `S15`–`S22` | **Absent** — the two traps the material warns about are, in the current implementation, indistinguishable from the setup (`02-engine.md`). |
-| Top-down alignment (§2.10) | `S34`, `S36`, `S38`–`S47` | **Absent** — everything runs on a single timeframe: one-minute bars for the price-action method, fifteen-minute bars for others; no higher-timeframe bias, no alignment step (`03-operating-manual.md`). |
-| Daily / macro levels (§2.10) | `S38`, `S39` | **Absent** — the "next macro level" target needs the daily levels, which do not exist yet (`03-operating-manual.md`). |
-| Limit entry at the order block (§2.11) | not in the frames (deck only) | **Implemented for one of the methods** — limit entry and the stop relative to the origin (`03-operating-manual.md`). |
-| Stop at the wick (§2.11) | **shown in `S46`/`S47`** (stop zone top 153.78, above the order block top 153.61) and stated in the deck | **Implemented for that same method** — stop placed just above the order block's wick (`03-operating-manual.md`). |
-| Minimum 1:2 risk-to-reward (§2.11) | deck only; the one drawn example in `S46`/`S47` is about 1 : 4.2 | **Not enforced anywhere** — exits aim at various targets (a swing, an imbalance, a structure extreme) chosen to make the trade well-formed, not against a risk-to-reward floor (`03-operating-manual.md`). |
-| Take profit at the next macro level (§2.11) | **shown in `S46`/`S47`** (teal target zone ends on the blue "4H level"); stated in the deck | **Not possible yet** — needs the daily levels, which do not exist (`03-operating-manual.md`). |
-| Patience / overtrading (§2.12) | `S48`, `S33` | **Contradicted in practice** — the code fires roughly once an hour on one-minute bars, far above the frequency the material describes (`03-operating-manual.md`). |
+| Supply/demand zone band (§2.1) | `S01`, `S04`–`S07`, `S25`, `S28` | **Implemented.** A level is a band around the candles that formed it (lowest wick to lowest body bottom for a floor, as `S01` draws it), overlapping bands merged, alive until a bar *closes* through the far edge, then deleted. Drawn faded by how many times the market turned there. |
+| Order block (§2.2) | `S30`–`S33`, `S39`, `S43`, `S46`, `S47` | **Implemented** as the single candle before the leg, wick to wick; the last opposite-coloured candle (the three S&D decks say so in words; the frames do not contradict it). |
+| Inefficiency / FVG (§2.3) | `S01`, `S10`, `S20`, `S31`, `S43`, `S46` | **Implemented**, strict no-wick-overlap; open until price trades back into it. |
+| Break of structure (§2.4) | `S01`, `S02`, `S10`, `S14`, `S15`, `S19`, `S26`–`S28` | **Implemented** as a close through the trend's last extreme (continuation), reported as `BOS`. |
+| Pushed distance (§2.5) | `S01`, `S08` | **Measured and reported, not gated.** The material judges it by eye and gives no number; gating on one is the invented-constant failure. Shown in each opportunity's reason. |
+| Market control, two states (§2.6) | `S23`, `S24`, `S28` | **Implemented.** Seeded by the first clear structure, then flips only on a true change of character. Shown as the strip along the top of the drawing. |
+| Change of character (§2.7) | `S12`, `S15`, `S17`, `S21`, `S27`, `S46` | **Implemented**: a close through the last swing the current control has to hold. |
+| Liquidity-sweep invalidation (§2.8) | `S15`–`S19` | **Implemented as wick-through-and-close-back** (`SWEEP`, red). It does *not* use the "visible stop cluster to the left" test; that is a judgement the material leaves to the eye. A sweep no longer uses the level up: a later close through it is a fresh break. |
+| FVG-mitigation invalidation (§2.8) | `S21`, `S22` | **Implemented** (`GAP FILL`, orange) — but it **has not fired once** on the EUR/USD or gold bars read so far, so the path is tested on fixtures only. |
+| Validator matrix (§2.9) | `S12`, `S15`–`S22` | **Implemented**: every break is one of BOS, CHOCH, SWEEP, GAP FILL, with its reason. |
+| Top-down alignment (§2.10) | `S34`, `S36`, `S38`–`S47` | **Partly.** A veto only: the slower clock's structure (default 60 min over 15 min) must not contradict the trade. The daily → 4H → 1H chain is not built; the recordings are days long, not months. |
+| Daily / macro levels (§2.10) | `S38`, `S39` | **Approximated**: the target is the nearest opposing level on the same chart that leaves the 1:2 floor. There are no daily levels to use. |
+| Limit entry at the order block (§2.11) | deck; `S36` Entry marker | **Implemented**: entry at the block edge nearest price (bottom of a supply block, top of a demand block). |
+| Stop at the wick (§2.11) | `S46`/`S47`, deck | **Implemented**: beyond the block's far wick. |
+| Minimum 1:2 risk-to-reward (§2.11) | deck; `S36`, `S46`/`S47` | **Enforced**: no level leaving 1:2 means the opportunity is rejected as `NO ROOM`. |
+| Take profit at the next macro level (§2.11) | `S46`/`S47`, deck | **Approximated** as above. |
+| Zone dies on a close beyond its far edge; first tap only; no falling knife | Institutional deck pp. 7–8, Ultimate deck p. 8 | **Implemented** (`DEAD`, first-tap fill, `KNIFE` = the reaching bar is as large as the impulse's median body — a comparison, not a constant). |
+| Patience / overtrading (§2.12) | `S48`, `S33` | **Now consistent.** A few true opportunities per few hundred 15-minute bars: EUR/USD 276 bars → 14 CHOCH, 4 armed; gold 287 bars → 14 CHOCH, 3 armed. |
 
-**Read the table as a whole:** three concepts are transcribed (the gap, the one-candle zone, structure
-breaking), and every concept that lives in *identification* — control, change of character, both
-invalidators, the validator matrix, pushed distance, and the whole timeframe funnel — is missing. Every
-replay figure this project has produced was measured without the three invalidation rules, which is to say
-it counted traps as setups.
+**What is still absent or only approximate, stated plainly:** Fibonacci 61.8 confluence, "lowest = strongest",
+the level stack / flip zone, the daily → 4H → 1H chain, the left-side stop-cluster test, and any judgement the
+material leaves to the eye (`docs/smc/README.md`, rule 3). **What has still not been done:** compare the drawing
+with the owner's own markup of a chart — the reference examples that rule 3 says are the only legitimate source
+for the criteria nobody wrote down.

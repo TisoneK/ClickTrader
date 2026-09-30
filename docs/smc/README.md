@@ -71,22 +71,46 @@ The point of stating it: rule 2 is the difference between decoding a perception 
 the difference between an honest incomplete engine and a confident wrong one. Both failures have already
 happened in this repository once.
 
-## Looking at what the engine sees
+## Reading and drawing a chart
 
 ```bash
-clicktrader smc-chart recordings/forex/live-eurusd-20260928.jsonl chart.png --minutes 5 --bars 160
+clicktrader smc-chart recordings/forex/live-eurusd-20260928.jsonl chart.png --minutes 15 --bars 150
 ```
 
-draws the bars with every level band, unfilled gap and swing point the engine holds laid on top
-(`clicktrader/smc/render.py`; the colour legend is `render.LEGEND`; no dependencies, no text in the image).
-Until this existed nothing the engine found had ever been compared with a picture. **Use it before changing
-any detection rule and again after**: the EUR/USD chart showed in one look that level clusters were chaining
-into bands as tall as the whole range, which the mean-price representation had hidden for the life of the
-package. A level is now drawn — and broken — as a band around the candles that formed it (`LiquidityPool.low`
-/ `.high` / `.far_edge`): a floor runs from its lowest wick to the top of the lowest member body, mirrored for
-a ceiling, and a break means leaving the band through its far edge rather than touching its middle.
+`clicktrader/smc/analyst.py` reads the bars one at a time using only what a person would know at that moment
+(a swing is not known until `strength` bars after it), and `smc/draw.py` draws the whole reading **in the
+engine's own language**, so a person can disagree with a specific mark instead of with "the engine". Every word
+in the picture is a verdict:
 
-What it does **not** settle, and should not be tuned by eye alone (rule 3 above): on a consolidation the
-engine now draws several overlapping bands where a person would circle one zone, and it gives a 120-bar-old
-level the same weight as yesterday's. Whether overlapping bands merge and whether recency matters are
-judgements the material leaves to the trader; they need the trader's own reference examples.
+| mark | meaning |
+|---|---|
+| `HH HL LH LL` | swing names, against the previous swing of the same kind |
+| blue band | a level (liquidity) while alive — faded by how often the market turned there; deleted when a bar closes through it |
+| yellow box | an open fair value gap; it stops at the bar that filled it |
+| `BOS` (blue, dashed) | the trend carried on through its last extreme |
+| `CHOCH` (green) | a **true** change of character: a close through the level the current control had to hold |
+| `SWEEP` (red) | the wick took the stops and the close came back — **not** a reversal |
+| `GAP FILL` (orange) | price rebalancing an open gap — **not** a reversal |
+| orange box | the order block: the last opposite-coloured candle before the leg, wick to wick |
+| pink / teal boxes | stop zone / target zone of an opportunity the engine would take, `LONG`/`SHORT n.nR`, then `WIN`/`LOSS` (hindsight, never used to decide) or `ARMED` |
+| grey `X ...` | an opportunity it **rejected**: `NO ROOM` (no level leaves 1:2), `HTF` (against the slower clock), `KNIFE` (violent approach), `DEAD` (closed through the zone first) |
+| top strip | who is in control: teal demand, red supply |
+
+`smc/strategy.py` trades exactly what this reading calls true, so the picture and the trades cannot disagree.
+`--readings` prints the few choices the reading makes that are the project's own (`analyst.READINGS`).
+
+**Use the picture before and after changing any detection rule.** It found, in one look each, four defects the logs
+had hidden: level clusters chaining into range-tall bands, a break measured at a band's middle, a sweep using a
+level up so the real break two bars later was missed, and break logic switched off whenever the swing labels read
+"range".
+
+**Conventions checked against an open-source reference** (the `smart-money-concepts` Python library, read directly
+because web search was unavailable): a swing is the extreme of N bars each side; BOS and CHoCH are read from the
+sequence of swings, a break that continues the sequence versus one that goes against it; a liquidity level is
+several highs or lows within a small range, with a recorded "swept" bar; a fair value gap is the strict
+three-candle gap. Those agree with this package. The library's BOS/CHoCH needs a four-swing pattern; this analyst
+reads against control instead, which is what the material's own two-state figure describes.
+
+What the drawing does **not** settle, and should not be tuned by eye alone (rule 3 above): whether a person
+would circle a level the engine draws, merge two they would not, or ignore one it marks. That needs the owner's own
+markup of a chart — the reference examples rule 3 names as the only legitimate source.
