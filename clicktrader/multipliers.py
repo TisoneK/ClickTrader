@@ -31,6 +31,18 @@ from .forex.trade_strategies import TradeStrategy
 from .strategies import History
 
 
+def _say(line: str) -> None:
+    """Print and flush — the lesson this project keeps re-learning in a new file.
+
+    `record-deriv` gained `--progress-every` after a multi-hour capture went silent; the Rise/Fall runner's
+    printer was fixed for the same reason; a throwaway probe was still invisible because of it; and the
+    first live SMC run wrote nothing to its log for the same cause. A loop whose output is block-buffered
+    is indistinguishable from a loop that has died, and every long-running entry point here needs its own
+    copy of this because the default is per-function.
+    """
+    print(line, flush=True)
+
+
 @dataclass
 class MultiplierRun:
     """What the run did, in the terms a person reads."""
@@ -112,7 +124,7 @@ def run(
     broker=None,
     poll_every: float = 60.0,
     hold_timeout: float = 3600.0,
-    emit: Callable[[str], None] = print,
+    emit: Callable[[str], None] = _say,
     now: Callable[[], float] = time.time,
 ) -> MultiplierRun:
     """Trade the strategy's plans on Multipliers until the trade cap, the clock or an error stops it.
