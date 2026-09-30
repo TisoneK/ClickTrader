@@ -124,6 +124,7 @@ def run(
     broker=None,
     poll_every: float = 60.0,
     hold_timeout: float = 3600.0,
+    report_every: float = 300.0,
     emit: Callable[[str], None] = _say,
     now: Callable[[], float] = time.time,
 ) -> MultiplierRun:
@@ -138,12 +139,22 @@ def run(
     feed = ticks if ticks is not None else stream_ticks(symbol)
     history: list = []
     started = now()
+    last_report = started
     log = open(log_path, "a", encoding="utf-8")
     try:
         for record in feed:
             history.append(record.tick)
             run.ticks += 1
             decision = strategy.decide(History(history, len(history)))
+            if report_every and now() - last_report >= report_every:
+                # Narration between the trades, not only at them. A loop that speaks once an hour is a loop
+                # that cannot be told from a dead one, and "it saw nothing" is as much of a result as "it
+                # took a trade" — the strategy already knows which and why in `last_view`.
+                last_report = now()
+                emit(f"[{now() - started:.0f}s] {run.readout()}")
+                seen = getattr(strategy, "last_view", None)
+                if seen:
+                    emit(f"  what it sees: {seen}")
             if decision is None:
                 continue
             run.plans += 1
