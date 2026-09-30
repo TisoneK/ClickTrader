@@ -129,9 +129,12 @@ Block" and draws it in the same breath as a "Bos".
   pips, so this is one daily candle's range seen at a coarser scale — the same object. **Its top edge does
   not coincide with the high of any candle within a few bars of its left edge**, so unlike `S31`/`S43` this
   particular box cannot be pinned to a named candle by measurement; treat it as approximately one candle.
-- `S46`/`S47` (real chart, USD/JPY 1h). A new "Order Block" box after the reversal: pink fill from
-  153.77 down to 153.34 (43 pips), its lower edge marked by a dashed line, its left edge at the candle that
-  began the down-move, extending forward.
+- `S46`/`S47` (real chart, USD/JPY 1h). A new **grey** "Order Block" box after the reversal, spanning
+  about **153.34 → 153.61** (27 pips; y 360→432 in the frame), with its lower edge marked by a dashed line and
+  its left edge at the candle that began the down-move. *Correction (S010):* an earlier version of this
+  bullet described the **pink** fill (153.77 → 153.34) as the order block. It is not: the pink and teal
+  rectangles share one x-range (1168→1602) and butt against each other at 153.34 — that is a TradingView
+  position box, not a zone (see §2.11).
 - `S42`–`S45` (real chart, USD/JPY 1h). A **"Daily Order Block"** drawn as a pink band across the top of
   the 1h chart (154.2 up to ~154.8, clipped by the frame), i.e. the daily object re-drawn on a lower
   timeframe and extended forward. `S43` places a second, lower "1h Order Block" beneath it, and a white
@@ -443,7 +446,9 @@ The drawn lines are hand-placed and are not consistent across frames; no frame s
 - `S44` draws the intended trade as a **single annotated path**: a line coming down out of the daily order
   block into the 1h order block box, then turning and rising — the planned long.
 - `S45` draws what happened: price went through the 1h order block and kept falling.
-- `S46` adds the CHOCH line, a **new order block** and an FVG where the failure occurred.
+- `S46` adds the CHOCH line, a **new order block**, an FVG, and **a short position box** (below).
+- `S47` (16:05 of 16:52, chapter "Real Chart Example") is the same chart with the decline drawn in: price
+  falls out of the new order block and runs to the "4H level", touching it at the right edge.
 - `S48`, the closing slide: patience is one of the most valuable skills a trader can develop, and waiting
   for high-quality setups is a discipline that must be mastered, not a choice.
 - `S03` defines the plan as a *day-trading* plan: positions are opened and closed within the same trading
@@ -452,12 +457,25 @@ The drawn lines are hand-placed and are not consistent across frames; no frame s
 **Stated — not in the frames.** The three-step execution sequence, the **limit order placed at the order
 block**, the **stop placed just above the order block's wick**, the **minimum 1:2 risk-to-reward** and the
 **next-macro-level target** appear in `03-operating-manual.md` and in the deck material that file
-summarises. **None of the 48 frames contains the words stop, limit, risk, reward, ratio, target or 1:2**;
-there is no stop line, no target line and no ratio drawn on any chart in the video. The video's own worked
-example (`S38`–`S47`) draws one arrow describing an entry path and then shows that entry failing. Anyone
-implementing from the video alone has no stated entry price, stop, or target.
+summarises. **None of the 48 frames contains the words stop, limit, risk, reward, ratio, target or 1:2**, and no frame
+draws a *limit* order. *Correction (S010): an earlier version of this section said there is no stop line, no
+target line and no ratio drawn on any chart. That was wrong.* `S46` and `S47` carry a TradingView-style
+**short position box**: a pink rectangle above the entry and a teal rectangle below it, sharing one x-range.
+Measured off the frames (pixel rows against the right-hand price axis, 154.80 at y=34 and 151.30 at y≈990):
 
-**Shown** (the geometry that does exist, for the entry path only): in `S43` the origin candle is drawn as a
+| part | frame rows | price | what it is |
+|---|---|---|---|
+| pink (risk) | y 314 → 431 | **153.78 → 153.34** | the stop zone: its top is **above the order block's top (153.61)**, i.e. above the wick |
+| entry | y 432 | **153.34** | the order block's lower edge / the FVG's top edge — the dashed line |
+| teal (reward) | y 434 → 925 | **153.34 → 151.54** | the target zone, ending on the blue **"4H level"** line (151.52) |
+
+That is **about 43 pips of risk against about 180 of reward — roughly 1 : 4.2**, not 1:2. Two things follow.
+The target *is* the next higher-timeframe level, and this is now **shown in the frames**, not only stated in
+the deck. And the 1:2 is a *minimum* in the deck's wording, so a 1:4 example does not contradict it. The box is
+a **hand-drawn overlay, placed with hindsight** (it is drawn after the short has already happened), so it is
+evidence of what the author *means* by a stop and a target, and is not evidence that the trade was taken.
+
+**Shown** (the geometry, for the planned long): in `S43` the origin candle is drawn as a
 single 1h candle 29 pips tall, and the box's lower edge (153.36) is where price was expected to react;
 `S44`'s path returns to that lower edge. In `S36` the entry is drawn at the *coincidence* of the
 higher-timeframe box's lower edge and the daily key-level band's upper edge.
@@ -478,10 +496,14 @@ corresponding caution about the tool itself: order blocks do not always work and
 `S13`–`S22` — roughly a third of the runtime — is given over to breaks that *look* like reversals and are
 not, which is the same argument stated with examples.
 
-**Shown.** `S48` is a text callout over the real USD/JPY 1h chart on which the planned long failed — the
-slide's own evidence is the failed setup behind it. No chart in `S38`–`S48` contains a broker marker, an
-entry/stop/target line, or a profit figure. **The worked example the video walks through end to end is a
-setup that did not work**, taught as such.
+**Shown.** `S48` is a text callout over the real USD/JPY 1h chart. *Correction (S010): an earlier version
+said the chart has no entry/stop/target and that the worked example "did not work".* Half of that is true and
+half is not. The **planned long failed** (`S44`→`S45`, price ran through the 1h order block). What the video
+then draws (`S46`/`S47`) is a **short** from the new order block, with stop above it and target on the 4H level,
+and `S47` shows price reaching that target. So the example ends in a *winning* position box — drawn with
+hindsight, with no broker marker and no profit figure, which is why it is a teaching overlay and not a track
+record. The patience slide's own point still stands: the long was the wrong read, and the method's answer was to
+wait for the change of character rather than to keep the long.
 
 **Not specified.** No frequency, no maximum trades per day, no minimum time between setups, no quality
 score. The material states "wait for high quality" and defines quality only by the §2.4–§2.9 concepts, none
@@ -534,9 +556,9 @@ files; the Python source was not read and is not judged here. Verified by a huma
 | Top-down alignment (§2.10) | `S34`, `S36`, `S38`–`S47` | **Absent** — everything runs on a single timeframe: one-minute bars for the price-action method, fifteen-minute bars for others; no higher-timeframe bias, no alignment step (`03-operating-manual.md`). |
 | Daily / macro levels (§2.10) | `S38`, `S39` | **Absent** — the "next macro level" target needs the daily levels, which do not exist yet (`03-operating-manual.md`). |
 | Limit entry at the order block (§2.11) | not in the frames (deck only) | **Implemented for one of the methods** — limit entry and the stop relative to the origin (`03-operating-manual.md`). |
-| Stop at the wick (§2.11) | not in the frames (deck only) | **Implemented for that same method** — stop placed just above the order block's wick (`03-operating-manual.md`). |
-| Minimum 1:2 risk-to-reward (§2.11) | not in the frames (deck only) | **Not enforced anywhere** — exits aim at various targets (a swing, an imbalance, a structure extreme) chosen to make the trade well-formed, not against a risk-to-reward floor (`03-operating-manual.md`). |
-| Take profit at the next macro level (§2.11) | not in the frames (deck only) | **Not possible yet** — needs the daily levels, which do not exist (`03-operating-manual.md`). |
+| Stop at the wick (§2.11) | **shown in `S46`/`S47`** (stop zone top 153.78, above the order block top 153.61) and stated in the deck | **Implemented for that same method** — stop placed just above the order block's wick (`03-operating-manual.md`). |
+| Minimum 1:2 risk-to-reward (§2.11) | deck only; the one drawn example in `S46`/`S47` is about 1 : 4.2 | **Not enforced anywhere** — exits aim at various targets (a swing, an imbalance, a structure extreme) chosen to make the trade well-formed, not against a risk-to-reward floor (`03-operating-manual.md`). |
+| Take profit at the next macro level (§2.11) | **shown in `S46`/`S47`** (teal target zone ends on the blue "4H level"); stated in the deck | **Not possible yet** — needs the daily levels, which do not exist (`03-operating-manual.md`). |
 | Patience / overtrading (§2.12) | `S48`, `S33` | **Contradicted in practice** — the code fires roughly once an hour on one-minute bars, far above the frequency the material describes (`03-operating-manual.md`). |
 
 **Read the table as a whole:** three concepts are transcribed (the gap, the one-candle zone, structure

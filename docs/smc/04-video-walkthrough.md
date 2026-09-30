@@ -69,7 +69,7 @@ daily → 4-hour → 1-hour in the worked example). The division of labour is co
 
 The three-panel frame is the only place in the whole sequence with an explicit **"Entry"** marker.
 
-## The worked example — and it fails
+## The worked example — the planned long fails, the re-read short reaches its target
 
 The final stretch is a real chart, USD/JPY on FXCM via TradingView, walked from the daily down:
 
@@ -82,16 +82,19 @@ The final stretch is a real chart, USD/JPY on FXCM via TradingView, walked from 
    then bounce.
 5. **What actually happened**: price kept going. It fell through the 1-hour order block, into the gap, a
    bearish change of character formed with its own new order block, and price ran on to the 4-hour level
-   at ~151.3. **The planned long was wrong.**
+   at ~151.3. **The planned long was wrong.** The video then draws a *short* position box on the new order
+   block (entry ~153.34, stop ~153.78 above the block, target the 4H level ~151.5: about 1 : 4.2) and the
+   final frame shows price reaching the target (`S46`/`S47`; measured in `spec.md` §2.11).
 6. The video closes on: *patience is one of the most valuable skills a trader can develop; waiting for
    high-quality setups is not a choice but a discipline that must be mastered.*
 
-That ending is worth taking at face value. The material's own worked example is a setup that did not work,
-taught as such — which is more honest than the supply-and-demand decks' closing slides, and it is the
-opposite of a track record. **The video contains no broker markers, no entry/stop/target lines and no
-profit figure anywhere**: the annotations are hand-drawn teaching overlays. So it documents the method and
-not its results — the "79.13% over 115 trades" claim lives in a different deck and has nothing behind it
-here.
+That ending is worth taking at face value. The first read was wrong and the example says so; the method's
+answer is to wait for the change of character and re-read, not to defend the long. **It is still not a track
+record:** the short box is a hand-drawn overlay placed with hindsight, and the video has no broker marker and
+no profit figure. So it documents the method and not its results — the "79.13% over 115 trades" claim lives in
+a different deck and has nothing behind it here. *(Correction, S010: an earlier version of this paragraph
+said the video has no entry/stop/target lines at all and that the example "did not work". The frames show a
+stop-and-target position box that reaches its target; see `spec.md` §2.11.)*
 
 ## What this changes for the code
 
