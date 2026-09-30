@@ -130,6 +130,24 @@ def wilson_interval(successes: int, n: int, z: float = 1.96) -> tuple[float, flo
     return (max(0.0, centre - half), min(1.0, centre + half))
 
 
+def difference_interval(
+    successes_a: int, n_a: int, successes_b: int, n_b: int, z: float = 1.96
+) -> tuple[float, float]:
+    """Interval for ``rate_a - rate_b`` (Newcombe's hybrid-Wilson method, built from each side's own
+    `wilson_interval` so it stays sane at small n and near 0 or 1).
+
+    For comparing a strategy with its random control: the control's hit rate is itself an estimate with
+    sampling error, so asking whether the strategy's interval clears the control's *point* rate ignores
+    half of the noise. An empty side carries no information, so the difference is unbounded."""
+    if n_a == 0 or n_b == 0:
+        return (-1.0, 1.0)
+    p_a, p_b = successes_a / n_a, successes_b / n_b
+    lo_a, hi_a = wilson_interval(successes_a, n_a, z)
+    lo_b, hi_b = wilson_interval(successes_b, n_b, z)
+    d = p_a - p_b
+    return (d - math.sqrt((p_a - lo_a) ** 2 + (hi_b - p_b) ** 2), d + math.sqrt((hi_a - p_a) ** 2 + (p_b - lo_b) ** 2))
+
+
 def _norm_cdf(x: float) -> float:
     return 0.5 * (1 + math.erf(x / math.sqrt(2)))
 

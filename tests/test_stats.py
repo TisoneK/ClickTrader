@@ -97,3 +97,21 @@ def test_bonferroni_z_actually_restores_the_intended_family_wise_rate():
     corrected_hits = sum(any_false_positive(bonferroni_z(8), 8, seed) for seed in range(trials))
     assert uncorrected_hits / trials > 0.15  # comfortably above the nominal 5%, as expected
     assert corrected_hits / trials < 0.12  # meaningfully brought back down toward it
+
+
+def test_difference_interval_is_centred_on_the_gap_and_shrinks_with_more_data():
+    from clicktrader.stats import difference_interval
+
+    lo, hi = difference_interval(550, 1000, 450, 1000)
+    assert lo < 0.10 < hi and lo > 0  # a 10-point gap on 1,000 each is distinguishable from zero
+    wide = difference_interval(55, 100, 45, 100)
+    assert wide[1] - wide[0] > hi - lo
+    assert difference_interval(5, 0, 5, 10) == (-1.0, 1.0)  # an empty side says nothing
+
+
+def test_difference_interval_is_antisymmetric():
+    from clicktrader.stats import difference_interval
+
+    lo, hi = difference_interval(480, 1000, 450, 1000)
+    rlo, rhi = difference_interval(450, 1000, 480, 1000)
+    assert (rlo, rhi) == pytest.approx((-hi, -lo))

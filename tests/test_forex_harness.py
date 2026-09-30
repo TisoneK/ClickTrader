@@ -172,3 +172,30 @@ def test_the_report_carries_the_plain_reading_and_the_breakeven():
     assert "In plain words:" in report
     assert "breaking even needs 51.2%" in report
     assert "verdict (out-of-sample only)" in report
+
+
+def test_verdict_allows_for_the_controls_own_sampling_error():
+    # 490/1000 has a Wilson interval (~0.459-0.521) wholly above the control's point rate of 0.450 -- the
+    # old verdict read that as POSITIVE. But the control is 450/1000, itself uncertain by about +-3 points,
+    # so the gap (+0.040) is inside the noise of the difference and there is no edge to report.
+    result = ForexReplayResult(
+        strategy="s",
+        in_sample=ForexSegmentResult("in", 1, bets=1000, wins=490),
+        out_of_sample=ForexSegmentResult("oos", 1, bets=1000, wins=490),
+        control=ForexSegmentResult("ctl", 1, bets=1000, wins=450),
+    )
+    assert result.verdict.startswith("No directional edge")
+    clear = ForexReplayResult(
+        strategy="s",
+        in_sample=result.in_sample,
+        out_of_sample=ForexSegmentResult("oos", 1, bets=1000, wins=540),
+        control=ForexSegmentResult("ctl", 1, bets=1000, wins=450),
+    )
+    assert clear.verdict.startswith("POSITIVE")
+    worse = ForexReplayResult(
+        strategy="s",
+        in_sample=result.in_sample,
+        out_of_sample=ForexSegmentResult("oos", 1, bets=1000, wins=390),
+        control=ForexSegmentResult("ctl", 1, bets=1000, wins=450),
+    )
+    assert worse.verdict.startswith("Worse than the random control")

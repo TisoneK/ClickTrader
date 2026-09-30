@@ -16,7 +16,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 from ..model import Tick
-from ..stats import MIN_BETS_REPORT, wilson_interval
+from ..stats import MIN_BETS_REPORT, difference_interval, wilson_interval
 from ..strategies import History
 from .model import Signal
 from .strategies import ForexStrategy, RandomDirection
@@ -60,7 +60,10 @@ class ForexReplayResult:
         exact tie (price unchanged over the horizon) is a loss for either direction, so even a strategy
         with zero real skill lands below 50% by an amount that depends on how often ties actually happen
         (confirmed against a real recording: 14.8% ties dragging the empirical baseline down to ~43%,
-        not 50%). The control measures that baseline directly instead of assuming it."""
+        not 50%). The control measures that baseline directly instead of assuming it.
+
+        The control is an estimate too, so the verdict reads the interval of the *difference* between the
+        strategy and the control (`stats.difference_interval`), not the strategy against a point."""
         oos = self.out_of_sample
         if oos.bets < MIN_BETS_REPORT:
             return (
@@ -68,18 +71,28 @@ class ForexReplayResult:
                 f"{MIN_BETS_REPORT} are needed before the numbers mean anything. Get more data rather than "
                 "reading this one."
             )
-        baseline = self.control.hit_rate
+        ctl = self.control
+        baseline = ctl.hit_rate
         lo, hi = oos.hit_rate_interval
-        if lo > baseline:
+        # The control is an estimate too: comparing the strategy's interval with the control's point rate
+        # would treat it as exact. The verdict reads the interval of the *difference* instead.
+        dlo, dhi = difference_interval(oos.wins, oos.bets, ctl.wins, ctl.bets, z=oos.z)
+        if dlo > 0:
             return (
-                f"POSITIVE directional accuracy: interval {lo:.3f}-{hi:.3f} entirely above the random "
-                f"control's {baseline:.3f} (not a fixed 50% — see this property's own docstring for why). "
-                "Unlike digit contracts there is no algebra ruling this out, but it is still a surprising "
-                "result — re-record on a fresh period and confirm before trusting it."
+                f"POSITIVE directional accuracy: {oos.hit_rate:.3f} ({lo:.3f}-{hi:.3f}) beats the random "
+                f"control's {baseline:.3f} by {dlo:+.3f} to {dhi:+.3f} (not a fixed 50% — see this property's "
+                "own docstring for why). Unlike digit contracts there is no algebra ruling this out, but it "
+                "is still a surprising result — re-record on a fresh period and confirm before trusting it."
             )
-        if hi < baseline:
-            return f"Worse than the random control: interval {lo:.3f}-{hi:.3f}, entirely below its {baseline:.3f}."
-        return f"No directional edge: hit rate {oos.hit_rate:.3f}, interval {lo:.3f}-{hi:.3f} includes the control's {baseline:.3f}."
+        if dhi < 0:
+            return (
+                f"Worse than the random control: {oos.hit_rate:.3f} ({lo:.3f}-{hi:.3f}) against its "
+                f"{baseline:.3f}, a gap of {dlo:+.3f} to {dhi:+.3f}."
+            )
+        return (
+            f"No directional edge: hit rate {oos.hit_rate:.3f} ({lo:.3f}-{hi:.3f}); the gap to the control's "
+            f"{baseline:.3f} ({dlo:+.3f} to {dhi:+.3f}) includes zero."
+        )
 
     def report(self) -> str:
         lines = [f"strategy: {self.strategy}", ""]
@@ -122,10 +135,11 @@ class ForexReplayResult:
                 said + f" The uncertainty ({lo:.1%} to {hi:.1%}) straddles the {self.breakeven:.1%} needed to "
                 "break even, so this many trades cannot say which side of it the method is on."
             )
-        if lo > ctl.hit_rate:
-            return said + f" The whole plausible range ({lo:.1%} to {hi:.1%}) beats the random result, which is a real signal."
-        if hi < ctl.hit_rate:
-            return said + f" The whole plausible range ({lo:.1%} to {hi:.1%}) is worse than the random result."
+        dlo, dhi = difference_interval(oos.wins, oos.bets, ctl.wins, ctl.bets, z=oos.z)
+        if dlo > 0:
+            return said + f" Allowing for the random result's own uncertainty, it beats it (by {dlo:.1%} to {dhi:.1%}), which is a real signal."
+        if dhi < 0:
+            return said + f" Allowing for the random result's own uncertainty, it is worse than it (by {-dhi:.1%} to {-dlo:.1%})."
         return said + f" The plausible range ({lo:.1%} to {hi:.1%}) includes the random result, so this says nothing yet."
 
 
