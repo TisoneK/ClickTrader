@@ -110,6 +110,14 @@ class ReplayResult:
         return "\n".join(lines)
 
 
+def settling_index(i: int, duration: int, stop: int) -> int | None:
+    """The tick a contract decided on tick ``i`` settles on, or None if that tick is not inside a
+    segment ending at ``stop`` (exclusive). One rule shared by every replay that grades a decision, so
+    a replay cannot quietly settle on a different tick than the harness does."""
+    index = i + duration
+    return index if index <= stop - 1 else None
+
+
 def _run_segment(
     strategy: Strategy,
     ticks: Sequence[Tick],
@@ -133,8 +141,8 @@ def _run_segment(
             if ledger is not None and log_skips:
                 ledger.append(LedgerRow(seen.ts, i, seen.digit, strategy.name, "skip", "no signal", balance=balance))
             continue
-        settle_index = i + decision.duration
-        if settle_index > stop - 1:
+        settle_index = settling_index(i, decision.duration, stop)
+        if settle_index is None:
             if ledger is not None and log_skips:
                 ledger.append(
                     LedgerRow(

@@ -16,6 +16,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Callable
 
+from .harness import settling_index
 from .limits import RiskGuard, RiskLimits
 from .model import Tick
 from .strategies import History, Strategy
@@ -36,13 +37,18 @@ class SessionOutcome:
 
 def _bets_for_session(strategy: Strategy, ticks: Sequence[Tick]) -> list[tuple[float, float]]:
     """(stake, pnl) for every bet across one session, in order — no RiskGuard involved yet, matching
-    `harness._run_segment`'s own decide/settle mechanics exactly."""
+    `harness._run_segment`'s own decide/settle mechanics exactly, including a decision's `duration`: a
+    bet whose settling tick falls outside the session is passed over, not graded against a tick it
+    does not reach."""
     bets: list[tuple[float, float]] = []
     for i in range(len(ticks) - 1):
         decision = strategy.decide(History(ticks, i + 1))
         if decision is None:
             continue
-        pnl = decision.contract.settle(decision.stake, ticks[i + 1].digit)
+        settle_at = settling_index(i, decision.duration, len(ticks))
+        if settle_at is None:
+            continue
+        pnl = decision.contract.settle(decision.stake, ticks[settle_at].digit)
         bets.append((decision.stake, pnl))
     return bets
 
@@ -63,6 +69,11 @@ def simulate_session(bets: Sequence[tuple[float, float]], limits: RiskLimits) ->
     guarded_pnls: list[float] = []
     for stake, pnl in bets:
         if guard.check(stake) is not None:
+            # The session ends at the first refusal, deliberately. The bet sequence was produced by the
+            # *unguarded* strategy, so it only describes the path the strategy would take if every bet
+            # were placed. A live strategy whose bet is refused never sees an outcome, so it keeps asking
+            # for the same stake and is refused again (`runner.py`); the bets after a refusal here belong
+            # to a path that would not exist. Stopping is the faithful reading, not a simplification.
             break
         guard.record(pnl)
         guarded_pnls.append(pnl)

@@ -96,3 +96,36 @@ def test_report_shows_both_views_side_by_side():
 def test_session_ticks_must_be_at_least_two():
     with pytest.raises(ValueError):
         replay_sessions(lambda: LowDigitOver(), [], LIMITS, session_ticks=1)
+
+
+class _FiveTick:
+    """Bets Over 0 (wins on any nonzero digit) every tick, settling 5 ticks later."""
+
+    name = "five-tick"
+
+    def decide(self, history):
+        from clicktrader.strategies import Decision
+
+        return Decision(Contract(Side.OVER, 0), 1.0, "always", duration=5)
+
+
+def test_bets_settle_on_the_decisions_own_duration_and_skip_unsettlable_ones():
+    from clicktrader.risk_replay import _bets_for_session
+    from clicktrader.model import Tick
+
+    # digits: tick i carries digit i % 10. Settling 5 ahead from tick 0 lands on digit 5 (a win); from
+    # tick 5 it lands on digit 0 (a loss). A one-tick settle would read digit 1 / digit 6 -- both wins.
+    ticks = [Tick(ts=float(i), price=f"1.000{i % 10}") for i in range(11)]
+    bets = _bets_for_session(_FiveTick(), ticks)
+    assert len(bets) == 6  # decided on ticks 0..5; ticks 6..9 settle past the window and are skipped
+    assert [pnl > 0 for _, pnl in bets] == [True, True, True, True, True, False]
+
+
+def test_a_refusal_ends_the_session_because_later_bets_belong_to_a_path_that_would_not_exist():
+    # a 3.0 stake is over max_stake (2). The bets after it were produced assuming it was placed and
+    # settled, so they are not replayed -- a live strategy that is refused never sees its outcome.
+    bets = [(1.0, -0.5), (3.0, -3.0), (1.0, -0.5), (1.0, 0.5)]
+    outcome = simulate_session(bets, LIMITS)
+    assert outcome.stopped_early
+    assert outcome.guarded_bets == 1
+    assert outcome.guarded_final_pnl == pytest.approx(-0.5)
