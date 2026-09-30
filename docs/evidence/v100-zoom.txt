@@ -1,0 +1,97 @@
+1m -> docs/evidence/v100-zoom.1m.png
+  1499 bars, 393 swings; events: 72 BOS, 70 CHOCH, 94 sweep, 0 gap fill; opportunities: 14 true (7 won, 4 lost in hindsight), 56 rejected
+    bar 29: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
+    bar 38: down declined — against the higher timeframe, which reads up
+    bar 81: up filled (loss) — CHOCH then a block at 1000.32000-1002.34000; limit 1002.34000, stop 1000.32000, target 1011.09000 (4.3:1); gap no; pushed 1.5 bands
+    bar 89: down declined — against the higher timeframe, which reads up
+    bar 125: up filled (loss) — CHOCH then a block at 996.92000-999.07000; limit 999.07000, stop 996.92000, target 1004.46000 (2.5:1); gap no; pushed 1.1 bands
+    bar 154: down declined — against the higher timeframe, which reads up
+    bar 166: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
+    bar 170: down declined — against the higher timeframe, which reads up
+    bar 208: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
+    bar 218: down declined — against the higher timeframe, which reads up
+    bar 249: up armed — CHOCH then a block at 984.27000-985.39000; limit 985.39000, stop 984.27000, target 988.31000 (2.6:1); gap yes; pushed 3.0 bands
+    bar 261: down declined — against the higher timeframe, which reads up
+    bar 263: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
+    bar 272: down declined — against the higher timeframe, which reads up
+    bar 277: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
+    bar 296: down declined — against the higher timeframe, which reads up
+    bar 303: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
+    bar 322: down declined — against the higher timeframe, which reads up
+    bar 328: up filled (win) — CHOCH then a block at 1000.80000-1003.03000; limit 1003.03000, stop 1000.80000, target 1008.24000 (2.3:1); gap no; pushed 0.4 bands
+    bar 361: down declined — against the higher timeframe, which reads up
+    bar 402: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
+    bar 420: down declined — against the higher timeframe, which reads up
+    bar 434: up filled (win) — CHOCH then a block at 999.76000-1002.24000; limit 1002.24000, stop 999.76000, target 1007.29000 (2.0:1); gap yes; pushed 0.8 bands
+    bar 470: down declined — against the higher timeframe, which reads up
+    bar 500: up filled (win) — CHOCH then a block at 1000.54000-1004.10000; limit 1004.10000, stop 1000.54000, target 1011.24000 (2.0:1); gap no; pushed 0.9 bands
+    bar 510: down declined — against the higher timeframe, which reads up
+    bar 522: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
+    bar 549: down declined — against the higher timeframe, which reads up
+    bar 561: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
+    bar 582: down declined — against the higher timeframe, which reads up
+    bar 615: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
+    bar 625: down declined — against the higher timeframe, which reads up
+    bar 667: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
+    bar 675: down declined — against the higher timeframe, which reads up
+    bar 686: up filled (loss) — CHOCH then a block at 1001.01000-1002.96000; limit 1002.96000, stop 1001.01000, target 1006.90000 (2.0:1); gap yes; pushed 1.4 bands
+    bar 748: down declined — against the higher timeframe, which reads up
+    bar 755: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
+    bar 774: down declined — against the higher timeframe, which reads up
+    bar 785: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
+    bar 836: down declined — against the higher timeframe, which reads up
+    bar 871: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
+    bar 889: down declined — against the higher timeframe, which reads up
+    bar 902: up filled (win) — CHOCH then a block at 1002.06000-1003.23000; limit 1003.23000, stop 1002.06000, target 1005.60000 (2.0:1); gap yes; pushed 1.5 bands
+    bar 905: down declined — against the higher timeframe, which reads up
+    bar 918: up filled (win) — CHOCH then a block at 999.00000-1000.92000; limit 1000.92000, stop 999.00000, target 1004.80000 (2.0:1); gap yes; pushed 1.4 bands
+    bar 955: down declined — against the higher timeframe, which reads up
+    bar 966: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
+    bar 969: down declined — against the higher timeframe, which reads up
+    bar 992: up armed — CHOCH then a block at 1001.78000-1003.00000; limit 1003.00000, stop 1001.78000, target 1005.44000 (2.0:1); gap yes; pushed 1.2 bands
+    bar 1002: down declined — against the higher timeframe, which reads up
+    bar 1004: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
+    bar 1038: down declined — against the higher timeframe, which reads up
+    bar 1053: up armed — CHOCH then a block at 1004.69000-1005.96000; limit 1005.96000, stop 1004.69000, target 1008.63000 (2.1:1); gap yes; pushed 2.1 bands
+    bar 1089: down declined — against the higher timeframe, which reads up
+    bar 1101: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
+    bar 1138: down declined — against the higher timeframe, which reads up
+    bar 1148: up filled (win) — CHOCH then a block at 1017.91000-1021.21000; limit 1021.21000, stop 1017.91000, target 1027.88000 (2.0:1); gap no; pushed 0.1 bands
+    bar 1164: down declined — against the higher timeframe, which reads up
+    bar 1167: up declined — no room to move: no opposing level leaves 2:1 from the block
+    bar 1181: down declined — against the higher timeframe, which reads up
+    bar 1195: up filled (loss) — CHOCH then a block at 1023.88000-1026.02000; limit 1026.02000, stop 1023.88000, target 1031.50000 (2.6:1); gap yes; pushed 1.7 bands
+    bar 1207: down declined — against the higher timeframe, which reads up
+    bar 1214: up declined — no room to move: no opposing level leaves 2:1 from the block
+    bar 1216: down declined — against the higher timeframe, which reads up
+    bar 1220: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
+    bar 1253: down declined — against the higher timeframe, which reads up
+    bar 1262: up filled (win) — CHOCH then a block at 1026.72000-1027.90000; limit 1027.90000, stop 1026.72000, target 1030.38000 (2.1:1); gap yes; pushed 4.0 bands
+    bar 1322: down declined — against the higher timeframe, which reads up
+    bar 1394: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
+    bar 1401: down declined — against the higher timeframe, which reads up
+5m -> docs/evidence/v100-zoom.5m.png
+  300 bars, 78 swings; events: 15 BOS, 14 CHOCH, 21 sweep, 0 gap fill; opportunities: 2 true (0 won, 2 lost in hindsight), 12 rejected
+    bar 29: up declined — no room to move: no opposing level leaves 2:1 from the block
+    bar 35: down declined — against the higher timeframe, which reads up
+    bar 41: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
+    bar 46: down declined — against the higher timeframe, which reads up
+    bar 56: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
+    bar 74: down declined — against the higher timeframe, which reads up
+    bar 92: up filled (loss) — CHOCH then a block at 1006.80000-1009.70000; limit 1009.70000, stop 1006.80000, target 1019.12000 (3.2:1); gap no; pushed 0.0 bands
+    bar 99: down declined — against the higher timeframe, which reads up
+    bar 100: up filled (loss) — CHOCH then a block at 1000.54000-1005.78000; limit 1005.78000, stop 1000.54000, target 1019.12000 (2.5:1); gap no; pushed 0.8 bands
+    bar 117: down declined — against the higher timeframe, which reads up
+    bar 133: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
+    bar 170: down declined — against the higher timeframe, which reads up
+    bar 206: up dead — closed through the zone's far edge before the tap — dead zone, deleted
+    bar 275: down declined — against the higher timeframe, which reads up
+15m -> docs/evidence/v100-zoom.15m.png
+  100 bars, 25 swings; events: 3 BOS, 6 CHOCH, 5 sweep, 0 gap fill; opportunities: 0 true (0 won, 0 lost in hindsight), 6 rejected
+    bar 20: up declined — no room to move: no opposing level leaves 2:1 from the block
+    bar 41: down declined — against the higher timeframe, which reads up
+    bar 47: up declined — no room to move: no opposing level leaves 2:1 from the block
+    bar 56: down declined — against the higher timeframe, which reads up
+    bar 68: up declined — no room to move: no opposing level leaves 2:1 from the block
+    bar 95: down declined — against the higher timeframe, which reads up
+structure by zoom: 1m down, 5m down, 15m range

@@ -114,3 +114,9 @@ reads against control instead, which is what the material's own two-state figure
 What the drawing does **not** settle, and should not be tuned by eye alone (rule 3 above): whether a person
 would circle a level the engine draws, merge two they would not, or ignore one it marks. That needs the owner's own
 markup of a chart — the reference examples rule 3 names as the only legitimate source.
+
+**Zoom, drag and a person's own marks.** `--minutes 1 5 15` zooms (one picture per bar size, and a table of the
+structure at each), `--from`/`--to` drags to a time window (UTC; the time axis is on the picture), and
+`--mark PRICE` overlays a level drawn by hand and says how it compares with the engine's levels. The engine's own
+renders, with the exact command and console output beside each, are in [`docs/evidence/`](../evidence/README.md),
+including the one comparison with the owner's markup that exists.
