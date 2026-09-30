@@ -203,8 +203,11 @@ them (see §2.8).
   "FVG" label sits between the two dashed lines, and the teal fill continues down past the lower dashed
   line to the bottom of the chart. **The material does not state why the fill extends below its own lower
   boundary**; this is a drawing convention that could not be resolved from the frames.
-- `S36`, 15-min panel — the higher-timeframe FVG is drawn as a large teal rectangle whose lower edge
-  coincides with the top edge of the pink key-level band below it; the entry marker is at that junction.
+- `S36`, 15-min panel — *(corrected S010, after viewing the frame)* the teal rectangle is **not** a
+  higher-timeframe FVG. It is half of a **long position box**: teal target zone above (y 303→637), pink stop
+  zone below (y 638→725), sharing one x-range, with the "Entry" arrow at their junction and a "$" bracket
+  marking the risk. In the 1H panel the grey "FVG" box is the gap. The box is ~334 px of reward against ~87 px
+  of risk, about **1 : 3.8** — the same drawing as the short box in `S46`/`S47`, in a synthetic schematic.
 
 **Not specified.** Whether a gap is still "unfilled" when price wicks into it but does not close inside it
 (the frames draw both a wick-only touch in `S21` and a body-through in `S12`); how old a gap may be; how
@@ -449,8 +452,10 @@ The drawn lines are hand-placed and are not consistent across frames; no frame s
 **Stated — in the frames.** Very little, and this matters:
 
 - `S36`'s 15-min panel carries the **only "Entry" marker in the entire video**: an arrow pointing up at the
-  junction where the pink key-level band meets the lower edge of the higher-timeframe teal box. The marker
-  is a *place*, not a rule — no order type, no price, no trigger condition.
+  junction of a **long position box** — teal target above, pink stop below (*corrected S010: an earlier
+  version called the teal rectangle a higher-timeframe box, and said no frame draws a stop or target; `S36`,
+  `S46` and `S47` all do*). The marker is a *place*, not a rule — no order type, no price, no trigger
+  condition — but the box beside it shows where the stop and the target sit relative to it.
 - `S44` draws the intended trade as a **single annotated path**: a line coming down out of the daily order
   block into the 1h order block box, then turning and rising — the planned long.
 - `S45` draws what happened: price went through the 1h order block and kept falling.
@@ -485,8 +490,9 @@ evidence of what the author *means* by a stop and a target, and is not evidence 
 
 **Shown** (the geometry, for the planned long): in `S43` the origin candle is drawn as a
 single 1h candle 29 pips tall, and the box's lower edge (153.36) is where price was expected to react;
-`S44`'s path returns to that lower edge. In `S36` the entry is drawn at the *coincidence* of the
-higher-timeframe box's lower edge and the daily key-level band's upper edge.
+`S44`'s path returns to that lower edge. In `S36` the entry is drawn at the junction of the long box's stop and target zones, about 1 : 3.8 by
+measurement (S010 correction to an earlier reading of it as a coincidence of a higher-timeframe box edge and
+a key-level band).
 
 **Not specified.** Without the deck text: where the stop goes, what the minimum reward is, whether the
 entry is a limit or a market order, what the target is, how the target relates to the higher timeframe,
