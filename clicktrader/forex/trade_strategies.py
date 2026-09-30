@@ -17,6 +17,7 @@ from __future__ import annotations
 import inspect
 from dataclasses import dataclass, field
 from enum import Enum
+from collections.abc import Sequence
 from typing import Callable, Protocol
 
 from ..strategies import History
@@ -272,6 +273,25 @@ class _Setup:
     touched: bool = False
 
 
+def _last_opposite_candle(candles: Sequence[Candle], start_index: int, direction: Direction) -> int | None:
+    """Index of the last candle *before* `start_index` whose colour opposes the move, or None.
+
+    All three supply-and-demand decks state the origin this way — "the very last opposite-coloured candle
+    immediately before" the run — and the institutional deck's checklist repeats it ("the preceding
+    opposite-coloured candle"). Taking the adjacent candle whatever its colour agrees with that only when
+    the run starts exactly where a colour change does, which the window search does not guarantee: it
+    prefers the longest qualifying window, and a shorter one can begin inside a same-coloured stretch.
+    A doji has no colour and is stepped over, not accepted.
+    """
+    for index in range(start_index - 1, -1, -1):
+        candle = candles[index]
+        if (direction is Direction.UP and candle.close < candle.open) or (
+            direction is Direction.DOWN and candle.close > candle.open
+        ):
+            return index
+    return None
+
+
 class SupplyDemand:
     """The supply-and-demand method, run as the eight-line checklist its own SOP states.
 
@@ -425,8 +445,11 @@ class SupplyDemand:
         gaps = [g for g in fair_value_gaps(candles) if push.start_index <= g.formed_index <= push.end_index]
         if not any(gap_untouched(g, candles) for g in gaps):
             return
-        origin = candles[push.start_index - 1]
-        zone = zone_from_origin(origin, index=push.start_index - 1, direction=direction)
+        origin_index = _last_opposite_candle(candles, push.start_index, direction)
+        if origin_index is None:
+            return
+        origin = candles[origin_index]
+        zone = zone_from_origin(origin, index=origin_index, direction=direction)
         if zone.size <= 0:
             return
         if taps(zone, candles, from_index=push.end_index + 1) > 0:

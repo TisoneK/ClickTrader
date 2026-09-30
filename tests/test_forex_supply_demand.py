@@ -318,3 +318,30 @@ def test_the_registry_exposes_it_and_build_passes_no_session_hour_to_a_method_wi
     # concept at all, so build must not hand it a parameter it would silently ignore
     assert build("sneaky-pivot", session_start_hour_utc=21).name.startswith("sneaky-pivot(bar=15m, session-start=21h")
     assert build("supply-demand", session_start_hour_utc=21).name == SupplyDemand().name
+
+
+def test_origin_is_the_last_opposite_coloured_candle_not_merely_the_adjacent_one():
+    from clicktrader.forex.candles import Candle
+    from clicktrader.forex.model import Direction
+    from clicktrader.forex.trade_strategies import _last_opposite_candle
+
+    def bar(o, c):
+        return Candle(open=o, high=max(o, c) + 0.1, low=min(o, c) - 0.1, close=c)
+
+    # index 1 is the last bearish candle; 2 and 3 are bullish and sit between it and the run starting at 4.
+    candles = [bar(5, 6), bar(6, 5), bar(5, 5.5), bar(5.5, 6), bar(6, 9)]
+    assert _last_opposite_candle(candles, 4, Direction.UP) == 1  # the decks: "the very last opposite-coloured"
+    assert _last_opposite_candle(candles, 2, Direction.UP) == 1
+    assert _last_opposite_candle(candles, 1, Direction.UP) is None  # nothing bearish before index 1
+    # a downward move wants the last *bullish* candle instead
+    assert _last_opposite_candle(candles, 4, Direction.DOWN) == 3
+
+
+def test_a_doji_has_no_colour_and_is_not_taken_as_the_origin():
+    from clicktrader.forex.candles import Candle
+    from clicktrader.forex.model import Direction
+    from clicktrader.forex.trade_strategies import _last_opposite_candle
+
+    doji = Candle(open=5, high=5.5, low=4.5, close=5)
+    bearish = Candle(open=6, high=6.1, low=4.9, close=5)
+    assert _last_opposite_candle([bearish, doji, Candle(5, 9, 5, 9)], 2, Direction.UP) == 0

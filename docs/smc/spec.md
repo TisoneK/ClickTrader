@@ -162,6 +162,14 @@ block must sit inside a macro zone. None of this is stated anywhere in the 48 fr
 > is measured onto the candle **immediately before the impulse**, which on that diagram is drawn the same
 > colour as the impulse. What the frames support is *the single candle immediately before the displacement
 > move, drawn wick to wick*. "Last opposite-coloured candle" is a stronger claim than the frames carry.
+>
+> **Scope of that disagreement (S010, after reading all six decks first-hand).** It concerns the *video's*
+> frames only. The three supply-and-demand decks **do** say it, in words, repeatedly: "the very last
+> opposite-colored (red) candle immediately before the buying frenzy" (Ultimate S&D, origin slides), "the
+> previous opposite-colored candle" (Supply & Demand, drafting slide), "drawn strictly wick-to-wick on the
+> preceding opposite-colored candle" (Institutional SOP, item 5). So for the S&D method the opposite-colour
+> rule is the material's, and `SupplyDemand` now applies it (`_last_opposite_candle`). For the SMC order
+> block the frames still carry only "the candle before the displacement".
 
 ---
 
