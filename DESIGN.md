@@ -273,6 +273,12 @@ verdict was comparing against the wrong number. Fixed to compare against the ran
 analytically known −5% rather than an assumed one. Re-run after the fix, all five testable strategies
 correctly read "No directional edge" against real EUR/USD data.
 
+**That fix was itself incomplete, and a review caught it.** The control's hit rate is an estimate with its
+own sampling error, but the verdict tested the strategy's interval against it as if it were exact — so a
+strategy 4 points above a control that was itself uncertain by ±3 read "POSITIVE". The verdict now reads
+the interval of the *difference* between the strategy and the control (`stats.difference_interval`,
+Newcombe's hybrid-Wilson). See ADR-4.
+
 **The other strategy shape has no findings yet, and that is stated rather than glossed.** A trade with a
 stop and a target is graded by `forex/trade_harness.py` instead (see "Two kinds of claim, and two
 harnesses to grade them"): it walks the ticks between entry and resolution and reports expectancy in R
