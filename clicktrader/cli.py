@@ -505,6 +505,7 @@ def cmd_run_smc(args: argparse.Namespace) -> int:
     try:
         if args.warm_bars:
             warm_from_history(strategy, args.symbol, minutes=1.0, bars=args.warm_bars, decimals=args.decimals)
+            print(f"right now it sees: {strategy.describe()}", flush=True)
         feed = stream_ticks(args.symbol)
         log = args.log or ("recordings/smc-demo-trades.jsonl" if args.place else "recordings/smc-paper-trades.jsonl")
         if not args.place:
@@ -921,7 +922,7 @@ def main(argv: list[str] | None = None) -> int:
     run_smc.add_argument("--max-loss-per-trade", type=float, default=None, help="optional: refuse a plan whose stop is worth more than this (default: no limit)")
     run_smc.add_argument("--warm-bars", type=int, default=1000, help="one-minute bars of history to start with (default 1000; 0 = start blind)")
     run_smc.add_argument("--decimals", type=int, default=2)
-    run_smc.add_argument("--report-every", type=float, default=120.0, help="seconds between status lines saying what the engine sees (default 120)")
+    run_smc.add_argument("--report-every", type=float, default=60.0, help="seconds between status lines saying what the engine sees (default 60)")
     run_smc.add_argument("--log", default=None)
     run_smc.add_argument("--place", action="store_true", help="actually place orders on the DEMO account (default is paper: nothing placed)")
     run_smc.set_defaults(func=cmd_run_smc)

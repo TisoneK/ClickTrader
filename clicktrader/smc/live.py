@@ -74,16 +74,19 @@ def paper_run(
     started = last_report = now()
     exposure = stake * multiplier
     log = open(log_path, "a", encoding="utf-8")
+    emit("connecting to the live feed; the first tick should arrive within a few seconds...")
     try:
         for record in ticks:
             tick = record.tick
             price = float(tick.price)
             history.append(tick)
             run.ticks += 1
+            if run.ticks == 1:
+                emit(f"live feed connected: first tick {price}. Status every {report_every:g}s, and a line whenever it plans or closes a trade.")
             decision = strategy.decide(History(history, len(history)))
             if report_every and now() - last_report >= report_every:
                 last_report = now()
-                emit(f"[{now() - started:.0f}s] {run.readout()}")
+                emit(f"[{now() - started:.0f}s] price {price} — {run.readout()}")
                 seen = getattr(strategy, "last_view", None)
                 if seen:
                     emit(f"  what it sees: {seen}")

@@ -79,3 +79,12 @@ def test_the_registry_exposes_it_so_the_harness_can_grade_it():
 def test_a_risk_reward_below_the_materials_floor_is_refused():
     with pytest.raises(ValueError):
         SmcStrategy(risk_reward=0.5)
+
+
+def test_describe_says_what_the_chart_reads_right_now():
+    strategy = SmcStrategy(trigger_minutes=1.0, higher_minutes=(5.0,))
+    assert "not enough to read yet" in strategy.describe()
+    ticks = [Tick(float(i * 15), f"{100 + ((i * 7) % 23) / 10:.2f}", "X") for i in range(1500)]
+    strategy.warm(ticks)
+    text = strategy.describe()
+    assert "structure" in text and "fresh true zones:" in text and "last close" in text

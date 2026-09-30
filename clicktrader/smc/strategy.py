@@ -121,6 +121,22 @@ class SmcStrategy:
         self.last_view = f"warmed with {fed} historical tick(s)"
         return fed
 
+    def describe(self) -> str:
+        """What the chart says right now, in a few words — for the moment a live run starts, so the person watching can
+        check it is reading the chart they are looking at: structure, who is in control, the zones still standing."""
+        candles = self._trigger.last(self._window)
+        if len(candles) < self._lookback + self._strength * 2 + 2:
+            return f"only {len(candles)} bar(s) so far — not enough to read yet"
+        r = read_chart(candles, higher=[b.last(self._window) for b in self._higher] or None, strength=self._strength,
+                       lookback=self._lookback, risk_reward=self._risk_reward)
+        fresh = [z for z in r.zones if z.verdict == "TRUE" and z.status == "fresh"]
+        zones = "; ".join(f"{z.kind} {z.low:.2f}-{z.high:.2f}" + (" (weaker)" if z.weaker else "") for z in fresh[-4:]) or "none"
+        control = r.control[-1].value if r.control and r.control[-1] else "not yet decided"
+        last = f"{r.events[-1].kind.value} {r.events[-1].verdict.value} at {r.events[-1].level:.2f}" if r.events else "none yet"
+        price = candles[-1].close
+        return (f"{len(candles)} bars, last close {price:.2f}; structure {r.structure[-1].value}, {control} in control; "
+                f"fresh true zones: {zones}; last event: {last}")
+
     def _on_trigger_bar(self, closed: Candle) -> None:
         candles = self._trigger.last(self._window)
         if len(candles) < self._lookback + self._strength * 2 + 2:
