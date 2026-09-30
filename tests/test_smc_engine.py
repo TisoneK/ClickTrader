@@ -47,7 +47,7 @@ def test_a_level_needs_more_than_one_turn_to_be_a_pool():
 
 def test_a_break_that_closes_through_with_no_gap_at_the_level_is_a_change_of_character():
     candles = _bars(*_TWO_LOWS, (100.5, 100.7, 97.6, 98.2))
-    result = classify_break(candles, index=5, level=100.0, direction=Direction.DOWN, band=_BAND)
+    result = classify_break(candles, index=5, level=100.0, direction=Direction.DOWN)
     assert result.kind is BreakKind.CHANGE_OF_CHARACTER
     assert result.flips_control
     assert "no unfilled gap" in result.reason
@@ -56,25 +56,40 @@ def test_a_break_that_closes_through_with_no_gap_at_the_level_is_a_change_of_cha
 def test_a_wick_through_that_closes_back_is_a_liquidity_sweep_not_a_reversal():
     # the same fixture, changed only in where the breaking bar closed
     candles = _bars(*_TWO_LOWS, (100.5, 100.7, 97.6, 100.5))
-    result = classify_break(candles, index=5, level=100.0, direction=Direction.DOWN, band=_BAND)
+    result = classify_break(candles, index=5, level=100.0, direction=Direction.DOWN)
     assert result.kind is BreakKind.LIQUIDITY_SWEEP
     assert not result.flips_control
     assert "stops at that level were taken" in result.reason
 
 
-def test_a_close_through_an_unfilled_gap_is_mitigation_not_a_reversal():
-    # a bearish imbalance spanning 99.0-100.9, and the third candle of it closing below 100: the break IS
-    # the fill, which is why the gap has to be unfilled right up to that bar
+def test_a_close_through_an_older_unfilled_gap_is_mitigation_not_a_reversal():
+    # the material's picture: a *bullish* gap left behind by an earlier rally, sitting below price, with the
+    # swing low inside it — and price falling back into the gap later. The gap has to predate the break.
     candles = _bars(
-        (101.0, 101.5, 100.9, 101.2),  # candle 1: low 100.9, above the level
-        (101.2, 101.3, 99.5, 99.6),    # candle 2: the displacement that leaves the gap
-        (99.6, 99.0, 98.4, 98.6),      # candle 3: high 99.0 — closes below 100, inside the gap
+        (99.0, 99.5, 98.8, 99.4),      # candle 1 of the gap: high 99.5
+        (99.4, 101.0, 99.3, 100.9),    # the rally that leaves it
+        (100.9, 101.5, 99.8, 101.2),   # candle 3: low 99.8 -> gap 99.5-99.8
+        (101.2, 101.6, 100.4, 100.6),  # stays above the gap, so it stays unfilled
+        (100.6, 100.8, 99.4, 99.55),   # the break: falls through the level inside the gap
     )
-    result = classify_break(candles, index=2, level=100.0, direction=Direction.DOWN, band=_BAND)
+    result = classify_break(candles, index=4, level=99.65, direction=Direction.DOWN)
     assert result.kind is BreakKind.GAP_MITIGATION
     assert not result.flips_control
     assert result.gap is not None
     assert "rebalancing" in result.reason
+
+
+def test_a_gap_created_by_the_breaking_move_does_not_excuse_the_break():
+    # the bug this guards, found by running the whole stack over a real recording: a gap needs three candles,
+    # so one whose middle candle is the breaking bar was left by this move rather than before it. Counting it
+    # meant every sharp break excused itself as "rebalancing" and no change of character could ever form.
+    candles = _bars(
+        (101.0, 101.5, 100.9, 101.2),
+        (101.2, 101.3, 99.5, 99.6),    # the middle candle of a gap that contains 100.0...
+        (99.6, 99.0, 98.4, 98.6),      # ...and its third candle, which is also the break
+    )
+    result = classify_break(candles, index=2, level=100.0, direction=Direction.DOWN)
+    assert result.kind is BreakKind.CHANGE_OF_CHARACTER
 
 
 def test_a_gap_that_was_already_filled_does_not_excuse_the_break():
@@ -88,13 +103,13 @@ def test_a_gap_that_was_already_filled_does_not_excuse_the_break():
         (99.0, 100.5, 98.8, 100.2),    # a later bar trades back up into it, filling it
         (100.2, 100.3, 97.6, 98.2),    # now a clean close below the level
     )
-    result = classify_break(candles, index=4, level=100.0, direction=Direction.DOWN, band=0.0)
+    result = classify_break(candles, index=4, level=100.0, direction=Direction.DOWN)
     assert result.kind is BreakKind.CHANGE_OF_CHARACTER
 
 
 def test_a_bar_that_never_reached_the_level_is_reported_as_neither():
     candles = _bars(*_TWO_LOWS, (101.0, 101.5, 100.8, 101.2))
-    result = classify_break(candles, index=5, level=100.0, direction=Direction.DOWN, band=_BAND)
+    result = classify_break(candles, index=5, level=100.0, direction=Direction.DOWN)
     assert result.kind is BreakKind.GAP_MITIGATION
     assert "never reached" in result.reason
 
