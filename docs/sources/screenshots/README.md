@@ -10,14 +10,19 @@ rose from ~1000 to a peak near 1022 around 09:40, fell back, and was near 1009 a
 drawn with the platform's drawing tool sits at about 1001** (the pixel row falls between the 1000 and 1010 axis
 labels), running through a cluster of lows that price returns to at least five times and that the candles do not
 close below. This is the owner's own marking of a level, the reference example `docs/smc/README.md` rule 3 asks
-for. Side panel: Rise/Fall, duration 2 min, stake $10, allow-equals off, **Buy, payout $18.85**: a profit of $8.85
-on $10, **88.5%**, matching the ~88% fills measured on the demo account (P-2026-09-29-6) and not the ~95% the
-Pure Price Action deck shows.
+for. Side panel: Rise/Fall, duration 2 min, stake $10, allow-equals off, **Buy, payout $18.85** — a *quote* for a $10
+purchase (no trade was open in this shot): 88.5% profit, the same rate the realised trade in `rise and fall won.jpg` paid,
+and not the ~95% the Pure Price Action deck shows.
 
-## `rise and fall won.jpg` — a settled trade
-The same instrument and platform on 29 Sep 2026 at about 13:13–13:21 GMT. A Rise position closed at a profit of
-**+8.85 USD** (95% of the $10 stake is 9.50, so this is again ~88.5%, not 95%); the Positions panel shows no open
-positions; balance 10,064.59. A tooltip shows a bar with open 953.92, high 953.98, low 951.56, close 952.28.
+## `rise and fall won.jpg` — the result of an EARLIER trade, dated 29 Sep (not the test session)
+Volatility 100 (1s) Index, demo account, **29 Sep 2026, 13:21 GMT** (the day before the test session), balance
+10,064.59. The green **"+8.85 USD"** bubble on the chart is the **result of a previous $10 Rise**: stake $10, profit
+$8.85, so **$18.85 returned in total** (the owner's "$18.85"). The Positions panel shows no open positions, so that
+trade had already settled. The **"Payout $18.85" on the Buy button is a different thing**: the platform's *quote* for
+the *next* $10 purchase. The two agree: a quote of 88.5% and a realised profit of 88.5% of the stake. That is worth
+stating because earlier notes found the API's proposal quote (about 95%) disagreeing with the fills (88%); on this
+screen the platform's own quote and the realised result match, so 88.5% is the figure to use. A tooltip shows a bar
+with open 953.92, high 953.98, low 951.56, close 952.28. Nothing here was produced by this engine or by a rule.
 
 ## `test-live.zip` — five screenshots of the owner's test session, 30 Sep 2026 21:27-21:32 GMT
 Deriv DTrader, demo account. **How the owner sees the bars:** candles at the **1-minute** interval (the "1m" badge on
