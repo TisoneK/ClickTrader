@@ -215,13 +215,22 @@ class ControlMachine:
     def consider(self, candles: Sequence[Candle], *, index: int) -> BreakResult | None:
         """Report what the bar at `index` did, if it broke a pool against the current control.
 
-        A bar is only interesting if it *pierced* a pool on the losing side — piercing, not closing beyond,
-        because whether the close held is exactly what the classification is for. Returns `None` when the
-        bar threatened nothing, which is a different answer from a break that was declined.
+        A bar is only interesting if it **crossed** a pool on the losing side — crossed, not merely sat
+        beyond it. That distinction is the whole reason this method exists in its current shape: an earlier
+        version tested `bar.low < pool.price`, which is true of every bar below the level forever, so one
+        eleven-touch level registered **62,566 breaks** over a seventeen-hour recording and every one was
+        declined, hiding that not one of them was a break at all. A crossing is a moment; being below a
+        level is a state, and only the moment can be a signal.
+
+        Crossing rather than closing, because whether the close held is exactly what the classification is
+        for. Returns `None` when the bar threatened nothing — a different answer from a break it declined.
         """
         if not 0 <= index < len(candles):
             raise ValueError("index is outside the series")
+        if index == 0:
+            return None
         bar = candles[index]
+        previous = candles[index - 1]
         for pool in liquidity_pools(
             candles[: index + 1], strength=self._strength, band=self._band, min_touches=self._min_touches
         ):
@@ -230,8 +239,11 @@ class ControlMachine:
             )
             if not against_control:
                 continue
-            pierced = bar.low < pool.price if pool.kind is SwingKind.LOW else bar.high > pool.price
-            if not pierced:
+            if pool.kind is SwingKind.LOW:
+                crossed = bar.low < pool.price <= previous.close
+            else:
+                crossed = bar.high > pool.price >= previous.close
+            if not crossed:
                 continue
             direction = Direction.DOWN if pool.kind is SwingKind.LOW else Direction.UP
             result = classify_break(candles, index=index, level=pool.price, direction=direction)

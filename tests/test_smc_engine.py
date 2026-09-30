@@ -162,3 +162,29 @@ def test_a_level_with_no_width_is_refused():
         ControlMachine(band=0.0)
     with pytest.raises(ValueError):
         ControlMachine(band=_BAND).consider(_bars(*_TWO_LOWS), index=99)
+
+
+def test_sitting_below_a_level_is_not_breaking_it_again():
+    # the bug that hid behind 62,566 declines on a real recording: `bar.low < level` is true of every bar
+    # below the level forever, so one eleven-touch pool registered a "break" on every subsequent bar. A
+    # crossing is a moment; being below is a state, and only the moment can be a signal.
+    machine = ControlMachine(band=_BAND, strength=1, initial=Control.DEMAND)
+    candles = _bars(
+        *_TWO_LOWS,
+        (100.5, 100.7, 97.6, 98.2),   # crosses 100 downward — this one is a break
+        (98.2, 98.4, 97.0, 97.2),     # already below; nothing was crossed
+        (97.2, 97.5, 96.4, 96.8),     # still below
+    )
+    first = machine.consider(candles, index=5)
+    assert first is not None and first.kind is BreakKind.CHANGE_OF_CHARACTER
+    assert machine.consider(candles, index=6) is None
+    assert machine.consider(candles, index=7) is None
+
+
+def test_a_bar_that_closes_back_above_before_the_next_one_is_still_a_crossing():
+    # the crossing is what counts, so a bar that pierces on the way down and closes above the level is
+    # classified as a sweep rather than ignored
+    machine = ControlMachine(band=_BAND, strength=1, initial=Control.DEMAND)
+    candles = _bars(*_TWO_LOWS, (100.5, 100.7, 97.6, 100.5))
+    result = machine.consider(candles, index=5)
+    assert result is not None and result.kind is BreakKind.LIQUIDITY_SWEEP
