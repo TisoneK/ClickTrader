@@ -79,9 +79,9 @@ class LiquidityPool:
     high: float = 0.0
     """The band the level occupies: a person draws it around the candles that formed it, not as a line.
 
-    For a floor it runs from the lowest wick in the cluster up to the top of the lowest body among them —
-    "a thin band at the lows of a cluster", one body tall, covering the lower wicks — and mirrored for a
-    ceiling. Both edges come from the member candles themselves; no width is chosen. A level read off the
+    For a floor it runs from the lowest wick in the cluster up to the *lowest body bottom* among them — the
+    grey "Demand" box of S01, measured in all three of its panels: top edge at the lowest body bottom, bottom
+    edge at the lowest wick, so it covers the lower wicks and nothing of the bodies — mirrored for a ceiling. Both edges come from the member candles themselves; no width is chosen. A level read off the
     mean price (`price`) alone sits in the middle of this band, and a bar that merely reaches the middle
     has not left it."""
     first_index: int = 0
@@ -129,11 +129,11 @@ def _pool_of(zone, candles: Sequence[Candle]) -> LiquidityPool:
         return LiquidityPool(zone.price, zone.kind, zone.touches, zone.price, zone.price, 0)
     if zone.kind is SwingKind.LOW:
         low = min(c.low for c in members)
-        high = max(min(c.open, c.close) for c in members)
+        high = min(min(c.open, c.close) for c in members)  # the lowest body bottom: the band covers wicks only
         high = max(high, low)
     else:
         high = max(c.high for c in members)
-        low = min(max(c.open, c.close) for c in members)
+        low = max(max(c.open, c.close) for c in members)  # the highest body top
         low = min(low, high)
     return LiquidityPool(zone.price, zone.kind, zone.touches, low, high, min(zone.members))
 
