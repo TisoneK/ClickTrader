@@ -239,3 +239,21 @@ def test_smc_chart_writes_a_png(tmp_path):
             recorder.write(TickRecord(Tick(ts=1_700_000_000.0 + i * 5, price=price, symbol="X")))
     assert main(["smc-chart", str(rec), str(out), "--minutes", "5", "--bars", "60"]) == 0
     assert out.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_smc_chart_zooms_drags_and_compares_a_hand_drawn_level(tmp_path, capsys):
+    from clicktrader.cli import main
+    from clicktrader.model import Tick
+    from clicktrader.recording import Recorder, TickRecord
+
+    rec = tmp_path / "t.jsonl"
+    with Recorder(rec) as recorder:
+        for i in range(6000):
+            price = f"{100 + ((i * 7) % 97) / 10:.2f}"
+            recorder.write(TickRecord(Tick(ts=1_700_000_000.0 + i * 5, price=price, symbol="X")))
+    out = tmp_path / "c.png"
+    # two zoom levels -> two files; a dragged window; one level drawn by hand
+    assert main(["smc-chart", str(rec), str(out), "--minutes", "1", "5", "--from", "2023-11-14 22:30", "--to", "2023-11-15 02:00", "--mark", "104.0", "--list", "0"]) == 0
+    assert (tmp_path / "c.1m.png").exists() and (tmp_path / "c.5m.png").exists()
+    text = capsys.readouterr().out
+    assert "your level 104.00" in text and "structure by zoom:" in text

@@ -265,9 +265,22 @@ def cmd_forex_replay(args: argparse.Namespace) -> int:
     return 0
 
 
+def _parse_utc(text: str) -> float:
+    """'2026-09-30 10:00' (UTC) or a bare epoch number, for --from / --to."""
+    try:
+        return float(text)
+    except ValueError:
+        return datetime.fromisoformat(text).replace(tzinfo=timezone.utc).timestamp()
+
+
 def cmd_smc_chart(args: argparse.Namespace) -> int:
-    """Read a recording the way a person reads a chart, and draw what the analyst saw (PNG) with a summary."""
+    """Read a recording the way a person reads a chart, at one or several zoom levels, and draw what was seen.
+
+    Zooming is the bar size (`--minutes 1 5 15` draws each); dragging is the time window (`--from` / `--to`, UTC).
+    The reading is always of the whole recording, so moving the window never changes what is seen in it.
+    `--mark PRICE` overlays a level you drew by hand and says how it compares with the engine's own levels."""
     from .forex.candles import TimeCandleBuilder
+    from .forex.structure import SwingKind
     from .smc.analyst import READINGS, read_chart
     from .smc.draw import draw_reading
 
@@ -277,22 +290,45 @@ def cmd_smc_chart(args: argparse.Namespace) -> int:
             builder.feed(record.tick.ts, float(record.tick.price))
         return builder.last(10**7)
 
-    candles = bars(args.minutes)
-    if len(candles) < 30:
-        print(f"only {len(candles)} closed bar(s) of {args.minutes:g} minutes in that recording — nothing worth reading")
-        return 1
-    higher = bars(args.higher_minutes) if args.higher_minutes else None
-    reading = read_chart(candles, higher=higher)
-    draw_reading(reading, args.out, bars=args.bars)
-    print(f"wrote {args.out}")
-    print(reading.summary())
-    for opp in reading.opportunities[-args.list :]:
-        print(f"  bar {opp.armed_at}: {opp.direction.value} {opp.state.value}" + (f" ({opp.outcome})" if opp.outcome else "") + f" — {opp.reason}")
-    if args.readings:
+    sizes = args.minutes or [15.0]
+    lo_ts = _parse_utc(args.start) if args.start else None
+    hi_ts = _parse_utc(args.end) if args.end else None
+    structures: dict[float, str] = {}
+    last_reading = None
+    for minutes in sizes:
+        candles = bars(minutes)
+        if len(candles) < 30:
+            print(f"{minutes:g}m: only {len(candles)} closed bar(s) in that recording — nothing worth reading")
+            continue
+        higher_minutes = args.higher_minutes if args.higher_minutes else None
+        higher = bars(higher_minutes) if higher_minutes and higher_minutes > minutes else None
+        reading = read_chart(candles, higher=higher)
+        first = next((i for i, c in enumerate(candles) if lo_ts is None or c.opened_at >= lo_ts), 0)
+        stop = next((i for i, c in enumerate(candles) if hi_ts is not None and c.opened_at >= hi_ts), len(candles))
+        out = args.out if len(sizes) == 1 else args.out.replace(".png", f".{minutes:g}m.png")
+        draw_reading(reading, out, bars=args.bars, start=first if (lo_ts or hi_ts) else None, end=stop if (lo_ts or hi_ts) else None, marks_owner=tuple(args.mark or ()))
+        structures[minutes] = reading.structure[min(stop, len(candles)) - 1].value
+        print(f"{minutes:g}m -> {out}")
+        print("  " + reading.summary())
+        for opp in reading.opportunities[-args.list :]:
+            print(f"    bar {opp.armed_at}: {opp.direction.value} {opp.state.value}" + (f" ({opp.outcome})" if opp.outcome else "") + f" — {opp.reason}")
+        last_reading = reading
+        if args.mark:
+            end_i = min(stop, len(candles)) - 1
+            typical = sorted(c.range for c in candles[max(0, end_i - 20) : end_i + 1])[10 if end_i >= 20 else 0]
+            for price in args.mark:
+                inside = [b for b, born, died in reading.levels if born <= end_i and (died is None or died > end_i) and b.low - typical <= price <= b.high + typical]
+                touches = [s for s in reading.swings if s.swing.index <= end_i and abs(s.swing.price - price) <= typical]
+                lows = sum(1 for s in touches if s.swing.kind is SwingKind.LOW)
+                print(f"  your level {price:.2f}: {len(touches)} swing(s) within one typical candle range ({typical:.2f}), {lows} of them lows; "
+                      + (f"engine level(s) there: " + ", ".join(f"{b.low:.2f}-{b.high:.2f} ({b.touches} touches)" for b in inside) if inside else "NO engine level within one candle range of it"))
+    if len(structures) > 1:
+        print("structure by zoom: " + ", ".join(f"{m:g}m {v}" for m, v in structures.items()))
+    if args.readings and last_reading is not None:
         print("choices this reading makes that are the project's own:")
         for line in READINGS:
             print("  -", line)
-    return 0
+    return 0 if structures else 1
 
 
 def cmd_forex_replay_all(args: argparse.Namespace) -> int:
@@ -648,12 +684,15 @@ def main(argv: list[str] | None = None) -> int:
     )
     fx_rep.set_defaults(func=cmd_forex_replay)
 
-    smc_chart = sub.add_parser("smc-chart", help="read a recording like a trader (swings, levels, gaps, breaks, opportunities) and draw it (PNG)")
+    smc_chart = sub.add_parser("smc-chart", help="read a recording like a trader at one or more zoom levels and draw it (PNG)")
     smc_chart.add_argument("recording")
-    smc_chart.add_argument("out", help="PNG path to write")
-    smc_chart.add_argument("--minutes", type=float, default=15.0, help="bar length in minutes (default 15)")
+    smc_chart.add_argument("out", help="PNG path to write (several --minutes write out.<m>m.png)")
+    smc_chart.add_argument("--minutes", type=float, nargs="+", help="bar length(s) in minutes — the zoom (default 15)")
     smc_chart.add_argument("--higher-minutes", type=float, default=60.0, help="slower clock that must not contradict a trade; 0 disables (default 60)")
-    smc_chart.add_argument("--bars", type=int, default=160, help="how many of the most recent bars to draw (default 160)")
+    smc_chart.add_argument("--from", dest="start", help="drag: first moment to show, UTC ('2026-09-30 07:00') or epoch")
+    smc_chart.add_argument("--to", dest="end", help="drag: last moment to show (exclusive), UTC or epoch")
+    smc_chart.add_argument("--bars", type=int, default=160, help="without --from/--to, how many of the latest bars to draw (default 160)")
+    smc_chart.add_argument("--mark", type=float, nargs="+", help="price level(s) you drew by hand; overlaid and compared with the engine's levels")
     smc_chart.add_argument("--list", type=int, default=12, help="how many of the latest opportunities to print (default 12)")
     smc_chart.add_argument("--readings", action="store_true", help="also print the choices this reading makes that are the project's own")
     smc_chart.set_defaults(func=cmd_smc_chart)

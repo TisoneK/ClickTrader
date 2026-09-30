@@ -40,10 +40,32 @@ def _short_reason(opp) -> str:
     return _SHORT_REASON.get(opp.state, "")
 
 
-def draw_reading(reading: Reading, path: str, *, bars: int = 160, width: int = 1800, height: int = 900) -> None:
-    n = len(reading.candles)
-    lo = max(0, n - bars)
-    candles = list(reading.candles[lo:])
+def _tick_labels(candles, lo: int) -> list[tuple[int, str]]:
+    """Time marks along the bottom so a picture can be placed on the clock: a label roughly every 12th bar, with
+    the date on the first mark and whenever the day changes. Empty when the candles carry no time."""
+    from datetime import datetime, timezone
+
+    if not candles or not hasattr(candles[0], "opened_at"):
+        return []
+    step = max(1, len(candles) // 10)
+    out, last_day = [], None
+    for i in range(0, len(candles), step):
+        t = datetime.fromtimestamp(candles[i].opened_at, tz=timezone.utc)
+        day = t.strftime("%m-%d")
+        out.append((i, (day + " " if day != last_day else "") + t.strftime("%H:%M")))
+        last_day = day
+    return out
+
+
+def draw_reading(
+    reading: Reading, path: str, *, bars: int = 160, start: int | None = None, end: int | None = None,
+    marks_owner: tuple[float, ...] = (), width: int = 1800, height: int = 900,
+) -> None:
+    """Draw bars `start:end` of the reading (default: the last `bars`). Dragging is choosing the window;
+    the reading itself is always of the whole history, so what is drawn does not depend on where you look."""
+    n = end if end is not None else len(reading.candles)
+    lo = start if start is not None else max(0, n - bars)
+    candles = list(reading.candles[lo:n])
     m = len(candles)
 
     def at(i: int | None) -> int | None:
@@ -53,28 +75,35 @@ def draw_reading(reading: Reading, path: str, *, bars: int = 160, width: int = 1
         return i is not None and i - lo >= 0
 
     lines, boxes, marks, labels, segs = [], [], [], [], []
+    for price in marks_owner:
+        lines.append(HLine(price, 0, None, (20, 20, 20)))
+        labels.append(Label(2, price, "OWNER %.2f" % price, (20, 20, 20), 2, "right"))
 
     for ls in reading.swings:
         s = ls.swing
-        if ls.known_at < n and s.index >= lo:
+        if ls.known_at < n and lo <= s.index < n:
             high = s.kind.value == "high"
             marks.append(Mark(s.index - lo, s.price, above=high))
             labels.append(Label(s.index - lo, s.price, ls.label, _GREY, 2, "above" if high else "below"))
 
     most = max((b.touches for b, _, d in reading.levels if d is None), default=1)
     for band, born, died in reading.levels:
-        if died is not None:
-            continue  # a level that has been closed through is deleted from the chart, as the material says
+        if born >= n or (died is not None and died < n):
+            continue  # a level not yet found at this window's end, or one that has been closed through, is not drawn; a level that has been closed through is deleted from the chart, as the material says
         # the more often the market turned there, the more it stands out; touches are the only thing that varies
         boxes.append(Box(band.low, band.high, max(0, band.first_index - lo), None, _BLUE, 0.07 + 0.22 * band.touches / most))
 
     for gap, filled in reading.gaps:
+        if gap.formed_index >= n:
+            continue
+        if filled is not None and filled >= n:
+            filled = None  # still open at this window's end
         if filled is not None and filled < lo:
             continue
         boxes.append(Box(gap.lower, gap.upper, max(0, gap.formed_index - lo), None if filled is None else at(filled), _YELLOW, 0.32 if filled is None else 0.14))
 
     for e in reading.events:
-        if e.index < lo:
+        if e.index < lo or e.index >= n:
             continue
         x0, x1 = max(0, e.level_from - lo), e.index - lo
         colour = {EventKind.BOS: _BLUE, EventKind.CHOCH: _GREEN, EventKind.SWEEP: _RED, EventKind.GAP_FILL: _ORANGE}[e.kind]
@@ -83,12 +112,12 @@ def draw_reading(reading: Reading, path: str, *, bars: int = 160, width: int = 1
         labels.append(Label((x0 + x1) // 2, e.level, e.kind.value.replace(" ", " "), colour, 2, "below" if below else "above"))
 
     for o in reading.opportunities:
-        if o.armed_at < lo:
+        if o.armed_at < lo or o.armed_at >= n:
             continue
         b = o.block
-        end_i = o.closed_at if o.closed_at is not None else (n - 1)
+        end_i = min(o.closed_at, n - 1) if o.closed_at is not None else (n - 1)
         # a rejected setup's block is only worth a glance: it runs to the bar it was rejected on, no further
-        box_end = (o.filled_at or o.closed_at or n - 1) if o.is_true else o.armed_at
+        box_end = min(o.filled_at or o.closed_at or n - 1, n - 1) if o.is_true else o.armed_at
         boxes.append(Box(b.price_low, b.price_high, max(0, b.index - lo), at(box_end), _ORANGE, 0.25 if o.is_true else 0.14))
         if o.is_true and o.target is not None:
             start = max(0, o.armed_at - lo)
@@ -104,11 +133,11 @@ def draw_reading(reading: Reading, path: str, *, bars: int = 160, width: int = 1
             word = _short_reason(o)
             labels.append(Label(max(0, o.armed_at - lo), b.price_high if b.price_high else 0, "X " + word, _GREY, 2, "above"))
 
-    control = [c.value if c else "" for c in reading.control[lo:]]
+    control = [c.value if c else "" for c in reading.control[lo:n]]
     lo_p = min(c.low for c in candles)
     hi_p = max(c.high for c in candles)
     for o in reading.opportunities:
-        if o.is_true and o.armed_at >= lo:
+        if o.is_true and lo <= o.armed_at < n:
             lo_p, hi_p = min(lo_p, o.stop), max(hi_p, o.stop)
     pad = (hi_p - lo_p) * 0.06
-    render_chart(candles, path, lines=lines, boxes=boxes, marks=marks, labels=labels, segments=segs, control=control, price_range=(lo_p - pad, hi_p + pad), width=width, height=height)
+    render_chart(candles, path, lines=lines, boxes=boxes, marks=marks, labels=labels, segments=segs, control=control, price_range=(lo_p - pad, hi_p + pad), xticks=_tick_labels(candles, lo), width=width, height=height)

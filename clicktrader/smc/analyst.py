@@ -248,7 +248,7 @@ def read_chart(
     swept: set[tuple[int, str]] = set()  # one SWEEP per level until it is finally broken: a person says it once
     control: Control | None = None
     armed: list[Opportunity] = []
-    level_life: dict[tuple[str, int, int], list] = {}
+    level_life: dict[tuple[str, int], list] = {}
 
     for t in range(n):
         bar = candles[t]
@@ -271,16 +271,22 @@ def read_chart(
             band = _median([c.range for c in candles[t - lookback : t + 1]])
             live = _merge_bands(liquidity_pools(candles[: t + 1], strength=strength, band=band, min_touches=2))
             for p in live:
-                key = (p.kind.value, p.first_index, p.last_index)
                 died = None
                 for u in range(p.last_index + 1, t + 1):
                     if (candles[u].close < p.low) if p.kind is SwingKind.LOW else (candles[u].close > p.high):
                         died = u
                         break
-                if key not in level_life:
-                    level_life[key] = [p, t, died]
-                elif level_life[key][2] is None:
-                    level_life[key][0], level_life[key][2] = p, died
+                # A level is one object that GROWS as the market turns at it again — not a new level each time a
+                # swing joins the cluster. Match by kind and overlap with one already being tracked; only when
+                # nothing matches is this a newly found level.
+                match = next((k for k, rec in level_life.items() if k[0] == p.kind.value
+                              and rec[0].low <= p.high and p.low <= rec[0].high), None)
+                if match is not None:
+                    if level_life[match][2] is None:  # a level already deleted stays deleted, however often its swings are re-found
+                        level_life[match][0] = p
+                        level_life[match][2] = died
+                else:
+                    level_life[(p.kind.value, len(level_life))] = [p, t, died]
             reading.levels = [(rec[0], rec[1], rec[2]) for rec in level_life.values()]
 
         # -- opportunities waiting for a retrace: dead zone, first tap, falling knife

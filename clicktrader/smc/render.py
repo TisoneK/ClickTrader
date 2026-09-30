@@ -219,6 +219,7 @@ def render_chart(
     segments: Sequence[Segment] = (),
     control: Sequence[str] | None = None,
     price_range: tuple[float, float] | None = None,
+    xticks: Sequence[tuple[int, str]] = (),
     width: int = 1600,
     height: int = 800,
 ) -> None:
@@ -229,7 +230,7 @@ def render_chart(
     """
     if not candles:
         raise ValueError("nothing to draw")
-    left, right, top, bottom = 10, 10, 30, 10
+    left, right, top, bottom = 10, 10, 30, 22
     plot_w, plot_h = width - left - right, height - top - bottom
     n = len(candles)
     lo = min(c.low for c in candles)
@@ -298,6 +299,11 @@ def render_chart(
             ty += dy
         placed.append((tx, ty, w, h))
         canvas.text(tx, ty, lab.text, lab.color, lab.scale)
+    for idx, text in xticks:
+        if 0 <= idx < n:
+            xx = x_of(idx)
+            canvas.rect(xx, top, xx, height - bottom, GRID)
+            canvas.text(max(left, xx - len(text) * 6 // 2), height - bottom - 12, text, (90, 90, 90), 1)
     if control:
         for i, state in enumerate(control[:n]):
             colour = UP if state == "demand" else DOWN if state == "supply" else (190, 190, 190)
