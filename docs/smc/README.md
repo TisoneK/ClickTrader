@@ -120,3 +120,9 @@ structure at each), `--from`/`--to` drags to a time window (UTC; the time axis i
 `--mark PRICE` overlays a level drawn by hand and says how it compares with the engine's levels. The engine's own
 renders, with the exact command and console output beside each, are in [`docs/evidence/`](../evidence/README.md),
 including the one comparison with the owner's markup that exists.
+
+**Judging the engine against a person's marks.** Write what you would mark on a chart as JSON (levels, zones,
+changes of character, sweeps, trades, no-trade windows; see `docs/evidence/markup/`), then
+`clicktrader smc-compare markup.json recording.jsonl` says, for each mark, whether the engine said the same and what
+it said instead. The first markup was written by an AI agent, not the owner, and the file says so; the owner's own
+marks go in the same format.

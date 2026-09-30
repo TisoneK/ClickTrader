@@ -1,0 +1,27 @@
+{
+  "source": "the owner's live screenshot 'Screenshot 2026-09-30 151950.png' (Volatility 100 (1s), 1m candles); prices read off the axis and then checked against Deriv history (highs 1021.54/1022.81/1024.77 vs my 1021.4/1022.9/1024.9)",
+  "marker": "Tariq (an AI agent) - NOT the owner. Written before the engine's output was looked at. Replace or add the owner's own marks in this same format.",
+  "instrument": "1HZ100V",
+  "minutes": 1,
+  "from": "2026-09-30 07:00",
+  "to": "2026-09-30 12:20",
+  "levels": [
+    {"price": 1001.0, "note": "support: lows 1000.78@07:46, 1001.61@10:35, 998.82@11:24, 999.76@11:43; this is the owner's own blue line"},
+    {"price": 1010.8, "note": "flip zone: a floor at 08:28/09:17/10:19 (1009.96-1011.6) that breaks ~10:20 and then caps bounces at 11:00 and 12:07"}
+  ],
+  "zones": [
+    {"low": 1021.0, "high": 1025.0, "note": "resistance: three highs, 1021.54@08:13, 1022.81@08:55, 1024.77@10:05"}
+  ],
+  "changes_of_character": [
+    {"at": "2026-09-30 10:22", "direction": "down", "price": 1011.0, "note": "after the 10:05 high, a close through the 1010-1011.6 floor"}
+  ],
+  "sweeps": [
+    {"at": "2026-09-30 11:24", "price": 998.82, "note": "wick below the 999-1001 lows and back: takes the stops, not a break"}
+  ],
+  "trades": [
+    {"at": "2026-09-30 11:26", "direction": "up", "entry": 1000.5, "stop": 998.5, "target": 1010.5, "note": "buy the held support after the sweep; target the flip zone"}
+  ],
+  "no_trade": [
+    {"from": "2026-09-30 08:20", "to": "2026-09-30 09:40", "note": "chop between 1010 and 1022, lower highs and equal lows, nothing decisive"}
+  ]
+}

@@ -1,12 +1,12 @@
 15m -> docs/evidence/eurusd-15m.png
-  277 bars, 72 swings; events: 12 BOS, 14 CHOCH, 11 sweep, 0 gap fill; opportunities: 4 true (0 won, 3 lost in hindsight), 10 rejected
+  278 bars, 72 swings; events: 12 BOS, 12 CHOCH, 19 sweep, 0 gap fill; opportunities: 3 true (0 won, 2 lost in hindsight), 9 rejected
     bar 65: up filled (loss) — CHOCH then a block at 1.13641-1.13676; limit 1.13676, stop 1.13641, target 1.13808 (3.8:1); gap no; pushed 3.6 bands
     bar 75: down declined — against the higher timeframe, which reads up
     bar 88: up dead — closed through the zone's far edge before the tap — dead zone, deleted
     bar 96: down declined — against the higher timeframe, which reads up
     bar 120: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
     bar 126: down declined — against the higher timeframe, which reads up
-    bar 139: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
+    bar 144: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
     bar 156: down declined — against the higher timeframe, which reads up
     bar 168: up armed — CHOCH then a block at 1.13141-1.13193; limit 1.13193, stop 1.13141, target 1.13359 (3.2:1); gap no; pushed 3.8 bands
     bar 196: down declined — against the higher timeframe, which reads up
