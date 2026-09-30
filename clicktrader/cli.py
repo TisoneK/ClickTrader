@@ -331,6 +331,94 @@ def cmd_smc_chart(args: argparse.Namespace) -> int:
     return 0 if structures else 1
 
 
+def cmd_smc_compare(args: argparse.Namespace) -> int:
+    """Compare a person's markup of a chart with what the engine read, mark by mark.
+
+    The markup is a JSON file (see docs/evidence/markup/): levels, zones, changes of character, sweeps, trades and
+    no-trade windows, in prices and UTC times. Nothing here scores the engine as right or wrong; it says, for each
+    mark, whether the engine said the same thing and, where it did not, what it said instead."""
+    import json
+
+    from .forex.candles import TimeCandleBuilder
+    from .smc.analyst import EventKind, State, read_chart
+
+    mk = json.loads(Path(args.markup).read_text())
+    minutes = float(mk.get("minutes", 15))
+    builder = TimeCandleBuilder(minutes * 60.0)
+    for record in read_recording(args.recording):
+        builder.feed(record.tick.ts, float(record.tick.price))
+    candles = builder.last(10**7)
+    higher_builder = TimeCandleBuilder(args.higher_minutes * 60.0)
+    for record in read_recording(args.recording):
+        higher_builder.feed(record.tick.ts, float(record.tick.price))
+    reading = read_chart(candles, higher=higher_builder.last(10**7) if args.higher_minutes > minutes else None)
+    ts = lambda text: _parse_utc(text)  # noqa: E731
+    lo_ts, hi_ts = ts(mk["from"]), ts(mk["to"])
+    idx = [i for i, c in enumerate(candles) if lo_ts <= c.opened_at <= hi_ts]
+    if not idx:
+        print("no bars of that recording fall inside the markup's window")
+        return 1
+    first, last = idx[0], idx[-1]
+    typical = sorted(c.range for c in candles[first : last + 1])[len(idx) // 2]
+    at = lambda text: min(range(len(candles)), key=lambda i: abs(candles[i].opened_at - ts(text)))  # noqa: E731
+    when = lambda i: datetime.fromtimestamp(candles[i].opened_at, tz=timezone.utc).strftime("%H:%M")  # noqa: E731
+    in_win = lambda i: first <= i <= last  # noqa: E731
+    print(f"window {mk['from']} -> {mk['to']} ({len(idx)} bars of {minutes:g}m; typical candle range {typical:.2f}); marker: {mk.get('marker', '?')}")
+
+    bands = [(b, born, died) for b, born, died in reading.levels if born <= last and (died is None or died >= first)]
+    hits = misses = 0
+    for lv in mk.get("levels", []):
+        near = [(b, born, died) for b, born, died in bands if b.low - typical <= lv["price"] <= b.high + typical]
+        hits += bool(near); misses += not near
+        print(f"level {lv['price']:.2f}: " + ("engine found " + "; ".join(f"{b.low:.2f}-{b.high:.2f} ({b.touches} touches, {'alive' if d is None else 'deleted at ' + when(d)})" for b, _, d in near[:4]) if near else "NO engine level within one candle range of it"))
+    for z in mk.get("zones", []):
+        over = [(b, born, died) for b, born, died in bands if b.low <= z["high"] and z["low"] <= b.high]
+        hits += bool(over); misses += not over
+        print(f"zone {z['low']:.2f}-{z['high']:.2f}: " + (f"{len(over)} engine band(s) overlap it, e.g. " + ", ".join(f"{b.low:.2f}-{b.high:.2f}" for b, _, _ in over[:3]) if over else "NO engine band overlaps it"))
+
+    marked_choch = []
+    for ch in mk.get("changes_of_character", []):
+        i = at(ch["at"]); marked_choch.append(i)
+        want = "down" if ch["direction"] == "down" else "up"
+        cand = [e for e in reading.events if e.kind is EventKind.CHOCH and abs(e.index - i) <= args.tolerance]
+        same = [e for e in cand if e.direction.value == want]
+        hits += bool(same); misses += not same
+        print(f"CHOCH {want} ~{ch['at'][-5:]} @{ch.get('price', '?')}: " + (f"engine CHOCH at {when(same[0].index)} level {same[0].level:.2f}" if same else ("engine had a CHOCH the other way at " + when(cand[0].index) if cand else "engine had NO CHOCH within %d bars" % args.tolerance)))
+    for sw in mk.get("sweeps", []):
+        i = at(sw["at"])
+        found = [e for e in reading.events if e.kind is EventKind.SWEEP and abs(e.index - i) <= args.tolerance]
+        hits += bool(found); misses += not found
+        print(f"sweep ~{sw['at'][-5:]} @{sw['price']}: " + (f"engine SWEEP at {when(found[0].index)} level {found[0].level:.2f}" if found else "engine did NOT call a sweep there"))
+    marked_trades = []
+    for tr in mk.get("trades", []):
+        i = at(tr["at"]); marked_trades.append(i)
+        want = "up" if tr["direction"] == "up" else "down"
+        cand = [o for o in reading.opportunities if abs(o.armed_at - i) <= args.tolerance * 3]
+        same = [o for o in cand if o.direction.value == want]
+        ok = [o for o in same if o.is_true]
+        hits += bool(ok); misses += not ok
+        if ok:
+            o = ok[0]; print(f"trade {want} ~{tr['at'][-5:]} entry {tr['entry']}: engine armed one at {when(o.armed_at)}: entry {o.entry:.2f} stop {o.stop:.2f} target {o.target:.2f} ({o.state.value}, {o.outcome or 'no outcome'})")
+        elif same:
+            print(f"trade {want} ~{tr['at'][-5:]}: engine saw it and REJECTED it — {same[0].state.value}: {same[0].reason}")
+        else:
+            print(f"trade {want} ~{tr['at'][-5:]}: engine found NO opportunity near it" + (f" (it had {len(cand)} the other way)" if cand else ""))
+    for nt in mk.get("no_trade", []):
+        a, b = at(nt["from"]), at(nt["to"])
+        chs = [e for e in reading.events if e.kind is EventKind.CHOCH and a <= e.index <= b]
+        opps = [o for o in reading.opportunities if a <= o.armed_at <= b and o.is_true]
+        ok = not opps
+        hits += ok; misses += not ok
+        print(f"no-trade {nt['from'][-5:]}-{nt['to'][-5:]}: engine called {len(chs)} CHOCH and armed {len(opps)} trade(s) there" + ("" if ok else "  <-- it traded where the marker would not"))
+
+    extra_ch = [e for e in reading.events if e.kind is EventKind.CHOCH and in_win(e.index) and not any(abs(e.index - m) <= args.tolerance for m in marked_choch)]
+    extra_tr = [o for o in reading.opportunities if in_win(o.armed_at) and o.is_true and not any(abs(o.armed_at - m) <= args.tolerance * 3 for m in marked_trades)]
+    print(f"engine CHOCHs the marker did not mark: {len(extra_ch)} (of {sum(1 for e in reading.events if e.kind is EventKind.CHOCH and in_win(e.index))} in the window)")
+    print(f"engine trades the marker did not mark: {len(extra_tr)} (of {sum(1 for o in reading.opportunities if in_win(o.armed_at) and o.is_true)} armed in the window)")
+    print(f"agreement on the marks given: {hits} of {hits + misses}")
+    return 0
+
+
 def cmd_forex_replay_all(args: argparse.Namespace) -> int:
     from .stats import bonferroni_z
 
@@ -696,6 +784,13 @@ def main(argv: list[str] | None = None) -> int:
     smc_chart.add_argument("--list", type=int, default=12, help="how many of the latest opportunities to print (default 12)")
     smc_chart.add_argument("--readings", action="store_true", help="also print the choices this reading makes that are the project's own")
     smc_chart.set_defaults(func=cmd_smc_chart)
+
+    smc_cmp = sub.add_parser("smc-compare", help="compare a person's markup of a chart (JSON) with what the engine read, mark by mark")
+    smc_cmp.add_argument("markup", help="markup JSON, see docs/evidence/markup/")
+    smc_cmp.add_argument("recording", help="recording of the same instrument and window (history-deriv makes one)")
+    smc_cmp.add_argument("--higher-minutes", type=float, default=5.0, help="slower clock for the higher-timeframe veto (default 5)")
+    smc_cmp.add_argument("--tolerance", type=int, default=8, help="bars either side within which an engine event counts as the marked one (default 8)")
+    smc_cmp.set_defaults(func=cmd_smc_compare)
 
     fx_rep_all = sub.add_parser(
         "forex-replay-all",

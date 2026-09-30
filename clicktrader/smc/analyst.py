@@ -48,6 +48,8 @@ from .engine import BreakKind, Control, LiquidityPool, classify_break, liquidity
 from .quality import pushed_distance
 
 READINGS = (
+    "structure is read from MAJOR swings: a leg smaller than the median leg among the recent swings is noise and its two ends are dropped (comparison, not a constant)",
+    "a wick through a stacked level that closes back inside it on the same bar is a SWEEP of that level, whatever swing control is watching; several closes beyond it are a break or an undercut, not a sweep",
     "a swing is a fractal pivot: the extreme of `strength` bars on each side (the convention every SMC reference uses)",
     "structure is UP when the last two swing highs and the last two swing lows both rise, DOWN when both fall, else RANGE; it only SEEDS control",
     "control is demand or supply and flips only on a true CHOCH; breaks are read against control, not against the structure label",
@@ -148,6 +150,8 @@ class Reading:
     """(gap, bar that filled it or None)."""
     events: list[Event] = field(default_factory=list)
     opportunities: list[Opportunity] = field(default_factory=list)
+    major: set[int] = field(default_factory=set)
+    """Bars whose swing was ever part of the structure the analyst read; the rest are drawn as bare dots."""
 
     def summary(self) -> str:
         opp = self.opportunities
@@ -187,6 +191,35 @@ def label_swings(swings: Sequence[SwingPoint], strength: int) -> list[LabeledSwi
         out.append(LabeledSwing(s, label, s.index + strength))
         last[s.kind] = s
     return out
+
+
+def major_swings(known: Sequence[SwingPoint], *, recent: int = 80) -> list[SwingPoint]:
+    """The swings a person treats as structure at the scale they are looking at, out of every fractal pivot.
+
+    On a one-minute chart almost every pause is a two-bar fractal, and a five-minute wiggle inside a rally is not
+    "the low the trend has to hold" — the floor the whole leg started from is. The eye drops the wiggles by size
+    *relative to the chart in view*: here, a leg smaller than the median leg among the recent swings is noise, and
+    both its ends are removed (the standard zig-zag simplification), repeatedly, so what remains alternates high and
+    low and every leg is at least median-sized. Nothing is a price or a percentage: "small" means "smaller than most
+    of what is on this chart". Uses only swings already known, so it is as causal as they are."""
+    pts = list(known[-recent:])
+    zz: list[SwingPoint] = []
+    for sp in pts:  # alternate kinds: two highs in a row are one swing, the higher
+        if zz and zz[-1].kind is sp.kind:
+            if (sp.kind is SwingKind.HIGH and sp.price > zz[-1].price) or (sp.kind is SwingKind.LOW and sp.price < zz[-1].price):
+                zz[-1] = sp
+        else:
+            zz.append(sp)
+    if len(zz) < 6:
+        return zz
+    thr = _median([abs(zz[i].price - zz[i - 1].price) for i in range(1, len(zz))])
+    while len(zz) >= 6:
+        legs = [abs(zz[i].price - zz[i - 1].price) for i in range(1, len(zz))]
+        small = min(range(len(legs)), key=legs.__getitem__)
+        if legs[small] >= thr or small == len(legs) - 1 or small == 0:
+            break  # the ends of the chart are kept: the newest leg is the one being decided and the oldest has no other side
+        del zz[small : small + 2]
+    return zz
 
 
 def read_structure(known: Sequence[SwingPoint]) -> Structure:
@@ -244,6 +277,7 @@ def read_chart(
     higher_swings = swing_points(higher, strength=strength) if higher else []
 
     gaps_all = fair_value_gaps(candles)
+    major_ever: set[int] = set()
     consumed: set[tuple[int, str]] = set()
     swept: set[tuple[int, str]] = set()  # one SWEEP per level until it is finally broken: a person says it once
     control: Control | None = None
@@ -254,7 +288,9 @@ def read_chart(
         bar = candles[t]
         window = candles[max(0, t - lookback) : t]
         body_med = _median([_body(c) for c in window]) or 1e-12
-        known = [s for s in all_swings if s.index + strength <= t]
+        minor = [s for s in all_swings if s.index + strength <= t]
+        known = major_swings(minor)
+        major_ever.update(s.index for s in known)
         structure = read_structure(known)
         reading.structure.append(structure)
 
@@ -288,6 +324,23 @@ def read_chart(
                 else:
                     level_life[(p.kind.value, len(level_life))] = [p, t, died]
             reading.levels = [(rec[0], rec[1], rec[2]) for rec in level_life.values()]
+
+            # A wick under (over) a stacked level that closes back is the stops being taken, whichever swing the
+            # control machinery happens to be watching: "wick below the level, rapid recovery". The level held.
+            for rec in level_life.values():
+                p0 = rec[0]
+                if rec[2] is not None or p0.touches < 2 or t <= p0.last_index + 1:
+                    continue
+                prev = candles[t - 1]
+                low_side = p0.kind is SwingKind.LOW
+                pierced = bar.low < p0.low and bar.close >= p0.low and prev.low >= p0.low if low_side else bar.high > p0.high and bar.close <= p0.high and prev.high <= p0.high
+                if pierced and not any(e.index == t and e.kind is EventKind.SWEEP for e in reading.events):
+                    reading.events.append(Event(
+                        t, EventKind.SWEEP, Verdict.FALSE, p0.low if low_side else p0.high, p0.first_index,
+                        Direction.DOWN if low_side else Direction.UP,
+                        f"wick through a level the market had turned at {p0.touches} times and closed back: the stops were taken, the level held",
+                        _body(bar) / body_med,
+                    ))
 
         # -- opportunities waiting for a retrace: dead zone, first tap, falling knife
         for opp in list(armed):
@@ -392,6 +445,7 @@ def read_chart(
         if opp.state is State.ARMED:
             armed.append(opp)
 
+    reading.major = major_ever
     for opp in reading.opportunities:
         if opp.state is State.FILLED and opp.outcome is None:
             opp.outcome = "open"

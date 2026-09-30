@@ -111,8 +111,16 @@ def test_the_reading_is_causal_a_prefix_reads_the_same_as_the_whole():
 def test_a_sweep_does_not_use_the_level_up_a_later_close_through_it_is_still_a_change_of_character():
     # bar 12 wicks through 11.3 and closes back (a sweep); bar 13 then closes through it for real
     r = read((12.4, 12.45, 10.9, 11.6), (11.6, 11.65, 10.5, 10.7))
-    kinds = [(e.index, e.kind, e.verdict) for e in r.events if e.index >= 12]
+    # (bar 13 also wicks under the separate 10.6 stack of lows and closes back inside it: a pool sweep, correctly —
+    # this test is about the 11.3 level only)
+    kinds = [(e.index, e.kind, e.verdict) for e in r.events if e.index >= 12 and e.level == 11.3]
     assert kinds == [(12, EventKind.SWEEP, Verdict.FALSE), (13, EventKind.CHOCH, Verdict.TRUE)]
+
+
+def test_a_wick_under_a_stacked_level_that_closes_back_inside_is_a_sweep_of_that_level():
+    r = read((12.4, 12.45, 10.9, 11.6), (11.6, 11.65, 10.5, 10.7))
+    pool = [e for e in r.events if e.kind is EventKind.SWEEP and e.index == 13]
+    assert pool and pool[0].level == 10.6 and "turned at 2 times" in pool[0].reason
 
 
 def test_a_reading_draws_to_a_png_with_every_kind_of_mark(tmp_path):

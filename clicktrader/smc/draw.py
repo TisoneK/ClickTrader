@@ -84,7 +84,8 @@ def draw_reading(
         if ls.known_at < n and lo <= s.index < n:
             high = s.kind.value == "high"
             marks.append(Mark(s.index - lo, s.price, above=high))
-            labels.append(Label(s.index - lo, s.price, ls.label, _GREY, 2, "above" if high else "below"))
+            if s.index in reading.major or not reading.major:  # minor pivots stay bare dots: they are not structure
+                labels.append(Label(s.index - lo, s.price, ls.label, _GREY, 2, "above" if high else "below"))
 
     most = max((b.touches for b, _, d in reading.levels if d is None), default=1)
     for band, born, died in reading.levels:
@@ -105,7 +106,7 @@ def draw_reading(
     for e in reading.events:
         if e.index < lo or e.index >= n:
             continue
-        x0, x1 = max(0, e.level_from - lo), e.index - lo
+        x0, x1 = max(0, e.level_from - lo, e.index - lo - 40), e.index - lo  # a line reaching back further than 40 bars is noise
         colour = {EventKind.BOS: _BLUE, EventKind.CHOCH: _GREEN, EventKind.SWEEP: _RED, EventKind.GAP_FILL: _ORANGE}[e.kind]
         segs.append(Segment(x0, e.level, x1, e.level, colour, e.kind is not EventKind.CHOCH))
         below = e.direction is Direction.DOWN
