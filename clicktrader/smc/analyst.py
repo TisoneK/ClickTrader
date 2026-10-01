@@ -244,6 +244,11 @@ class Reading:
         )
 
 
+RULES_VERSION = "2026-10-01.1"
+"""Bump this whenever a rule that changes which trades are taken changes. It is part of every log row's rules fingerprint, so a test's
+evidence is only ever one set of rules."""
+
+
 def _median(values: Sequence[float]) -> float:
     v = sorted(values)
     return v[len(v) // 2] if v else 0.0
@@ -429,6 +434,18 @@ def _veto(clocks, short: bool, strength: int) -> str:
     return ""
 
 
+def _agrees(clocks, short: bool, strength: int) -> bool:
+    """Every slower clock with enough bars has already turned the trade's way (it reads the trade's direction, not merely 'not against')."""
+    want = Structure.DOWN if short else Structure.UP
+    seen = False
+    for htf in clocks:
+        if len(htf) >= strength * 2 + 2:
+            seen = True
+            if read_structure_now(major_swings(swing_points(htf, strength=strength)), htf[-1].close) is not want:
+                return False
+    return seen
+
+
 def read_chart(
     candles: Sequence[Candle],
     *,
@@ -439,6 +456,8 @@ def read_chart(
     zone_min_candles: int = 3,
     stale_bars: int | None = None,
     counter_trend: bool = False,
+    stop_buffer: float = 0.0,
+    strict_choch: bool = False,
 ) -> Reading:
     """Read `candles` bar by bar. `higher` is the slower clock's candles, used only to confirm direction."""
     n = len(candles)
@@ -595,7 +614,7 @@ def read_chart(
             if not z.valid or z.status != "fresh" or t <= z.end:
                 continue
             standing = zone_opps.get(id(z))
-            now_opp = _zone_opportunity(candles, t, z, known, view.at(t), strength, risk_reward, control, structure, counter_trend)
+            now_opp = _zone_opportunity(candles, t, z, known, view.at(t), strength, risk_reward, control, structure, counter_trend, stop_buffer)
             if standing is not None:
                 if standing.state is State.ARMED and now_opp.state is State.DECLINED:
                     standing.state, standing.closed_at = State.CANCELLED, t
@@ -727,7 +746,7 @@ def read_chart(
         reading.control.append(control)
 
         # -- the opportunity this change of character leaves behind
-        opp = _opportunity(candles, t, event, known, view.at(t), strength, risk_reward)
+        opp = _opportunity(candles, t, event, known, view.at(t), strength, risk_reward, stop_buffer, strict_choch)
         reading.opportunities.append(opp)
         if opp.state is State.ARMED:
             armed.append(opp)
@@ -743,7 +762,7 @@ def read_chart(
 
 def _opportunity(
     candles: Sequence[Candle], t: int, event: Event, known: Sequence[SwingPoint],
-    clocks, strength: int, risk_reward: float,
+    clocks, strength: int, risk_reward: float, stop_buffer: float = 0.0, strict_choch: bool = False,
 ) -> Opportunity:
     short = event.direction is Direction.DOWN
     same = (lambda c: c.close < c.open) if short else (lambda c: c.close > c.open)
@@ -759,18 +778,20 @@ def _opportunity(
     blk = order_block(candles, index=origin_index, gap_search=max(3, t - origin_index))
     blk = OrderBlock(blk.price_low, blk.price_high, origin_index, event.direction, blk.gap)
     entry = blk.price_low if short else blk.price_high
-    stop = blk.price_high if short else blk.price_low
+    band = _median([c.range for c in candles[max(0, t - 20) : t + 1]]) or 1e-12
+    stop = (blk.price_high + stop_buffer * band) if short else (blk.price_low - stop_buffer * band)  # just outside the far edge, not on it
     risk = abs(stop - entry)
     if risk <= 0:
         return _declined(t, event, "the block has no width to risk", blk=blk)
 
-    band = _median([c.range for c in candles[max(0, t - 20) : t + 1]]) or 1e-12
     pushed = pushed_distance(candles[: t + 1], block=blk, band=band)
     gaps = [g for g in fair_value_gaps(candles[: t + 1]) if origin_index <= g.formed_index <= t - 1]
     gap = next((g for g in gaps if gap_untouched(g, candles[: t + 1])), None)
 
     # the slower clock(s) must not contradict the trade
     why_not = _veto(clocks, short, strength)
+    if not why_not and strict_choch and clocks and not _agrees(clocks, short, strength):
+        why_not = "the slower chart has not turned yet: one fast chart changing direction is not enough to trade against the bigger move"
 
     # next level with room: nearest opposing swing beyond the entry that leaves at least the floor
     want = [s for s in known if (s.kind is SwingKind.LOW if short else s.kind is SwingKind.HIGH)]
@@ -820,7 +841,7 @@ def fib_zone(top: float, bottom: float, *, demand: bool) -> tuple[float, float]:
 
 def _zone_opportunity(
     candles: Sequence[Candle], t: int, z: Zone, known: Sequence[SwingPoint], clocks, strength: int, risk_reward: float,
-    control: Control | None, structure: Structure, counter_trend: bool = False,
+    control: Control | None, structure: Structure, counter_trend: bool = False, stop_buffer: float = 0.0,
 ) -> Opportunity:
     """The trade a fresh, true zone offers, or the reason it is not taken.
 
@@ -831,7 +852,8 @@ def _zone_opportunity(
     short = z.direction is Direction.DOWN
     blk = OrderBlock(z.low, z.high, z.origin_index, z.direction)
     entry = z.low if short else z.high
-    stop = z.high if short else z.low
+    band = _median([c.range for c in candles[max(0, t - 20) : t + 1]]) or 1e-12
+    stop = (z.high + stop_buffer * band) if short else (z.low - stop_buffer * band)  # just outside the far edge, not on it
     risk = abs(stop - entry)
     with_trend = (control is Control.DEMAND and not short) or (control is Control.SUPPLY and short) if control is not None else (
         (structure is Structure.UP and not short) or (structure is Structure.DOWN and short)

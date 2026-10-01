@@ -272,6 +272,7 @@ def run(
     hold_timeout: float | None = None,
     report_every: float = 300.0,
     narrate_every: float = 60.0,
+    daily_loss_cap: float | None = None,
     on_state: Callable[[dict | None], None] | None = None,
     emit: Callable[[str], None] = _say,
     now: Callable[[], float] = time.time,
@@ -287,6 +288,7 @@ def run(
     feed = ticks if ticks is not None else stream_ticks(symbol)
     history: list = []
     open_trade: dict | None = None
+    day_net: dict[str, float] = {}
     started = now()
     last_report = started
     # a fresh clone has no recordings/ (it is not in git) — the log must not be the thing that kills a run
@@ -337,7 +339,8 @@ def run(
                         log.write(json.dumps({"ts": now(), "contract_id": cid, "symbol": symbol,
                                               "direction": d.plan.direction.value, "stake": stake,
                                               "multiplier": multiplier, "entry": open_trade["entry"], "stop": d.plan.stop,
-                                              "target": d.plan.target, "profit": now_profit, "reason": d.reason}) + "\n")
+                                              "target": d.plan.target, "profit": now_profit, "reason": d.reason,
+                                              "rules": strategy.config_id() if hasattr(strategy, "config_id") else None}) + "\n")
                         log.flush()
                         os.fsync(log.fileno())
                         run.open = ""
@@ -351,6 +354,12 @@ def run(
                         if max_seconds is not None and now() - started > max_seconds:
                             emit("reached the time cap; stopping")
                             break
+                        if daily_loss_cap is not None:
+                            day = time.strftime("%Y-%m-%d", time.gmtime(now()))
+                            day_net[day] = day_net.get(day, 0.0) + now_profit
+                            if day_net[day] <= -abs(daily_loss_cap):
+                                emit(f"daily loss cap reached ({day_net[day]:+.2f} today, cap {abs(daily_loss_cap):.2f}); stopping for the day. Nothing is open.")
+                                break
                     else:
                         run.open = f"position {open_trade['id']} open {now_profit:+.2f}"
                         _tell(on_state, {"contract_id": open_trade["id"], "side": "buy" if open_trade["decision"].plan.direction.value == "up" else "sell",

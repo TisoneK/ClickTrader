@@ -495,7 +495,8 @@ def cmd_run_smc(args: argparse.Namespace) -> int:
 
     chain = tuple(args.higher_minutes)  # an empty chain means no slower-clock veto at all
     inner = SmcStrategy(trigger_minutes=args.minutes, higher_minutes=chain, risk_reward=args.risk_reward,
-                           stale_bars=_stale_for(args.stale_bars, args.minutes), counter_trend=args.counter_trend)
+                           stale_bars=_stale_for(args.stale_bars, args.minutes), counter_trend=args.counter_trend,
+                           stop_buffer=args.stop_buffer, strict_choch=args.strict_trend_change)
     strategy = inner
     if args.smoke_test:
         from .smc.live import SmokeTest
@@ -549,7 +550,8 @@ def cmd_run_smc(args: argparse.Namespace) -> int:
         try:
             run_multipliers(symbol=args.symbol, log_path=log, stake=args.stake, multiplier=args.multiplier, strategy=strategy,
                             max_trades=args.max_trades, max_seconds=args.max_seconds, max_loss_per_trade=max_loss,
-                            ticks=feed, broker=broker, report_every=args.report_every, on_state=page.set_open if page else None)
+                            ticks=feed, broker=broker, report_every=args.report_every, on_state=page.set_open if page else None,
+                            daily_loss_cap=args.daily_loss_cap)
         finally:
             broker.close()
     except DerivAPIError as exc:
@@ -1051,6 +1053,9 @@ def main(argv: list[str] | None = None) -> int:
     run_smc.add_argument("--symbol", default="R_100", help="Deriv symbol (default R_100; 1HZ100V is the 1-second index)")
     run_smc.add_argument("--minutes", type=float, default=1.0, help="trigger bar length in minutes (default 1, the view the owner charts)")
     run_smc.add_argument("--higher-minutes", type=float, nargs="*", default=[5.0, 15.0], help="slower clock(s) that must not contradict a trade (default 5 15, the decks' alignment across timeframes). Measured causally on 16-25h of data: 5+15 arms 0.4-0.7 trades/h, 5 alone 0.8-0.9/h, none 1.1-1.4/h (about half of those cancelled as falling knives). Give none (`--higher-minutes` alone) to drop the veto")
+    run_smc.add_argument("--stop-buffer", type=float, default=0.0, help="put the stop this many typical candle ranges beyond the zone's far edge instead of on it (default 0; in hindsight a tighter stop did better, so this is only for testing)")
+    run_smc.add_argument("--strict-trend-change", action="store_true", help="only take a trend-change (CHOCH) block when the slower charts have already turned the same way. In hindsight this removes almost all such trades (the slower charts lag), so it is off by default")
+    run_smc.add_argument("--daily-loss-cap", type=float, default=None, help="stop the run for the day once the demo account is this much down since midnight UTC (default: none; decide this before the test, see docs/live-demo-test-protocol.md)")
     run_smc.add_argument("--smoke-test", action="store_true", help="place ONE small forced trade at once to test the whole path in minutes (not a signal; logged separately, never evidence)")
     run_smc.add_argument("--smoke-side", choices=("buy", "sell"), default="buy", help="direction of the --smoke-test trade (default buy)")
     run_smc.add_argument("--ui", action="store_true", help="also serve the one-page watch-only view of this run on 127.0.0.1 and open it in a browser")

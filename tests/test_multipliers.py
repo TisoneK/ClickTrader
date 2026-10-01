@@ -229,3 +229,11 @@ def test_the_loop_keeps_reading_ticks_and_tells_the_page_while_a_position_is_ope
     assert result.placed == 1 and result.net == -0.2
     assert any("still open at the broker" in line for line in said)
     assert any(line.startswith("closed ") for line in said)
+
+
+def test_a_daily_loss_cap_stops_the_run_once_the_day_is_that_far_down(tmp_path):
+    said = []
+    result = run(symbol="R_100", log_path=str(tmp_path / "t.jsonl"), stake=1.0, multiplier=100,
+                 strategy=FiresOnEveryTick(stop=99.0, target=102.0), poll_every=0, daily_loss_cap=0.5, ticks=iter(_ticks(30)),
+                 broker=FakeBroker([-0.3, -0.3, -0.3, -0.3]), emit=said.append, now=lambda: 1_790_000_000.0)
+    assert result.placed == 2 and any("daily loss cap reached" in line for line in said)  # -0.3, -0.3 = -0.6, past the 0.5 cap

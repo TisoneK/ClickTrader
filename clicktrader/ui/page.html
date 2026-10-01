@@ -80,6 +80,7 @@ canvas{position:absolute;inset:0;width:100%;height:100%;cursor:crosshair}
 .openbox .pl{font-size:26px;font-weight:700;line-height:1.2}
 .demo{border-left:3px solid var(--accent);padding-left:12px}
 .paper{opacity:.85;border-left:3px dashed var(--line2);padding-left:12px}
+.paper summary{cursor:pointer;font-size:14px;font-weight:650;color:var(--ink2)}
 table{width:100%;border-collapse:collapse;font-size:14px}
 th{font-weight:500;color:var(--mute);text-align:left;padding:0 6px 5px 0;font-size:12.5px}
 td{padding:5px 6px 5px 0;border-top:1px solid var(--line)}
@@ -139,7 +140,7 @@ td:last-child,th:last-child{text-align:right;padding-right:0}
     <div class="blk"><div class="price num" id="price">-</div><div class="mood" id="mood"></div></div>
     <div class="blk" id="openblk"></div>
     <div class="blk demo-wrap"><div class="demo"><h2>Your demo account <span class="sub num" id="demosum"></span></h2><div id="demo"></div></div></div>
-    <div class="blk"><div class="paper"><h2>Practice runs <span class="sub">no costs counted, not evidence</span></h2><div id="paper"></div></div></div>
+    <div class="blk"><details class="paper"><summary>Practice runs <span class="sub">no costs counted, not evidence</span></summary><div id="paper" style="margin-top:8px"></div></details></div>
     <div class="blk"><h2>What has happened</h2><ul class="feed num" id="events"></ul></div>
     <div class="blk muted" id="modenote" style="font-size:13px"></div>
   </div>
@@ -216,21 +217,24 @@ function draw(){
     g.fillText(t.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',hour12:false}),Math.max(padL,xx-15),H-11)}
   const placed=[];
   const label=(txt,xx,yy,col,pref)=>{g.font=sans;g.textBaseline='alphabetic';const w=g.measureText(txt).width,h=14;let ty=yy,tries=0;
-    const hit=()=>placed.some(q=>xx<q[0]+q[2]&&xx+w>q[0]&&ty-h<q[1]&&ty>q[1]-q[3]);
-    while(hit()&&tries++<12)ty+=pref==='up'?-16:16;ty=Math.max(padT+12,Math.min(ty,H-padB-4));placed.push([xx,ty,w,h]);g.fillStyle=col;g.fillText(txt,xx,ty);g.textBaseline='middle';g.font=mono};
+    const hit=()=>placed.some(q=>xx<q[0]+q[2]+4&&xx+w+4>q[0]&&ty-h<q[1]&&ty>q[1]-q[3]);
+    while(hit()&&tries++<12)ty+=pref==='up'?-16:16;ty=Math.max(padT+12,Math.min(ty,H-padB-4));placed.push([xx,ty,w,h]);
+    g.globalAlpha=.82;g.fillStyle=css('--c-bg');g.fillRect(xx-3,ty-h+1,w+6,h+3);g.globalAlpha=1;  // a quiet backing keeps text legible over candles
+    g.fillStyle=col;g.fillText(txt,xx,ty);g.textBaseline='middle';g.font=mono};
   const band=(a,b,s,col,al,edges)=>{const x0=x(s),y0=y(b),y1=y(a);g.fillStyle=col;g.globalAlpha=al;g.fillRect(x0,y0,R-x0,Math.max(1,y1-y0));g.globalAlpha=1;
     if(edges){g.strokeStyle=col;g.globalAlpha=.85;g.setLineDash([5,4]);g.beginPath();g.moveTo(x0,Math.round(y0)+.5);g.lineTo(R,Math.round(y0)+.5);g.moveTo(x0,Math.round(y1)+.5);g.lineTo(R,Math.round(y1)+.5);g.stroke();g.setLineDash([]);g.globalAlpha=1}};
-  if(show.levels)C.levels.forEach(l=>{band(l.low,l.high,l.start,css('--c-level'),.15,false);label('Price level '+(fmt(l.low,d)===fmt(l.high,d)?fmt(l.low,d):fmt(l.low,d)+' - '+fmt(l.high,d)),Math.max(x(l.start)+6,padL+6),y(l.high)+15,css('--c-level'),'down')});
-  if(show.zones)C.zones.forEach(z=>{const sup=z.kind==='SUPPLY',col=sup?css('--c-supply'):css('--c-demand');band(z.low,z.high,z.start,col,.19,true);
-    label((sup?'Seller zone ':'Buyer zone ')+fmt(z.low,d)+' - '+fmt(z.high,d),Math.max(x(z.start)+6,padL+6),sup?y(z.high)-7:y(z.low)+16,col,sup?'up':'down')});
+  if(show.levels)C.levels.forEach(l=>{band(l.low,l.high,l.start,css('--c-level'),.09,false);label('Price level '+(fmt(l.low,d)===fmt(l.high,d)?fmt(l.low,d):fmt(l.low,d)+' - '+fmt(l.high,d)),Math.max(x(l.start)+6,padL+6),y(l.high)+15,css('--c-level'),'down')});
+  if(show.zones)C.zones.forEach(z=>{const sup=z.kind==='SUPPLY',col=sup?css('--c-supply'):css('--c-demand');band(z.low,z.high,z.start,col,z.plan?.26:.10,z.plan);
+    label((z.plan?'Plan zone: ':'')+(sup?'Seller zone ':'Buyer zone ')+fmt(z.low,d)+' - '+fmt(z.high,d),Math.max(x(z.start)+6,padL+6),sup?y(z.high)-7:y(z.low)+16,col,sup?'up':'down')});
   const axisQ=[];const axisTag=(txt,p,col)=>{axisQ.push([txt,p,col])};
-  if(show.plan&&!ot)C.orders.forEach(o=>{band(Math.min(o.entry,o.stop),Math.max(o.entry,o.stop),o.start,css('--c-risk'),.2,false);band(Math.min(o.entry,o.target),Math.max(o.entry,o.target),o.start,css('--c-reward'),.16,false);
-    const long=o.side==='buy';label((long?'Buy plan, ':'Sell plan, ')+o.rr+' to 1',x(o.start)+8,y(o.entry)+(long?-9:18),css('--c-reward'),long?'up':'down');
-    axisTag('Target '+fmt(o.target,d),o.target,css('--c-reward'));axisTag('Entry '+fmt(o.entry,d),o.entry,css('--ink'));axisTag('Wrong '+fmt(o.stop,d),o.stop,css('--c-risk'));
-    const last=C.candles[n-1][4],sx=n-1,mx=n-1+Math.max(3,Math.round(fut/3)),ex=mx+Math.max(3,Math.round(fut/3));
+  if(show.plan&&!ot)C.orders.forEach(o=>{const tg=o.target_off?(o.target<lo?lo+(hi-lo)*.012:hi-(hi-lo)*.012):o.target;
+    band(Math.min(o.entry,o.stop),Math.max(o.entry,o.stop),o.start,css('--c-risk'),.2,false);band(Math.min(o.entry,tg),Math.max(o.entry,tg),o.start,css('--c-reward'),.16,false);
+    const long=o.side==='buy';label((long?'Buy plan, ':'Sell plan, ')+o.rr+' to 1',x(o.start)+6,y(o.entry)+(long?-9:18),css('--c-reward'),long?'up':'down');
+    axisTag('Target '+fmt(o.target,d)+(o.target_off?' (off chart)':''),tg,css('--c-reward'));axisTag('Entry '+fmt(o.entry,d),o.entry,css('--ink'));axisTag('Wrong '+fmt(o.stop,d),o.stop,css('--c-risk'));
+    const last=C.candles[n-1][4],sx=n-1,mx=n-1+Math.max(2,Math.round(fut/3)),ex=mx+Math.max(2,Math.round(fut/3));
     g.strokeStyle=css('--c-path');g.lineWidth=1.6;g.setLineDash([6,5]);g.beginPath();g.moveTo(x(sx),y(last));g.lineTo(x(mx),y(o.entry));g.stroke();g.setLineDash([]);
-    g.beginPath();g.moveTo(x(mx),y(o.entry));g.lineTo(x(ex),y(o.target));g.stroke();
-    const ang=Math.atan2(y(o.target)-y(o.entry),x(ex)-x(mx));[1,-1].forEach(sg=>{g.beginPath();g.moveTo(x(ex),y(o.target));g.lineTo(x(ex)-13*Math.cos(ang)-sg*5*Math.sin(ang),y(o.target)-13*Math.sin(ang)+sg*5*Math.cos(ang));g.stroke()});g.lineWidth=1});
+    g.beginPath();g.moveTo(x(mx),y(o.entry));g.lineTo(x(ex),y(tg));g.stroke();
+    const ang=Math.atan2(y(tg)-y(o.entry),x(ex)-x(mx));[1,-1].forEach(sg=>{g.beginPath();g.moveTo(x(ex),y(tg));g.lineTo(x(ex)-13*Math.cos(ang)-sg*5*Math.sin(ang),y(tg)-13*Math.sin(ang)+sg*5*Math.cos(ang));g.stroke()});g.lineWidth=1});
   const bw=Math.max(2,Math.min(14,pw*.62));
   C.candles.forEach((c,i)=>{const up=c[4]>=c[1],col=up?css('--c-up'):css('--c-down'),xx=Math.round(x(i))+.5;g.strokeStyle=col;g.fillStyle=col;
     g.beginPath();g.moveTo(xx,y(c[2]));g.lineTo(xx,y(c[3]));g.stroke();const t=y(Math.max(c[1],c[4])),b=y(Math.min(c[1],c[4]));g.fillRect(xx-bw/2,t,bw,Math.max(1.5,b-t))});
@@ -264,7 +268,7 @@ function render(){
   if(h.k!=='live'){const ago=h.age>1e8?'':h.age<120?Math.round(h.age)+' s':Math.round(h.age/60)+' min';w.innerHTML=SHAPE[h.k]+'<span>'+(h.k==='dead'?'Disconnected':'Data is stale')+(ago?', last update '+ago+' ago':'')+'</span>'}
   setFav(h.k);$('modenote').textContent=(MODE[s.mode]||'')+' This page cannot place trades.';
   const ev=s.evidence||{need:500,demo:{n:0,wins:0,net:0},paper:{n:0,wins:0,net:0}};
-  $('evtxt').textContent=ev.demo.n?`${ev.demo.n} of ${ev.need} demo trades settled. Not enough to judge yet.`:`No demo trades yet. It takes ${ev.need} before a result means anything.`;
+  $('evtxt').textContent=ev.demo.n?`${ev.demo.n} of ${ev.need} separate demo setups settled. Not enough to judge yet.`:(ev.demo.earlier?`0 of ${ev.need} separate demo setups under the current rules (${ev.demo.earlier} earlier trade${ev.demo.earlier>1?'s':''} under old rules do not count).`:`No demo trades yet. It takes ${ev.need} separate setups before a result means anything.`);
   $('ring').setAttribute('stroke-dashoffset',(94.25*(1-Math.min(1,ev.demo.n/ev.need))).toFixed(2));
   const b=s.balance;$('bal').textContent=b&&b.amount!=null?fmt(b.amount,2)+' '+b.currency:'-';
   $('price').textContent=pr==null?'-':fmt(pr,d);
@@ -284,7 +288,7 @@ function render(){
   $('openblk').innerHTML=ot?`<div class="openbox"><div class="sub">Open trade${h.k!=='live'?' (last known, feed not live)':''}</div><div class="pl num ${ot.profit>0?'pos':ot.profit<0?'neg':''}">${signed(ot.profit)}</div><div><span class="${ot.side}">${ot.side}</span> from <span class="num">${fmt(ot.entry,d)}</span><br>Wrong beyond <span class="num">${fmt(ot.stop,d)}</span> · target <span class="num">${fmt(ot.target,d)}</span></div></div>`:'<div class="muted">No open trade</div>';
   const tr2=s.trades||[],demo=tr2.filter(x=>x.mode!=='paper'),paper=tr2.filter(x=>x.mode==='paper');
   $('demo').innerHTML=table(demo.slice(0,6),'No demo trades yet');$('paper').innerHTML=table(paper.slice(0,4),'No practice trades yet');
-  $('demosum').innerHTML=ev.demo.n?`${ev.demo.n} settled · <span class="${ev.demo.net>0?'pos':ev.demo.net<0?'neg':''}">${signed(ev.demo.net)}</span>`:'';
+  $('demosum').innerHTML=ev.demo.all_trades?`${ev.demo.all_trades} trade${ev.demo.all_trades>1?'s':''} · <span class="${ev.demo.all_net>0?'pos':ev.demo.all_net<0?'neg':''}">${signed(ev.demo.all_net)}</span> in total`:'';
   $('events').innerHTML=(s.events||[]).slice(0,8).map(e=>`<li><time>${e.t}</time><span>${esc(e.text)}</span></li>`).join('')||'<li><time></time><span>Nothing yet. Updates appear here as the market moves.</span></li>';
   const dg=s.diagnostics||{};
   $('dendp').innerHTML=(dg.endpoints||[]).map(u=>`<a href="${u}">${u}</a>`).join(' · ');

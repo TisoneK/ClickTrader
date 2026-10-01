@@ -36,6 +36,8 @@ class Evidence:
     mean_r: float
     low: float
     high: float
+    trades: int = 0
+    """How many trades the n independent setups were made of (0 when counted trade by trade)."""
 
     @property
     def clears(self) -> bool:
@@ -50,6 +52,48 @@ def _r_multiple(row: dict) -> float | None:
         return float(row["profit"]) / risk if risk > 0 else None
     except (KeyError, TypeError, ValueError, ZeroDivisionError):
         return None
+
+
+INDEPENDENT_WITHIN = 3600.0
+"""Trades in the same direction closer together than this (seconds) are one idea tested more than once, not separate tests."""
+
+
+def independent_setups(rows: Iterable[dict], within: float = INDEPENDENT_WITHIN) -> list[list[dict]]:
+    """Group rows into separate setups. Four sells within 45 minutes on one move are one idea, not four tests: counting them as
+    four would overstate how much has been learned. A row joins the previous group when it has the same direction and its time
+    is within `within` seconds of that group's last trade."""
+    groups: list[list[dict]] = []
+    for row in sorted(rows, key=lambda r: float(r.get("ts") or 0.0)):
+        last = groups[-1][-1] if groups else None
+        timed = last is not None and last.get("ts") is not None and row.get("ts") is not None  # no time, no way to say they are one idea
+        if timed and last.get("direction") == row.get("direction") and float(row["ts"]) - float(last["ts"]) <= within:
+            groups[-1].append(row)
+        else:
+            groups.append([row])
+    return groups
+
+
+def current_rules(rows: list[dict]) -> tuple[str | None, list[dict], int]:
+    """(the rules fingerprint of the most recent row that has one, the rows made under it, how many rows were not).
+    A change of rules restarts the count: evidence about one set of rules says nothing about another."""
+    ids = [r.get("rules") for r in rows if r.get("rules")]
+    if not ids:  # a log from before rules were recorded: nothing to tell sets apart, so it is taken as one
+        return None, list(rows), 0
+    cur = ids[-1]
+    mine = [r for r in rows if r.get("rules") == cur]
+    return cur, mine, len(rows) - len(mine)
+
+
+def summarise_setups(rows: Iterable[dict]) -> Evidence:
+    """`summarise`, but each independent setup counts once (its trades averaged), so n is the number of separate tests."""
+    groups = independent_setups(rows)
+    flat = []
+    for g in groups:
+        rs = [r for r in (_r_multiple(x) for x in g) if r is not None]
+        if rs:
+            flat.append({"entry": 1.0, "stop": 0.0, "stake": 1.0, "multiplier": 1, "profit": sum(rs) / len(rs), "_trades": len(g)})
+    ev = summarise(flat)
+    return Evidence(ev.n, ev.wins, ev.net, ev.mean_r, ev.low, ev.high, trades=sum(f["_trades"] for f in flat))
 
 
 def summarise(rows: Iterable[dict]) -> Evidence:
@@ -84,16 +128,23 @@ def load(paths: Iterable[str]) -> list[dict]:
 def report(paths: Iterable[str], *, min_trades: int = MIN_TRADES) -> tuple[bool, str]:
     rows = load(paths)
     paper = summarise(r for r in rows if r.get("mode") == "paper")
-    placed = summarise(r for r in rows if r.get("mode") != "paper")
+    placed_rows = [r for r in rows if r.get("mode") != "paper"]
+    cur, mine, earlier = current_rules(placed_rows)
+    placed = summarise_setups(mine)
     lines = ["live-test evidence, in plain words", ""]
 
     def line(label: str, e: Evidence) -> str:
         if e.n == 0:
             return f"  {label}: no settled trades"
-        return (f"  {label}: {e.n} settled, won {e.wins}, net {e.net:+.2f}; mean result {e.mean_r:+.2f} per unit risked "
+        trades = f" (from {e.trades} trades)" if e.trades and e.trades != e.n else ""
+        return (f"  {label}: {e.n} settled{trades}, won {e.wins}, net {e.net:+.2f}; mean result {e.mean_r:+.2f} per unit risked "
                 f"(95% interval {e.low:+.2f} to {e.high:+.2f})")
 
-    lines += [line("paper (no orders, no costs)   ", paper), line("placed on the demo account      ", placed), ""]
+    lines += [line("paper (no orders, no costs)   ", paper), line("demo account, current rules      ", placed)]
+    lines.append("  (independent setups: same-direction trades within an hour count once)")
+    if earlier:
+        lines.append(f"  {earlier} earlier demo trade(s) were made under different rules and are not counted: a change of rules restarts the count")
+    lines.append("")
     ready = placed.n >= min_trades and placed.low > 0
     if ready:
         lines.append(f"READY on demo evidence: {placed.n} placed trades and the whole interval is above zero.")
@@ -102,7 +153,7 @@ def report(paths: Iterable[str], *, min_trades: int = MIN_TRADES) -> tuple[bool,
     else:
         why = []
         if placed.n < min_trades:
-            why.append(f"only {placed.n} of the {min_trades} placed demo trades it takes before a result can be told from luck"
+            why.append(f"only {placed.n} of the {min_trades} independent demo setups it takes before a result can be told from luck"
                        + (f" ({paper.n} paper trades do not count: they carry no commission or slippage)" if paper.n else ""))
         elif placed.low <= 0:
             why.append(f"the interval ({placed.low:+.2f} to {placed.high:+.2f}) includes zero, so the result is not distinguishable from no edge")

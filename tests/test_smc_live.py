@@ -163,3 +163,19 @@ def test_the_smoke_test_places_one_small_forced_trade_and_keeps_the_real_strateg
     assert first.plan.is_well_formed(price)
     assert all(smoke.decide(History(ticks, n)) is None for n in range(2, 6))  # once only
     assert smoke.last_view == inner.last_view  # the page and the warm-up still see the real strategy
+
+
+def test_trades_in_one_move_count_as_one_setup_and_old_rules_do_not_count():
+    from clicktrader.smc.readiness import current_rules, independent_setups, summarise_setups
+
+    def row(ts, direction, profit, rules="aaaa"):
+        return {"ts": ts, "direction": direction, "entry": 100.0, "stop": 99.0, "stake": 1.0, "multiplier": 10, "profit": profit, "rules": rules}
+
+    rows = [row(0, "down", -0.1), row(600, "down", -0.1), row(1500, "down", 0.3), row(2400, "down", -0.1), row(9000, "up", 0.2)]
+    groups = independent_setups(rows)
+    assert [len(g) for g in groups] == [4, 1]  # four sells inside an hour are one idea; the later buy is another
+    ev = summarise_setups(rows)
+    assert ev.n == 2 and ev.trades == 5
+    mixed = [row(0, "down", -0.1, rules="old1"), row(5000, "up", 0.2, rules="new2"), row(9000, "up", 0.1, rules="new2")]
+    cur, mine, earlier = current_rules(mixed)
+    assert cur == "new2" and len(mine) == 2 and earlier == 1  # a change of rules restarts the count

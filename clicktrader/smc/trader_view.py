@@ -59,35 +59,51 @@ def _why_nothing(reading: Reading, n: int) -> str:
 
 
 def trader_view(reading: Reading, *, bars: int = 120) -> dict:
-    """Choose what a person would draw. Pure data, so it can be checked without a picture."""
+    """Choose what a person would draw. Pure data, so it can be checked without a picture.
+
+    The plan is the point of the chart, so it is always kept; everything else has to be close enough to matter. One distant
+    zone or level must not stretch the scale until the candles are squashed, so each has to touch the candles' own price span
+    or sit just outside it."""
     n = len(reading.candles)
     lo = max(0, n - bars)
     candles = list(reading.candles[lo:n])
     price = candles[-1].close
     base_lo, base_hi = min(c.low for c in candles), max(c.high for c in candles)
-    reach = (base_hi - base_lo) * 3.0  # anything that would squash the candles into a strip is left off
+    span = (base_hi - base_lo) or 1e-12
 
-    def fits(*prices: float) -> bool:
-        return max(base_hi, *prices) - min(base_lo, *prices) <= reach
+    def near(a: float, b: float, margin: float) -> bool:
+        """The band [a, b] overlaps the candles' span, or lies within `margin` spans of it."""
+        return b >= base_lo - margin * span and a <= base_hi + margin * span
 
     standing = [o for o in reading.opportunities if o.state is State.ARMED and o.target is not None]
-    standing.sort(key=lambda o: abs(o.entry - price))
     orders: list = []
     for o in sorted(standing, key=lambda o: (abs(o.entry - price), o.source != "zone")):  # one plan once; a zone is the plainer reason
-        if fits(o.stop, o.target, o.entry) and not any(q.direction is o.direction and abs(q.entry - o.entry) < 1e-9 and abs(q.stop - o.stop) < 1e-9 for q in orders):
+        if near(min(o.entry, o.stop), max(o.entry, o.stop), 1.0) and not any(
+                q.direction is o.direction and abs(q.entry - o.entry) < 1e-9 and abs(q.stop - o.stop) < 1e-9 for q in orders):
             orders.append(o)
     orders = orders[:2]
+    plan_zone = {(o.direction, round(o.block.price_low, 9), round(o.block.price_high, 9)) for o in orders}
 
     zones = [z for z in reading.zones if z.valid and z.status == "fresh" and z.died_at is None and not z.weaker]
-    supply = sorted((z for z in zones if z.direction is Direction.DOWN and z.high > price), key=lambda z: z.low)[:2]
-    demand = sorted((z for z in zones if z.direction is Direction.UP and z.low < price), key=lambda z: -z.high)[:2]
-    zones = [z for z in (*supply, *demand) if fits(z.low, z.high)]
+    supply = sorted((z for z in zones if z.direction is Direction.DOWN and z.high > price), key=lambda z: z.low)[:1]
+    demand = sorted((z for z in zones if z.direction is Direction.UP and z.low < price), key=lambda z: -z.high)[:1]
+    zones = [z for z in (*supply, *demand) if near(z.low, z.high, 0.15) and (z.direction, round(z.low, 9), round(z.high, 9)) not in plan_zone]
 
     alive = [(b, born) for b, born, died in reading.levels if died is None and born < n]
-    above = sorted((x for x in alive if x[0].low > price), key=lambda x: x[0].low)[:2]
-    below = sorted((x for x in alive if x[0].high < price), key=lambda x: -x[0].high)[:2]
-    levels = [x for x in (*above, *below) if fits(x[0].low, x[0].high)]
-    return {"lo": lo, "candles": candles, "price": price, "orders": orders, "zones": zones, "levels": levels}
+    above = sorted((x for x in alive if x[0].low > price), key=lambda x: x[0].low)[:1]
+    below = sorted((x for x in alive if x[0].high < price), key=lambda x: -x[0].high)[:1]
+    levels = [x for x in (*above, *below) if near(x[0].low, x[0].high, 0.35)]
+
+    # the scale: the candles, the plan's entry and stop, the kept zones; the target only when it does not squash the candles
+    prices = [base_lo, base_hi] + [z.low for z in zones] + [z.high for z in zones]
+    for o in orders:
+        prices += [o.entry, o.stop]
+    for o in orders:
+        if max(prices + [o.target]) - min(prices + [o.target]) <= span * 2.2:
+            prices.append(o.target)
+    pad = (max(prices) - min(prices)) * 0.05
+    return {"lo": lo, "candles": candles, "price": price, "orders": orders, "zones": zones, "levels": levels,
+            "range": (min(prices) - pad, max(prices) + pad)}
 
 
 def sentences(reading: Reading, view: dict | None = None, fmt=None, decimals: int | None = None) -> list[str]:
@@ -139,7 +155,7 @@ def draw_trader_view(reading: Reading, path: str, *, bars: int = 120, decimals: 
 
     future = max(10, m // 5)  # empty room on the right: the plan lives in the future
     for o in view["orders"]:
-        start = max(0, o.armed_at - lo)
+        start = m  # the plan lives in the future: drawn to the right of the newest candle, never over it
         boxes.append(Box(*sorted((o.entry, o.stop)), start, None, _RISK, 0.28))
         boxes.append(Box(*sorted((o.entry, o.target)), start, None, _REWARD, 0.28))
         long = o.direction is Direction.UP
@@ -153,9 +169,8 @@ def draw_trader_view(reading: Reading, path: str, *, bars: int = 120, decimals: 
 
     lines = sentences(reading, view, fmt)
 
-    pad = (max(c.high for c in candles) - min(c.low for c in candles)) * 0.06
-    lo_p = min([c.low for c in candles] + [z.low for z in view["zones"]] + [o.stop for o in view["orders"]] + [o.target for o in view["orders"]])
-    hi_p = max([c.high for c in candles] + [z.high for z in view["zones"]] + [o.stop for o in view["orders"]] + [o.target for o in view["orders"]])
+    lo_p, hi_p = view["range"]
+    pad = 0.0
     render_chart(candles, path, boxes=boxes, labels=labels, segments=segs, arrows=arrows, axis=axis,
                  header=[(lines[0], _INK), (lines[1], _REWARD if view["orders"] else (110, 110, 110)), (lines[2], (90, 90, 90))],
                  price_range=(lo_p - pad, hi_p + pad), xticks=_tick_labels(candles, lo), future=future, right_margin=190,

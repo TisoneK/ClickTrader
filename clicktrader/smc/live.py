@@ -148,7 +148,7 @@ def paper_run(
                         "mode": "paper", "ts": now(), "contract_id": f"paper-{run.placed}", "symbol": symbol,
                         "direction": open_pos.direction.value, "stake": stake, "multiplier": multiplier,
                         "entry": open_pos.entry, "stop": open_pos.stop, "target": open_pos.target, "profit": profit,
-                        "reason": open_pos.reason,
+                        "reason": open_pos.reason, "rules": strategy.config_id() if hasattr(strategy, "config_id") else None,
                     }) + "\n")
                     log.flush()
                     os.fsync(log.fileno())

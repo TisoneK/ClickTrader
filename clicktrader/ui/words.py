@@ -54,7 +54,7 @@ _NOTE = re.compile(r"\s*\[last: (?P<note>.*)\]\s*$")
 _ORDER_NOTE = re.compile(r"(?P<side>sell|buy) order at (?P<price>[\d.]+) withdrawn . (?P<why>.*)$")
 
 
-def sentences(view: str) -> list[str]:
+def sentences(view: str, plans: list[dict] | None = None) -> list[str]:
     """Plain sentences for one engine message; empty when it is plumbing (warm-up, counts) that belongs in diagnostics."""
     if view.startswith("the live feed stopped"):
         return ["The live price feed stopped. Nothing on this page is current until it comes back."]
@@ -78,6 +78,13 @@ def sentences(view: str) -> list[str]:
         _, kind, verdict, lvl = m.groups()
         text = _EVENT.get((kind.strip(), verdict))
         if text:
+            level = float(lvl)
+            # a poke is a loss if it went past a plan's stop: the same rule applied the same way, whatever the story about it
+            crossed = [p for p in (plans or []) if (p["side"] == "sell" and level >= p["stop"]) or (p["side"] == "buy" and level <= p["stop"])]
+            if kind.strip() == "SWEEP" and crossed:
+                p = crossed[0]
+                text = (f"Price touched {lvl}, past the {p['side']} plan's stop at {p['stop']:g}. Had that trade been open it would "
+                        "have been stopped out, whatever happened next.")
             out.insert(0, text.format(lvl=lvl))
         return out
     m = re.match(r"passed on a setup . (.*?)(?:\. Passed on \d+ so far.*)?$", view)

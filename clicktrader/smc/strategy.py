@@ -77,6 +77,8 @@ class SmcStrategy:
         stake: float = 1.0,
         stale_bars: int | None = None,
         counter_trend: bool = False,
+        stop_buffer: float = 0.0,
+        strict_choch: bool = False,
     ) -> None:
         if risk_reward < 1:
             raise ValueError("the material's floor is a minimum of 1:2; anything below 1 risks more than it targets")
@@ -90,6 +92,9 @@ class SmcStrategy:
         self._window = window
         self._stale_bars = stale_bars
         self._counter_trend = counter_trend
+        self._stop_buffer = stop_buffer
+        self._strict_choch = strict_choch
+        self._config = (trigger_minutes, tuple(chain), risk_reward, strength, lookback, stale_bars, counter_trend, stop_buffer, strict_choch)
         self._note = ""
         self.reading = None
         """The latest reading of the chart, made on the last closed bar (None before there is enough chart) — what a page shows."""
@@ -140,13 +145,23 @@ class SmcStrategy:
         self.passes[key] = self.passes.get(key, 0) + 1
         return ", ".join(f"{v} {k}" for k, v in sorted(self.passes.items(), key=lambda kv: -kv[1]))
 
+    def config_id(self) -> str:
+        """A short fingerprint of the rules this strategy trades by (the rules' version plus every setting). A log row carries it, so
+        a change of rules partway through a test is visible and the evidence counts only the rules in force now."""
+        import hashlib
+
+        from .analyst import RULES_VERSION
+
+        return hashlib.sha1(repr((RULES_VERSION, self._config)).encode()).hexdigest()[:8]
+
     def read_now(self):
         """The reading of the chart as it stands (None until there are enough bars), and the candles it was made from."""
         candles = self._trigger.last(self._window)
         if len(candles) < self._lookback + self._strength * 2 + 2:
             return None
         return read_chart(candles, higher=[b.last(self._window) for b in self._higher] or None, strength=self._strength,
-                          lookback=self._lookback, risk_reward=self._risk_reward, stale_bars=self._stale_bars, counter_trend=self._counter_trend)
+                          lookback=self._lookback, risk_reward=self._risk_reward, stale_bars=self._stale_bars, counter_trend=self._counter_trend,
+                          stop_buffer=self._stop_buffer, strict_choch=self._strict_choch)
 
     def describe(self) -> str:
         """What the chart says right now, in a few words — for the moment a live run starts, so the person watching can
@@ -177,6 +192,7 @@ class SmcStrategy:
         reading = read_chart(
             candles, higher=[b.last(self._window) for b in self._higher] or None, strength=self._strength,
             lookback=self._lookback, risk_reward=self._risk_reward, stale_bars=self._stale_bars, counter_trend=self._counter_trend,
+            stop_buffer=self._stop_buffer, strict_choch=self._strict_choch,
         )
         self.reading = reading
         last = len(candles) - 1

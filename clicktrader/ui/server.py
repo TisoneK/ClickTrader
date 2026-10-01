@@ -56,7 +56,8 @@ class Watcher:
         """Record an engine message: raw in diagnostics, and as plain sentences in the main feed (each said once)."""
         stamp = time.strftime("%H:%M", time.localtime(self.now()))
         self.raw_events.appendleft({"t": time.strftime("%H:%M:%S", time.localtime(self.now())), "text": text})
-        for sentence in words.sentences(text):
+        plans = [{"side": o["side"], "stop": o["stop"]} for o in (self.state.get("orders") or [])]
+        for sentence in words.sentences(text, plans):
             if sentence not in self._said:
                 self._said.append(sentence)
                 self.events.appendleft({"t": stamp, "text": sentence})
@@ -67,15 +68,13 @@ class Watcher:
         price = view["price"]
         lo, cs = view["lo"], view["candles"]
         long = lambda o: o.direction is Direction.UP  # noqa: E731
-        prices = [c.low for c in cs] + [c.high for c in cs] + [z.low for z in view["zones"]] + [z.high for z in view["zones"]]
-        for o in view["orders"]:
-            prices += [o.stop, o.target, o.entry]
-        pad = (max(prices) - min(prices)) * 0.05
+        rng = view["range"]
         o = view["orders"][0] if view["orders"] else None
         if o is not None:
             side = "buy" if long(o) else "sell"
             verdict = {"kind": "waiting", "headline": f"Waiting to {side}", "reason": words.why_waiting(side, o.source),
-                       "detail": f"If price goes beyond {o.stop:.{2 if price >= 20 else 5}f} the idea is wrong. Target {o.target:.{2 if price >= 20 else 5}f}, {o.reward_risk:.1f} to 1."}
+                       "detail": (f"If price goes beyond {o.stop:.{2 if price >= 20 else 5}f} the idea is wrong. Target {o.target:.{2 if price >= 20 else 5}f}, {o.reward_risk:.1f} to 1. "
+                                  f"At that ratio it breaks even if it wins more than {100 / (1 + o.reward_risk):.0f} in 100 (before costs), so what counts is the win rate over many trades, not the ratio.")}
         else:
             verdict = {"kind": "idle", "headline": "No trade right now", "reason": words.why_nothing(why_code(reading, len(reading.candles))), "detail": ""}
         return {
@@ -86,11 +85,14 @@ class Watcher:
                         "armed_at_bar": o.armed_at} for o in view["orders"]],
             "chart": {
                 "candles": [[c.opened_at, c.open, c.high, c.low, c.close] for c in cs],
-                "range": [min(prices) - pad, max(prices) + pad],
-                "zones": [{"kind": z.kind, "low": z.low, "high": z.high, "start": max(0, z.origin_index - lo)} for z in view["zones"]],
+                "range": [rng[0], rng[1]],
+                "zones": [{"kind": z.kind, "low": z.low, "high": z.high, "start": max(0, z.origin_index - lo), "plan": False} for z in view["zones"]]
+                         + [{"kind": "DEMAND" if long(o) else "SUPPLY", "low": min(o.block.price_low, o.block.price_high), "high": max(o.block.price_low, o.block.price_high),
+                             "start": max(0, o.block.index - lo), "plan": True} for o in view["orders"]],
                 "levels": [{"low": b.low, "high": b.high, "touches": b.touches, "start": max(0, b.first_index - lo)} for b, _ in view["levels"]],
+                # the plan is drawn from the newest candle on, to its right, so it never covers the latest price action
                 "orders": [{"side": "buy" if long(o) else "sell", "entry": o.entry, "stop": o.stop, "target": o.target,
-                            "rr": round(o.reward_risk, 1), "start": max(0, o.armed_at - lo)} for o in view["orders"]],
+                            "rr": round(o.reward_risk, 1), "start": len(cs), "target_off": not (rng[0] <= o.target <= rng[1])} for o in view["orders"]],
             },
         }
 
@@ -161,13 +163,18 @@ class Watcher:
 
 
 def evidence(need: int = 500) -> dict:
-    """Counts for the progress meter: settled trades on the demo account and on paper, and how many are needed."""
-    from ..smc.readiness import summarise
+    """Counts for the meter. Demo = independent setups under the rules now in force (an earlier rule set is not counted);
+    paper is shown separately and never counts."""
+    from ..smc.readiness import current_rules, summarise, summarise_setups
 
     out = {"need": need}
-    for key, path in (("demo", TRADE_LOGS[0]), ("paper", TRADE_LOGS[1])):
-        e = summarise(load([path])) if os.path.exists(path) else summarise([])
-        out[key] = {"n": e.n, "wins": e.wins, "net": round(e.net, 2)}
+    demo_rows = [r for r in load([TRADE_LOGS[0]]) if r.get("mode") != "paper"] if os.path.exists(TRADE_LOGS[0]) else []
+    cur, mine, earlier = current_rules(demo_rows)
+    e = summarise_setups(mine)
+    out["demo"] = {"n": e.n, "trades": e.trades, "wins": e.wins, "net": round(e.net, 2), "earlier": earlier,
+                   "all_trades": len(demo_rows), "all_net": round(sum(float(r.get("profit", 0)) for r in demo_rows), 2)}
+    p = summarise(load([TRADE_LOGS[1]])) if os.path.exists(TRADE_LOGS[1]) else summarise([])
+    out["paper"] = {"n": p.n, "wins": p.wins, "net": round(p.net, 2)}
     return out
 
 
