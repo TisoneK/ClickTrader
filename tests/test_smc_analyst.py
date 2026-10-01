@@ -441,3 +441,18 @@ def test_a_zone_in_the_wrong_half_of_the_range_is_declined_only_when_the_option_
     assert not _wrong_half(candles, 99, 18.0, short=True)
     assert _wrong_half(candles, 99, 18.0, short=False)  # a buy at 18 is in the premium half
     assert not _wrong_half(candles, 99, 12.0, short=False)
+
+
+def test_confirmation_entry_waits_for_the_zone_to_be_defended_and_enters_on_the_close():
+    """The decks' normal/conservative entry (Playbook p8-9): not a blind limit - a confirming candle inside the zone, entered at its close."""
+    armed = (12.4, 12.45, 10.9, 11.0)
+    tap = (12.3, 12.5, 12.2, 12.4)  # comes back into the 12.25-12.8 block: no defence yet
+    confirming = (12.4, 12.6, 12.0, 12.1)  # bearish, inside the block, closes below the previous low: the zone is being defended
+    (opp,) = read(armed, tap, confirming, entry_model="confirm").opportunities
+    assert opp.state is State.FILLED and opp.confirmed and opp.entry == 12.1 and "CONFIRMED" in opp.reason
+    assert opp.reward_risk >= 2.0  # the 1:2 floor is re-checked at the real entry price
+    weak = (12.4, 12.5, 12.3, 12.35)  # small candles bleeding through: no defence shown
+    (none,) = read(armed, tap, weak, weak, entry_model="confirm", confirm_bars=2).opportunities
+    assert none.state is State.CANCELLED and "no defence" in none.reason
+    (blind,) = read(armed, tap, confirming).opportunities  # the blind limit would already have filled at the touch
+    assert blind.state is State.FILLED and not blind.confirmed

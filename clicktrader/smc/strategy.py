@@ -84,6 +84,8 @@ class SmcStrategy:
         velocity_gate: bool = False,
         min_pushed: float = 0.0,
         equilibrium: bool = False,
+        entry_model: str = "limit",
+        confirm_bars: int = 5,
     ) -> None:
         if risk_reward < 1:
             raise ValueError("the material's floor is a minimum of 1:2; anything below 1 risks more than it targets")
@@ -104,7 +106,10 @@ class SmcStrategy:
         self._velocity = velocity_gate
         self._min_pushed = min_pushed
         self._equilibrium = equilibrium
-        self._config = (trigger_minutes, tuple(chain), risk_reward, strength, lookback, stale_bars, counter_trend, stop_buffer, strict_choch, confluence_beats_clock, zones_block_path, velocity_gate, min_pushed, equilibrium)
+        self._entry = entry_model
+        self._confirm_bars = confirm_bars
+        self._confirmed: TradeDecision | None = None
+        self._config = (trigger_minutes, tuple(chain), risk_reward, strength, lookback, stale_bars, counter_trend, stop_buffer, strict_choch, confluence_beats_clock, zones_block_path, velocity_gate, min_pushed, equilibrium, entry_model, confirm_bars)
         self._note = ""
         self.reading = None
         """The latest reading of the chart, made on the last closed bar (None before there is enough chart) — what a page shows."""
@@ -128,6 +133,11 @@ class SmcStrategy:
         closed = self._trigger.feed(tick.ts, price)
         if closed is not None:
             self._on_trigger_bar(closed)
+        if self._entry == "confirm":
+            decision, self._confirmed = self._confirmed, None
+            if decision is not None and not decision.plan.is_well_formed(price):
+                return None  # price already ran through the stop between the confirming close and now
+            return decision
         return self._fill(price)
 
     def warm(self, ticks) -> int:
@@ -172,7 +182,8 @@ class SmcStrategy:
         return read_chart(candles, higher=[b.last(self._window) for b in self._higher] or None, strength=self._strength,
                           lookback=self._lookback, risk_reward=self._risk_reward, stale_bars=self._stale_bars, counter_trend=self._counter_trend,
                           stop_buffer=self._stop_buffer, strict_choch=self._strict_choch, confluence_beats_clock=self._confluence, zones_block_path=self._walls,
-                          velocity_gate=self._velocity, min_pushed=self._min_pushed, equilibrium=self._equilibrium)
+                          velocity_gate=self._velocity, min_pushed=self._min_pushed, equilibrium=self._equilibrium,
+                          entry_model=self._entry, confirm_bars=self._confirm_bars)
 
     def describe(self) -> str:
         """What the chart says right now, in a few words — for the moment a live run starts, so the person watching can
@@ -205,9 +216,17 @@ class SmcStrategy:
             lookback=self._lookback, risk_reward=self._risk_reward, stale_bars=self._stale_bars, counter_trend=self._counter_trend,
             stop_buffer=self._stop_buffer, strict_choch=self._strict_choch, confluence_beats_clock=self._confluence, zones_block_path=self._walls,
             velocity_gate=self._velocity, min_pushed=self._min_pushed, equilibrium=self._equilibrium,
+            entry_model=self._entry, confirm_bars=self._confirm_bars,
         )
         self.reading = reading
         last = len(candles) - 1
+        if self._entry == "confirm":
+            for o in reading.opportunities:
+                if o.confirmed and o.state is State.FILLED and o.filled_at == last:
+                    sig = self._signature(TradePlan(o.direction, stop=o.stop, target=o.target), o.block)
+                    if sig not in self._taken and self._confirmed is None:
+                        self._taken.add(sig)
+                        self._confirmed = TradeDecision(TradePlan(o.direction, stop=o.stop, target=o.target), self._stake, f"smc: {o.reason}")
         # An order that left the book on this bar: say which and why, so the person watching never sees one vanish unexplained.
         for gone in reading.opportunities:
             if gone.closed_at == last and gone.state in (State.CANCELLED, State.DEAD):

@@ -504,7 +504,8 @@ def cmd_run_smc(args: argparse.Namespace) -> int:
                            stale_bars=_stale_for(args.stale_bars, args.minutes), counter_trend=args.counter_trend,
                            stop_buffer=args.stop_buffer, strict_choch=args.strict_trend_change,
                            confluence_beats_clock=not args.strict_clock, zones_block_path=not args.no_zone_walls,
-                           velocity_gate=args.velocity_gate, min_pushed=args.min_pushed, equilibrium=args.equilibrium)
+                           velocity_gate=args.velocity_gate, min_pushed=args.min_pushed, equilibrium=args.equilibrium,
+                           entry_model=args.entry, confirm_bars=args.confirm_bars)
     strategy = inner
     if args.smoke_test:
         from .smc.live import SmokeTest
@@ -1078,6 +1079,8 @@ def main(argv: list[str] | None = None) -> int:
     run_smc.add_argument("--symbol", default="R_100", help="Deriv symbol (default R_100; 1HZ100V is the 1-second index)")
     run_smc.add_argument("--minutes", type=float, default=1.0, help="trigger bar length in minutes (default 1, the view the owner charts)")
     run_smc.add_argument("--higher-minutes", type=float, nargs="*", default=[5.0, 15.0], help="slower clock(s) that must not contradict a trade (default 5 15, the decks' alignment across timeframes). Measured causally on 16-25h of data: 5+15 arms 0.4-0.7 trades/h, 5 alone 0.8-0.9/h, none 1.1-1.4/h (about half of those cancelled as falling knives). Give none (`--higher-minutes` alone) to drop the veto")
+    run_smc.add_argument("--entry", choices=("limit", "confirm"), default="limit", help="limit: a resting order at the zone's near edge (the decks' aggressive entry, the default). confirm: wait inside the zone for a confirming candle and enter on its close (the decks' normal/conservative entry). On 1-minute synthetic data confirmation left only 0.07-0.15 trades an hour, so it is for hourly charts of real markets")
+    run_smc.add_argument("--confirm-bars", type=int, default=5, help="with --entry confirm: bars to wait for the confirming candle before dropping the order (default 5)")
     run_smc.add_argument("--equilibrium", action="store_true", help="ALSO require a sell to sit in the upper half of the last 100 bars' range and a buy in the lower half (Institutional deck p10: demand 'in deep discount'). Off by default: measured properly it LOWERED the net result per hour in hindsight")
     run_smc.add_argument("--min-pushed", type=float, default=2.0, help="a zone is traded only if price travelled at least this many typical candle ranges away from it before coming back (the SMC deck's 'pushed distance'; default 2, 0 = off). In hindsight 2 kept most of the better win rate; 3 was stricter and traded less often")
     run_smc.add_argument("--velocity-gate", action="store_true", help="ALSO skip a zone when the last three bars of the return were violent, not only the bar that touched it (the Ultimate deck's checklist item 4). Off by default: in hindsight it removed 40%% of the trades and lowered the net result per hour; the falling-knife check on the touching bar stays on")

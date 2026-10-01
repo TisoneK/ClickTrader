@@ -136,6 +136,10 @@ class Opportunity:
     """"choch" (the block left by a change of character) or "zone" (a fresh true supply/demand zone)."""
     impulse_from: int | None = None
     """First bar of the impulse that made the zone/block; the falling-knife test compares the return with it."""
+    tapped_at: int | None = None
+    """Confirmation entry only: the bar on which price first came back into the zone and the wait for a confirming candle began."""
+    confirmed: bool = False
+    """Confirmation entry only: filled on the close of a confirming candle (entry is that close), not at a resting limit."""
 
     @property
     def is_true(self) -> bool:
@@ -244,7 +248,7 @@ class Reading:
         )
 
 
-RULES_VERSION = "2026-10-01.8"
+RULES_VERSION = "2026-10-01.9"
 """Bump this whenever a rule that changes which trades are taken changes. It is part of every log row's rules fingerprint, so a test's
 evidence is only ever one set of rules."""
 
@@ -451,6 +455,23 @@ def _wrong_half(candles, t: int, mid: float, short: bool, bars: int = 100) -> st
     return ""
 
 
+def _confirms(candles, t: int, blk, short: bool, rule: str = "engulf") -> bool:
+    """The decks' confirming candle (Playbook p8, Institutional entry matrix): inside the zone, a candle that shows the zone is being defended -
+    for a buy a bullish bar that closes above the previous bar's high (an engulfing close), for a sell the mirror. A run of small weak candles
+    bleeding through is NOT a confirmation."""
+    if t < 1:
+        return False
+    b, p = candles[t], candles[t - 1]
+    inside = b.low <= blk.price_high and b.high >= blk.price_low
+    if rule == "direction":  # a bar that overlaps the zone and closes in the trade's direction
+        return inside and ((b.close < b.open) if short else (b.close > b.open))
+    if rule == "rejection":  # direction AND it closes back out of the zone (inside the zone was touched, the close is beyond the near edge)
+        return inside and ((b.close < b.open and b.close < blk.price_low) if short else (b.close > b.open and b.close > blk.price_high))
+    if short:
+        return inside and b.close < b.open and b.close < p.low
+    return inside and b.close > b.open and b.close > p.high
+
+
 def _control_age(control, t: int) -> int:
     """How many bars the market has been in the same hands (demand or supply), counting back from bar t; large if it never changed."""
     now = control[t - 1] if 0 < t <= len(control) else None
@@ -504,6 +525,9 @@ def read_chart(
     allow_knife: bool = False,
     equilibrium: bool = False,
     settle_bars: int = 0,
+    entry_model: str = "limit",
+    confirm_bars: int = 5,
+    confirm_rule: str = "engulf",
     zones_block_path: bool = False,
     velocity_gate: bool = False,
     min_pushed: float = 0.0,
@@ -696,6 +720,34 @@ def read_chart(
                 armed.remove(opp)
                 continue
             reached = bar.high >= opp.entry if short else bar.low <= opp.entry
+            if entry_model == "confirm":
+                # wait for the zone to be defended, then enter on the close of the confirming candle
+                if reached and t > opp.armed_at and opp.tapped_at is None:
+                    if min_pushed > 0 and _pushed_ranges(candles, blk, short, t) < min_pushed:
+                        opp.state, opp.closed_at = State.CANCELLED, t
+                        opp.reason = "the move away from the zone was too short before price came back (the decks: price must travel a significant distance first)"
+                        armed.remove(opp)
+                        continue
+                    opp.tapped_at = t
+                if opp.tapped_at is not None:
+                    if _confirms(candles, t, blk, short, confirm_rule):
+                        entry = bar.close
+                        risk = abs(entry - opp.stop)
+                        reward = abs(opp.target - entry) if opp.target is not None else 0.0
+                        wrong_side = (entry >= opp.stop) if short else (entry <= opp.stop)
+                        if wrong_side or risk <= 0 or reward < risk * risk_reward:
+                            opp.state, opp.closed_at = State.CANCELLED, t
+                            opp.reason = "the zone was defended, but after the confirming candle there is no longer room to the target (the decks' 1:2 floor)"
+                        else:
+                            opp.entry, opp.reward_risk = entry, reward / risk
+                            opp.state, opp.filled_at, opp.confirmed = State.FILLED, t, True
+                            opp.reason += f"; CONFIRMED by the candle that closed at {entry:.5f}"
+                        armed.remove(opp)
+                    elif t - opp.tapped_at >= confirm_bars:
+                        opp.state, opp.closed_at = State.CANCELLED, t
+                        opp.reason = f"no defence shown: {confirm_bars} bars in the zone without a confirming candle (small, weak candles bleeding through) - the decks say abort"
+                        armed.remove(opp)
+                continue
             if reached and t > opp.armed_at:
                 impulse = candles[(opp.impulse_from if opp.impulse_from is not None else opp.event.level_from) : opp.armed_at + 1]
                 impulse_med = _median([_body(c) for c in impulse]) or 1e-12
@@ -714,7 +766,7 @@ def read_chart(
                     opp.state, opp.filled_at = State.FILLED, t
                 armed.remove(opp)
         for opp in reading.opportunities:
-            if opp.state is State.FILLED and opp.closed_at is None and opp.filled_at is not None and t >= opp.filled_at:
+            if opp.state is State.FILLED and opp.closed_at is None and opp.filled_at is not None and (t > opp.filled_at if opp.confirmed else t >= opp.filled_at):
                 short = opp.direction is Direction.DOWN
                 hit_stop = bar.high >= opp.stop if short else bar.low <= opp.stop
                 hit_tgt = opp.target is not None and (bar.low <= opp.target if short else bar.high >= opp.target)
