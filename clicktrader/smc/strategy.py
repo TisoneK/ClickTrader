@@ -76,6 +76,7 @@ class SmcStrategy:
         window: int = 400,
         stake: float = 1.0,
         stale_bars: int | None = None,
+        counter_trend: bool = False,
     ) -> None:
         if risk_reward < 1:
             raise ValueError("the material's floor is a minimum of 1:2; anything below 1 risks more than it targets")
@@ -88,6 +89,7 @@ class SmcStrategy:
         self._lookback = lookback
         self._window = window
         self._stale_bars = stale_bars
+        self._counter_trend = counter_trend
         self._note = ""
         self.reading = None
         """The latest reading of the chart, made on the last closed bar (None before there is enough chart) — what a page shows."""
@@ -144,7 +146,7 @@ class SmcStrategy:
         if len(candles) < self._lookback + self._strength * 2 + 2:
             return None
         return read_chart(candles, higher=[b.last(self._window) for b in self._higher] or None, strength=self._strength,
-                          lookback=self._lookback, risk_reward=self._risk_reward, stale_bars=self._stale_bars)
+                          lookback=self._lookback, risk_reward=self._risk_reward, stale_bars=self._stale_bars, counter_trend=self._counter_trend)
 
     def describe(self) -> str:
         """What the chart says right now, in a few words — for the moment a live run starts, so the person watching can
@@ -174,7 +176,7 @@ class SmcStrategy:
                 self.last_view = "dropped: the bar closed through the block's far edge — dead zone"
         reading = read_chart(
             candles, higher=[b.last(self._window) for b in self._higher] or None, strength=self._strength,
-            lookback=self._lookback, risk_reward=self._risk_reward, stale_bars=self._stale_bars,
+            lookback=self._lookback, risk_reward=self._risk_reward, stale_bars=self._stale_bars, counter_trend=self._counter_trend,
         )
         self.reading = reading
         last = len(candles) - 1

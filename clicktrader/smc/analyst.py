@@ -335,6 +335,25 @@ def read_structure(known: Sequence[SwingPoint]) -> Structure:
     return Structure.RANGE
 
 
+def read_structure_now(known: Sequence[SwingPoint], last_close: float) -> Structure:
+    """`read_structure`, but a close that has already gone through the level the trend has to hold counts at once.
+
+    Swing-based structure only changes after a new pivot is confirmed, which on a slower chart is hours: a 15-minute chart
+    that has just rallied 20 points through its last lower high still "reads down" until the rally's own high is confirmed.
+    A person sees the break immediately. Here a DOWN structure whose last major high has been closed above, or an UP
+    structure whose last major low has been closed below, is a RANGE (changed, not yet confirmed as the opposite)."""
+    base = read_structure(known)
+    if base is Structure.DOWN:
+        highs = [s for s in known if s.kind is SwingKind.HIGH]
+        if highs and last_close > highs[-1].price:
+            return Structure.RANGE
+    elif base is Structure.UP:
+        lows = [s for s in known if s.kind is SwingKind.LOW]
+        if lows and last_close < lows[-1].price:
+            return Structure.RANGE
+    return base
+
+
 def _merge_bands(pools: list[LiquidityPool]) -> list[LiquidityPool]:
     """Bands of the same kind that overlap are one level to the eye — circle it once."""
     merged: list[LiquidityPool] = []
@@ -404,7 +423,7 @@ def _veto(clocks, short: bool, strength: int) -> str:
     """Why a trade is against the slower clocks, or "" — every clock in the chain gets a say."""
     for htf in clocks:
         if len(htf) >= strength * 2 + 2:
-            reading = read_structure(major_swings(swing_points(htf, strength=strength)))
+            reading = read_structure_now(major_swings(swing_points(htf, strength=strength)), htf[-1].close)
             if (reading is Structure.UP and short) or (reading is Structure.DOWN and not short):
                 return f"against the higher timeframe, which reads {reading.value}"
     return ""
@@ -419,6 +438,7 @@ def read_chart(
     risk_reward: float = 2.0,
     zone_min_candles: int = 3,
     stale_bars: int | None = None,
+    counter_trend: bool = False,
 ) -> Reading:
     """Read `candles` bar by bar. `higher` is the slower clock's candles, used only to confirm direction."""
     n = len(candles)
@@ -575,7 +595,7 @@ def read_chart(
             if not z.valid or z.status != "fresh" or t <= z.end:
                 continue
             standing = zone_opps.get(id(z))
-            now_opp = _zone_opportunity(candles, t, z, known, view.at(t), strength, risk_reward, control, structure)
+            now_opp = _zone_opportunity(candles, t, z, known, view.at(t), strength, risk_reward, control, structure, counter_trend)
             if standing is not None:
                 if standing.state is State.ARMED and now_opp.state is State.DECLINED:
                     standing.state, standing.closed_at = State.CANCELLED, t
@@ -800,7 +820,7 @@ def fib_zone(top: float, bottom: float, *, demand: bool) -> tuple[float, float]:
 
 def _zone_opportunity(
     candles: Sequence[Candle], t: int, z: Zone, known: Sequence[SwingPoint], clocks, strength: int, risk_reward: float,
-    control: Control | None, structure: Structure,
+    control: Control | None, structure: Structure, counter_trend: bool = False,
 ) -> Opportunity:
     """The trade a fresh, true zone offers, or the reason it is not taken.
 
@@ -817,7 +837,12 @@ def _zone_opportunity(
         (structure is Structure.UP and not short) or (structure is Structure.DOWN and short)
     )
     why_not = ""
-    if not with_trend:
+    # Against the trend, but at a zone the decks call their strongest (Fibonacci 61.8-78.6 or a flip zone): where a run is
+    # sold or bought after it has gone far. A person takes that trade (the supply above a long rally); the decks' "only with
+    # the trend" rule refuses it. Optional, because it is a judgement the decks do not make; the slower-clock veto does not
+    # apply to it, since it is counter-trend by definition.
+    counter = counter_trend and not with_trend and bool(z.fib or z.stacked)
+    if not with_trend and not counter:
         up = control is Control.DEMAND or (control is None and structure is Structure.UP)
         down = control is Control.SUPPLY or (control is None and structure is Structure.DOWN)
         state = "an up-trend (the decks only look for demand)" if up else "a down-trend (the decks only look for supply)" if down else "no established trend yet"
@@ -826,7 +851,7 @@ def _zone_opportunity(
         why_not = f"a weaker zone: another {z.kind.lower()} zone in the same leg is {'lower' if not short else 'higher'} and holds the deeper liquidity"
     elif risk <= 0:
         why_not = "the zone has no width to risk"
-    if not why_not:
+    if not why_not and not counter:
         why_not = _veto(clocks, short, strength)
     want = [sw for sw in known if (sw.kind is SwingKind.LOW if short else sw.kind is SwingKind.HIGH)]
     cands = sorted({sw.price for sw in want if (sw.price < entry if short else sw.price > entry)}, reverse=short)
@@ -838,7 +863,8 @@ def _zone_opportunity(
     if why_not:
         opp.state, opp.reason = State.DECLINED, why_not
     else:
-        extras = ", ".join(x for x in (("flip zone" if z.stacked else ""), (f"Fibonacci {z.fib}" if z.fib else "")) if x)
+        extras = ", ".join(x for x in (("counter-trend at a " + ("premium" if short else "discount") + " zone" if counter else ""),
+                                       ("flip zone" if z.stacked else ""), (f"Fibonacci {z.fib}" if z.fib else "")) if x)
         opp.reason = (
             f"fresh {z.kind.lower()} zone {z.low:.5f}-{z.high:.5f}; limit {entry:.5f}, stop {stop:.5f}, target {target:.5f} "
             f"({rr:.1f}:1)" + (f"; conviction: {extras}" if extras else "")

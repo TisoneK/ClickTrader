@@ -72,7 +72,11 @@ def trader_view(reading: Reading, *, bars: int = 120) -> dict:
 
     standing = [o for o in reading.opportunities if o.state is State.ARMED and o.target is not None]
     standing.sort(key=lambda o: abs(o.entry - price))
-    orders = [o for o in standing if fits(o.stop, o.target, o.entry)][:2]
+    orders: list = []
+    for o in sorted(standing, key=lambda o: (abs(o.entry - price), o.source != "zone")):  # one plan once; a zone is the plainer reason
+        if fits(o.stop, o.target, o.entry) and not any(q.direction is o.direction and abs(q.entry - o.entry) < 1e-9 and abs(q.stop - o.stop) < 1e-9 for q in orders):
+            orders.append(o)
+    orders = orders[:2]
 
     zones = [z for z in reading.zones if z.valid and z.status == "fresh" and z.died_at is None and not z.weaker]
     supply = sorted((z for z in zones if z.direction is Direction.DOWN and z.high > price), key=lambda z: z.low)[:2]

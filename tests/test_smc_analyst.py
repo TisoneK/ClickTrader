@@ -372,3 +372,32 @@ def test_the_trader_view_keeps_only_what_a_person_would_draw_and_says_what_it_wa
     assert (tmp_path / "t.png").stat().st_size > 1000
     flat = read_chart(chart(), lookback=3, strength=1)
     assert draw_trader_view(flat, str(tmp_path / "f.png"))[1] == "NOTHING TO DO NOW"
+
+
+def test_a_slower_chart_that_has_closed_through_its_last_lower_high_no_longer_vetoes_buys():
+    """The defect seen live: a 15m chart still 'read down' after rallying 20 points through its last lower high, because swing
+    structure only changes when the rally's own high is confirmed - so the engine vetoed buys during the very up-move."""
+    from clicktrader.smc.analyst import Structure, read_structure_now
+    from clicktrader.forex.structure import SwingKind, SwingPoint
+
+    swings = [SwingPoint(0, 12.0, SwingKind.HIGH), SwingPoint(2, 10.0, SwingKind.LOW), SwingPoint(4, 11.0, SwingKind.HIGH), SwingPoint(6, 9.0, SwingKind.LOW)]
+    assert read_structure_now(swings, 10.5) is Structure.DOWN  # still under the last lower high (11.0)
+    assert read_structure_now(swings, 11.4) is Structure.RANGE  # closed above it: the trend has changed, say so now
+    up = [SwingPoint(0, 9.0, SwingKind.LOW), SwingPoint(2, 11.0, SwingKind.HIGH), SwingPoint(4, 10.0, SwingKind.LOW), SwingPoint(6, 12.0, SwingKind.HIGH)]
+    assert read_structure_now(up, 11.0) is Structure.UP and read_structure_now(up, 9.5) is Structure.RANGE
+
+
+def test_a_premium_supply_is_refused_with_the_trend_rule_and_taken_when_counter_trend_is_allowed():
+    """The trader's GBP/AUD short: the true supply above a long rally carries the decks' Fibonacci flag, and the decks' own
+    'only with the trend' rule refuses it. With counter-trend allowed at such a zone it is armed, and without the flag it is not."""
+    z = _z(12.0, 12.8, direction=Direction.DOWN)
+    z.fib = "61.8-78.6"
+    refused = _opp(z, control=Control.DEMAND, structure=Structure.UP)
+    assert refused.state is State.DECLINED and "against the trend" in refused.reason
+    from clicktrader.forex.structure import SwingKind, SwingPoint
+    from clicktrader.smc.analyst import _zone_opportunity
+    room = [SwingPoint(3, 9.0, SwingKind.LOW)]  # a level below the supply that leaves 2:1
+    allowed = _zone_opportunity([Candle(10, 11, 9, 10)] * 20, 19, z, room, [], 1, 2.0, Control.DEMAND, Structure.UP, True)
+    assert allowed.state is State.ARMED and "counter-trend at a premium zone" in allowed.reason
+    plain = _z(12.0, 12.8, direction=Direction.DOWN)  # no flag: not a premium zone, so still refused
+    assert _zone_opportunity([Candle(10, 11, 9, 10)] * 20, 19, plain, room, [], 1, 2.0, Control.DEMAND, Structure.UP, True).state is State.DECLINED

@@ -303,7 +303,7 @@ def cmd_smc_chart(args: argparse.Namespace) -> int:
             continue
         chain = [m for m in (args.higher_minutes or []) if m and m > minutes]
         higher = [bars(m) for m in chain] or None
-        reading = read_chart(candles, higher=higher, stale_bars=args.stale_bars or None)
+        reading = read_chart(candles, higher=higher, stale_bars=_stale_for(args.stale_bars, minutes), counter_trend=args.counter_trend)
         first = next((i for i, c in enumerate(candles) if lo_ts is None or c.opened_at >= lo_ts), 0)
         stop = next((i for i, c in enumerate(candles) if hi_ts is not None and c.opened_at >= hi_ts), len(candles))
         out = args.out if len(sizes) == 1 else args.out.replace(".png", f".{minutes:g}m.png")
@@ -313,7 +313,7 @@ def cmd_smc_chart(args: argparse.Namespace) -> int:
             from .smc.trader_view import draw_trader_view
 
             # the picture is as the chart stood on its last drawn bar: a reading of the prefix is the same as the whole's up to there
-            shown = reading if not hi_ts else read_chart(candles[:stop], higher=higher, stale_bars=args.stale_bars or None)
+            shown = reading if not hi_ts else read_chart(candles[:stop], higher=higher, stale_bars=_stale_for(args.stale_bars, minutes), counter_trend=args.counter_trend)
             for sentence in draw_trader_view(shown, out, bars=args.bars):
                 print("  " + sentence)
         structures[minutes] = reading.structure[min(stop, len(candles)) - 1].value
@@ -495,7 +495,7 @@ def cmd_run_smc(args: argparse.Namespace) -> int:
 
     chain = tuple(args.higher_minutes)  # an empty chain means no slower-clock veto at all
     inner = SmcStrategy(trigger_minutes=args.minutes, higher_minutes=chain, risk_reward=args.risk_reward,
-                           stale_bars=args.stale_bars or None)
+                           stale_bars=_stale_for(args.stale_bars, args.minutes), counter_trend=args.counter_trend)
     strategy = inner
     if args.smoke_test:
         from .smc.live import SmokeTest
@@ -594,6 +594,14 @@ def _ctrl_c_always_works(*, grace: float = 3.0) -> None:
     threading.Thread(target=waiter, daemon=True).start()
 
 
+def _stale_for(value: int | None, minutes: float) -> int | None:
+    """How many bars an order may stand unfilled. Left alone it is automatic: 60 bars on a 1-minute chart (an hour), none on a
+    slower one, where an order is meant to wait days. 0 means never; any other number is taken as given."""
+    if value is None:
+        return 60 if minutes <= 1 else None
+    return value or None
+
+
 def _start_page(strategy, args, *, symbol: str, mode: str):
     """Start the watch-only page on this machine and return the watcher that feeds it (the caller feeds it with `observe`)."""
     import threading
@@ -632,7 +640,7 @@ def cmd_ui(args: argparse.Namespace) -> int:
     from .smc.strategy import SmcStrategy
 
     load_env_file()
-    strategy = SmcStrategy(trigger_minutes=1.0, higher_minutes=tuple(args.higher_minutes), stale_bars=args.stale_bars or None)
+    strategy = SmcStrategy(trigger_minutes=1.0, higher_minutes=tuple(args.higher_minutes), stale_bars=_stale_for(args.stale_bars, 1.0), counter_trend=args.counter_trend)
     warm_from_history(strategy, args.symbol, minutes=1.0, bars=args.warm_bars, decimals=args.decimals)
     watcher = _start_page(strategy, args, symbol=args.symbol, mode="watching the live feed")
     try:
@@ -1014,7 +1022,8 @@ def main(argv: list[str] | None = None) -> int:
     smc_chart.add_argument("--bars", type=int, default=160, help="without --from/--to, how many of the latest bars to draw (default 160)")
     smc_chart.add_argument("--mark", type=float, nargs="+", help="price level(s) you drew by hand; overlaid and compared with the engine's levels")
     smc_chart.add_argument("--list", type=int, default=12, help="how many of the latest opportunities to print (default 12)")
-    smc_chart.add_argument("--stale-bars", type=int, default=60, help="withdraw an order price has not come back to within this many bars, as the live run does (default 60; 0 = never)")
+    smc_chart.add_argument("--stale-bars", type=int, default=None, help="withdraw an order price has not come back to within this many bars (default: 60 on a 1-minute chart, none on slower ones; 0 = never)")
+    smc_chart.add_argument("--counter-trend", action=argparse.BooleanOptionalAction, default=True, help="also take a zone against the trend when it is a premium/discount zone (Fibonacci 61.8-78.6 or a flip zone), like selling the supply above a long rally (default on; --no-counter-trend keeps the decks' with-the-trend-only rule)")
     smc_chart.add_argument("--detail", action="store_true", help="draw everything the engine knows (swings, every break, false zones) instead of the trader's few areas and the plan")
     smc_chart.add_argument("--readings", action="store_true", help="also print the choices this reading makes that are the project's own")
     smc_chart.set_defaults(func=cmd_smc_chart)
@@ -1023,7 +1032,8 @@ def main(argv: list[str] | None = None) -> int:
     ui.add_argument("--symbol", default="R_100")
     ui.add_argument("--port", type=int, default=8765)
     ui.add_argument("--higher-minutes", type=float, nargs="*", default=[5.0, 15.0])
-    ui.add_argument("--stale-bars", type=int, default=60)
+    ui.add_argument("--stale-bars", type=int, default=None)
+    ui.add_argument("--counter-trend", action=argparse.BooleanOptionalAction, default=True)
     ui.add_argument("--warm-bars", type=int, default=1000)
     ui.add_argument("--decimals", type=int, default=2)
     ui.add_argument("--no-browser", action="store_true", help="do not open a browser tab")
@@ -1046,7 +1056,8 @@ def main(argv: list[str] | None = None) -> int:
     run_smc.add_argument("--ui", action="store_true", help="also serve the one-page watch-only view of this run on 127.0.0.1 and open it in a browser")
     run_smc.add_argument("--ui-port", type=int, default=8765, help="port for --ui (default 8765)")
     run_smc.add_argument("--no-browser", action="store_true", help="with --ui: do not open a browser tab, just print the address")
-    run_smc.add_argument("--stale-bars", type=int, default=60, help="withdraw an order price has not come back to within this many trigger bars (default 60; 0 = never)")
+    run_smc.add_argument("--stale-bars", type=int, default=None, help="withdraw an order price has not come back to within this many trigger bars (default: 60 on 1-minute bars, none on slower ones; 0 = never)")
+    run_smc.add_argument("--counter-trend", action=argparse.BooleanOptionalAction, default=True, help="also take a zone against the trend when it is a premium/discount zone (Fibonacci 61.8-78.6 or a flip zone), like selling the supply above a long rally (default on; --no-counter-trend keeps the decks' with-the-trend-only rule)")
     run_smc.add_argument("--risk-reward", type=float, default=2.0, help="minimum reward:risk (default 2, the material's floor)")
     run_smc.add_argument("--stake", type=float, default=1.0)
     run_smc.add_argument("--multiplier", type=int, default=100)
