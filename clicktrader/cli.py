@@ -494,8 +494,18 @@ def cmd_run_smc(args: argparse.Namespace) -> int:
     from .smc.strategy import SmcStrategy
 
     chain = tuple(args.higher_minutes)  # an empty chain means no slower-clock veto at all
-    strategy = SmcStrategy(trigger_minutes=args.minutes, higher_minutes=chain, risk_reward=args.risk_reward,
+    inner = SmcStrategy(trigger_minutes=args.minutes, higher_minutes=chain, risk_reward=args.risk_reward,
                            stale_bars=args.stale_bars or None)
+    strategy = inner
+    if args.smoke_test:
+        from .smc.live import SmokeTest
+
+        strategy = SmokeTest(inner, side=args.smoke_side, stake=args.stake, multiplier=args.multiplier)
+        if args.max_trades is None:
+            args.max_trades = 1
+        if not args.log:
+            args.log = "recordings/smc-smoke-trades.jsonl"  # its own file: a forced trade must never count as evidence
+        print("SMOKE TEST: one forced small trade to check the whole path (place, watch, close, log, page). It is not a signal and is not logged as evidence.", flush=True)
     max_loss = args.max_loss_per_trade
     mode = "DEMO ACCOUNT (virtual money)" if args.place else "PAPER (nothing is placed)"
     caps = ", ".join(x for x in (
@@ -1031,6 +1041,8 @@ def main(argv: list[str] | None = None) -> int:
     run_smc.add_argument("--symbol", default="R_100", help="Deriv symbol (default R_100; 1HZ100V is the 1-second index)")
     run_smc.add_argument("--minutes", type=float, default=1.0, help="trigger bar length in minutes (default 1, the view the owner charts)")
     run_smc.add_argument("--higher-minutes", type=float, nargs="*", default=[5.0, 15.0], help="slower clock(s) that must not contradict a trade (default 5 15, the decks' alignment across timeframes). Measured causally on 16-25h of data: 5+15 arms 0.4-0.7 trades/h, 5 alone 0.8-0.9/h, none 1.1-1.4/h (about half of those cancelled as falling knives). Give none (`--higher-minutes` alone) to drop the veto")
+    run_smc.add_argument("--smoke-test", action="store_true", help="place ONE small forced trade at once to test the whole path in minutes (not a signal; logged separately, never evidence)")
+    run_smc.add_argument("--smoke-side", choices=("buy", "sell"), default="buy", help="direction of the --smoke-test trade (default buy)")
     run_smc.add_argument("--ui", action="store_true", help="also serve the one-page watch-only view of this run on 127.0.0.1 and open it in a browser")
     run_smc.add_argument("--ui-port", type=int, default=8765, help="port for --ui (default 8765)")
     run_smc.add_argument("--no-browser", action="store_true", help="with --ui: do not open a browser tab, just print the address")

@@ -143,3 +143,23 @@ def test_a_live_loop_says_it_is_connected_and_shows_the_price_in_its_status(tmp_
     assert said[0].startswith("connecting to the live feed")
     assert any(line.startswith("live feed connected: first tick 100.0") for line in said)
     assert any("price 100." in line and "no trades yet" in line for line in said)  # a status line carries the current price
+
+
+def test_the_smoke_test_places_one_small_forced_trade_and_keeps_the_real_strategy_alive():
+    from clicktrader.forex.model import Direction
+    from clicktrader.smc.live import SmokeTest
+    from clicktrader.smc.strategy import SmcStrategy
+    from clicktrader.strategies import History
+
+    inner = SmcStrategy(trigger_minutes=1.0, higher_minutes=(5.0,))
+    smoke = SmokeTest(inner, side="sell", stake=1.0, multiplier=100)
+    ticks = [Tick(float(i), f"{613.0 + i * 0.01:.2f}", "R_100") for i in range(5)]
+    first = smoke.decide(History(ticks, 1))
+    assert first is not None and first.plan.direction is Direction.DOWN and "smoke test" in first.reason
+    price = float(ticks[0].price)
+    stop_money = abs(first.plan.stop - price) / price * 1.0 * 100
+    target_money = abs(first.plan.target - price) / price * 1.0 * 100
+    assert abs(stop_money - 0.2) < 1e-9 and abs(target_money - 0.3) < 1e-9  # inside the broker's 0.10 minimum and the stake
+    assert first.plan.is_well_formed(price)
+    assert all(smoke.decide(History(ticks, n)) is None for n in range(2, 6))  # once only
+    assert smoke.last_view == inner.last_view  # the page and the warm-up still see the real strategy

@@ -34,6 +34,41 @@ class _Paper:
     reason: str
 
 
+class SmokeTest:
+    """A pipeline test, not a strategy: place ONE small trade at once, whatever the chart says, so everything after the
+    decision (placing, polling the position, closing, logging, the page) can be watched in minutes instead of hours.
+
+    It wraps the real strategy and keeps feeding it, so the page still shows the live chart; the real strategy's own
+    decisions are ignored. The stop and target are sized in money (stop 0.2 and target 0.3 of the stake), small enough to
+    resolve within a few minutes and large enough for the broker's 0.10 minimum. Its trade is logged to its own file, so it
+    can never count as evidence."""
+
+    name = "smoke-test"
+
+    def __init__(self, inner, *, side: str, stake: float, multiplier: int) -> None:
+        self._inner, self._side, self._stake, self._multiplier = inner, side, stake, multiplier
+        self.fired = False
+
+    def __getattr__(self, name):  # warm(), reading, last_view, describe()...: the page and the warm-up see the real strategy
+        return getattr(self._inner, name)
+
+    def decide(self, history):
+        from ..forex.trade_strategies import TradeDecision
+        from ..forex.model import TradePlan
+
+        self._inner.decide(history)
+        if self.fired or not len(history):
+            return None
+        self.fired = True
+        price = float(history[-1].price)
+        # money = distance / price * stake * multiplier, so a stop worth 0.2 of the stake is 0.2 / multiplier of the price away
+        stop_d, target_d = 0.2 / self._multiplier * price, 0.3 / self._multiplier * price
+        up = self._side == "buy"
+        plan = TradePlan(Direction.UP if up else Direction.DOWN, stop=price - stop_d if up else price + stop_d,
+                         target=price + target_d if up else price - target_d)
+        return TradeDecision(plan, self._stake, f"smoke test: a forced {self._side} to check the whole path - not a signal")
+
+
 def warm_from_history(strategy, symbol: str, *, minutes: float, bars: int, decimals: int = 2, emit: Callable[[str], None] = _say) -> int:
     """Give the strategy the chart a person would already have on screen: recent candles from Deriv, fed as ticks.
 
@@ -95,9 +130,10 @@ def paper_run(
                 printer.show(price, run.readout(), getattr(strategy, "last_view", None))
             if open_pos is not None:
                 long = open_pos.direction is Direction.UP
+                unrealised = max(-stake, exposure * (price - open_pos.entry) / open_pos.entry * (1 if long else -1))
+                run.open = f"practice position open {unrealised:+.2f}"
                 _tell(on_state, {"contract_id": "paper", "side": "buy" if long else "sell", "entry": open_pos.entry, "stop": open_pos.stop,
-                                 "target": open_pos.target, "price": price, "opened": open_pos.opened,
-                                 "profit": max(-stake, exposure * (price - open_pos.entry) / open_pos.entry * (1 if long else -1))})
+                                 "target": open_pos.target, "price": price, "opened": open_pos.opened, "profit": unrealised})
                 hit_stop = price <= open_pos.stop if long else price >= open_pos.stop
                 hit_target = price >= open_pos.target if long else price <= open_pos.target
                 if hit_stop or hit_target:
@@ -118,6 +154,7 @@ def paper_run(
                     os.fsync(log.fileno())
                     emit(f"paper trade closed at the {'stop' if hit_stop else 'target'}: {profit:+.2f} — {run.readout()}")
                     open_pos = None
+                    run.open = ""
                     _tell(on_state, None)
                     if max_trades is not None and run.placed >= max_trades:
                         emit(f"reached the cap of {max_trades} paper trades; stopping")
