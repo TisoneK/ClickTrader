@@ -276,3 +276,21 @@ def test_load_env_file_fills_only_what_is_missing_and_never_returns_values(tmp_p
     assert "s3cret" not in " ".join(loaded)
     monkeypatch.delenv("DERIV_APP_ID")
     monkeypatch.delenv("DERIV_API_TOKEN")
+
+
+def test_ctrl_c_gets_an_answer_even_when_the_main_thread_is_blocked():
+    """A live run stuck in a call a signal handler cannot wake used to ignore Ctrl-C; now the first press is answered at
+    once and the process leaves after the grace period (and cleanly, at once, when it can)."""
+    import signal
+    import subprocess
+    import sys
+    import time
+
+    code = ("import time\nfrom clicktrader.cli import _ctrl_c_always_works\n_ctrl_c_always_works(grace=1.0)\n"
+            "try:\n    time.sleep(60)\nexcept KeyboardInterrupt:\n    print('clean')\n")
+    p = subprocess.Popen([sys.executable, "-c", code], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                         preexec_fn=lambda: signal.signal(signal.SIGINT, signal.SIG_DFL))
+    time.sleep(1.5)
+    p.send_signal(signal.SIGINT)
+    out, _ = p.communicate(timeout=15)
+    assert p.returncode == 130 and "Ctrl-C received" in out and "leaving now" in out

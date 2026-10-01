@@ -503,6 +503,8 @@ def cmd_run_smc(args: argparse.Namespace) -> int:
         if missing:
             print(f"missing {', '.join(missing)} — put them in .env in the project folder (KEY=value, one per line). Demo only. Nothing placed.")
             return 2
+    if sys.stdin.isatty():  # a person at a terminal; a log-redirected or test run keeps Python's own handling
+        _ctrl_c_always_works()
     try:
         if args.warm_bars:
             warm_from_history(strategy, args.symbol, minutes=1.0, bars=args.warm_bars, decimals=args.decimals)
@@ -527,6 +529,40 @@ def cmd_run_smc(args: argparse.Namespace) -> int:
     except KeyboardInterrupt:
         print("stopped by you; whatever was logged is written.")
     return 0
+
+
+def _ctrl_c_always_works(*, grace: float = 3.0) -> None:
+    """Make Ctrl-C answer at once, whatever the main thread is blocked in.
+
+    A signal handler only runs when the main thread next executes Python, so a live run stuck inside a socket call
+    can ignore Ctrl-C for as long as the call lasts. Here SIGINT is taken by a dedicated thread: the first press
+    says so immediately and asks the main thread to stop cleanly; if it has not stopped within `grace` seconds, or
+    on a second press, the process leaves at once. Anything logged was fsynced row by row, and an open position
+    keeps its stop and target at the broker."""
+    import _thread
+    import os
+    import signal
+    import threading
+
+    if threading.current_thread() is not threading.main_thread() or not hasattr(signal, "pthread_sigmask"):
+        return
+
+    def leave(why: str) -> None:
+        print(f"{why} — leaving now. Whatever was logged is written; an open position keeps its stop and target at the broker.", flush=True)
+        os._exit(130)
+
+    def waiter() -> None:
+        signal.sigwait({signal.SIGINT})
+        print("Ctrl-C received — stopping. Press it again to leave at once.", flush=True)
+        _thread.interrupt_main()
+        timer = threading.Timer(grace, leave, args=("not stopped after a few seconds",))
+        timer.daemon = True
+        timer.start()
+        signal.sigwait({signal.SIGINT})
+        leave("second Ctrl-C")
+
+    signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGINT})  # the threads started below inherit the block
+    threading.Thread(target=waiter, daemon=True).start()
 
 
 def cmd_smc_readiness(args: argparse.Namespace) -> int:
