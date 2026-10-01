@@ -142,4 +142,4 @@ def test_a_live_loop_says_it_is_connected_and_shows_the_price_in_its_status(tmp_
               ticks=_ticks(100.0, 100.1, 100.2), emit=said.append, report_every=60, now=lambda: next(clock))
     assert said[0].startswith("connecting to the live feed")
     assert any(line.startswith("live feed connected: first tick 100.0") for line in said)
-    assert any("price 100." in line and "plan(s)" in line for line in said)  # a status line carries the current price
+    assert any("price 100." in line and "no trades yet" in line for line in said)  # a status line carries the current price

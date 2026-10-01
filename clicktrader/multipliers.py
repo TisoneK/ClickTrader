@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
@@ -56,12 +57,41 @@ class MultiplierRun:
     outcomes: list[float] = field(default_factory=list)
 
     def readout(self) -> str:
+        refused = f", {self.refused} refused" if self.refused else ""
         if not self.placed:
-            return f"{self.ticks} ticks, {self.plans} plan(s), nothing placed yet ({self.refused} refused)"
-        return (
-            f"{self.ticks} ticks, {self.plans} plan(s), {self.placed} placed ({self.refused} refused): "
-            f"won {self.won} of {self.placed}, net {self.net:+.2f}"
-        )
+            return f"no trades yet{refused}"
+        return f"{self.placed} trade(s): won {self.won}, net {self.net:+.2f}{refused}"
+
+
+def tidy(text: str) -> str:
+    """Prices as a person writes them: 616.09000 -> 616.09 (a 5-decimal price keeps its 5 decimals)."""
+    return re.sub(r"(\d+\.\d\d)0{3,}(?!\d)", r"\1", text)
+
+
+class StatusPrinter:
+    """Quiet status: say something when the chart's story changed, and otherwise only a short heartbeat.
+
+    The old readout repeated the same two lines every minute for hours; the person watching could not
+    tell a change from a repeat. Now a full block appears only when what the engine sees differs from what it
+    last said, and an unchanged view gets one short line every `heartbeat` seconds so a dead loop still shows."""
+
+    def __init__(self, emit, heartbeat: float, now) -> None:
+        self.emit, self.heartbeat, self.now = emit, heartbeat, now
+        self._seen: str | None = None
+        self._last = None
+
+    def show(self, price, readout: str, seen: str | None, extra: str = "") -> None:
+        stamp = time.strftime("%H:%M:%S", time.localtime(self.now()))
+        view = tidy(seen) if seen else None
+        tail = f" · {extra}" if extra else ""
+        if view != self._seen:
+            self._seen, self._last = view, self.now()
+            self.emit(f"{stamp}  price {price}  ·  {readout}{tail}")
+            if view:
+                self.emit(f"          {view}")
+        elif self._last is None or self.now() - self._last >= self.heartbeat:
+            self._last = self.now()
+            self.emit(f"{stamp}  price {price}  ·  {readout}{tail}  (view unchanged)")
 
 
 def _connection_errors() -> tuple[type[Exception], ...]:
@@ -217,6 +247,7 @@ def run(
     if parent:
         os.makedirs(parent, exist_ok=True)
     log = open(log_path, "a", encoding="utf-8")
+    printer = StatusPrinter(emit, heartbeat=max(report_every * 5, 300.0), now=now)
     def money() -> str:
         """The account's balance, when the broker can say — a live run must always show it."""
         try:
@@ -240,11 +271,8 @@ def run(
                 # that cannot be told from a dead one, and "it saw nothing" is as much of a result as "it
                 # took a trade" — the strategy already knows which and why in `last_view`.
                 last_report = now()
-                emit(f"[{now() - started:.0f}s] price {record.tick.price} — {run.readout()}"
-                     + (f" — {money()}" if hasattr(broker, "balance") else ""))
-                seen = getattr(strategy, "last_view", None)
-                if seen:
-                    emit(f"  what it sees: {seen}")
+                printer.show(record.tick.price, run.readout(), getattr(strategy, "last_view", None),
+                             money() if hasattr(broker, "balance") else "")
             if decision is None:
                 continue
             run.plans += 1

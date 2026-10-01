@@ -20,7 +20,7 @@ from dataclasses import dataclass
 
 from ..forex.model import Direction
 from ..forex.trade_strategies import TradeStrategy
-from ..multipliers import MultiplierRun, _say
+from ..multipliers import MultiplierRun, StatusPrinter, _say
 from ..strategies import History
 
 
@@ -78,6 +78,7 @@ def paper_run(
     if parent:
         os.makedirs(parent, exist_ok=True)
     log = open(log_path, "a", encoding="utf-8")
+    printer = StatusPrinter(emit, heartbeat=max(report_every * 5, 300.0), now=now)
     emit("connecting to the live feed; the first tick should arrive within a few seconds...")
     try:
         for record in ticks:
@@ -90,10 +91,7 @@ def paper_run(
             decision = strategy.decide(History(history, len(history)))
             if report_every and now() - last_report >= report_every:
                 last_report = now()
-                emit(f"[{now() - started:.0f}s] price {price} — {run.readout()}")
-                seen = getattr(strategy, "last_view", None)
-                if seen:
-                    emit(f"  what it sees: {seen}")
+                printer.show(price, run.readout(), getattr(strategy, "last_view", None))
             if open_pos is not None:
                 long = open_pos.direction is Direction.UP
                 hit_stop = price <= open_pos.stop if long else price >= open_pos.stop

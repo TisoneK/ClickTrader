@@ -74,7 +74,7 @@ def test_a_run_that_places_nothing_says_so(tmp_path):
                  strategy=FiresOnEveryTick(stop=99.0, target=102.0), max_loss_per_trade=0.5,
                  ticks=iter(_ticks(3)), broker=FakeBroker([]), emit=lambda _s: None)
     assert result.placed == 0
-    assert "nothing placed yet" in result.readout()
+    assert "no trades yet" in result.readout()
 
 
 class BalanceBroker(FakeBroker):
@@ -103,7 +103,7 @@ def test_a_live_run_shows_the_balance_at_the_start_in_status_lines_and_after_eac
         strategy=FiresOnEveryTick(stop=99.0, target=102.0), max_trades=1, ticks=iter(_ticks(10)),
         broker=BalanceBroker([1.0]), emit=said.append, report_every=1, now=iter(range(0, 10_000, 5)).__next__)
     assert said[0].startswith("demo account balance 10,000.00 USD")
-    assert any(line.startswith("[") and "balance 10,000.00 USD" in line for line in said)  # a status line
+    assert any("price" in line and "balance 10,000.00 USD" in line for line in said)  # a status line
     assert any(line.startswith("closed") and "balance 10,000.00 USD" in line for line in said)  # and after a trade
 
 
@@ -114,3 +114,20 @@ def test_a_broker_refusal_is_reported_and_does_not_end_the_run(tmp_path):
                  broker=BalanceBroker([1.0], refuse_first=True), emit=said.append)
     assert result.refused == 1 and result.placed == 1  # the first plan was refused, the next one was placed
     assert any("BROKER REFUSED this plan: InvalidContractProposal: stop loss is too close" in line for line in said)
+
+
+def test_an_unchanged_view_is_not_repeated_every_status():
+    from clicktrader.multipliers import StatusPrinter, tidy
+
+    said, t = [], [0.0]
+    printer = StatusPrinter(said.append, heartbeat=300, now=lambda: t[0])
+    for _ in range(6):
+        t[0] += 60
+        printer.show(612.3, "no trades yet", "armed at 616.09000, 5.6 away")
+    blocks = [line for line in said if "armed at" in line]
+    assert len(blocks) == 1 and "616.09000" not in blocks[0]  # said once, tidied
+    assert len(said) == 3  # the block (2 lines) plus one heartbeat at 300s
+    t[0] += 60
+    printer.show(612.3, "no trades yet", "range structure")
+    assert any("range structure" in line for line in said)  # a change is said at once
+    assert tidy("limit 618.82000 ratio 3.0:1 eurusd 1.08340") == "limit 618.82 ratio 3.0:1 eurusd 1.08340"
