@@ -131,3 +131,14 @@ def test_an_unchanged_view_is_not_repeated_every_status():
     printer.show(612.3, "no trades yet", "range structure")
     assert any("range structure" in line for line in said)  # a change is said at once
     assert tidy("limit 618.82000 ratio 3.0:1 eurusd 1.08340") == "limit 618.82 ratio 3.0:1 eurusd 1.08340"
+
+
+def test_a_moving_distance_is_not_a_changed_view():
+    from clicktrader.multipliers import StatusPrinter
+
+    said, t = [], [0.0]
+    printer = StatusPrinter(said.append, heartbeat=300, now=lambda: t[0])
+    for away in (5.46, 3.96, 4.87, 6.95):
+        t[0] += 60
+        printer.show(615.0, "no trades yet", f"armed at 618.82, {away} away (1 standing order(s)): fresh supply zone")
+    assert len(said) == 2  # one block, no repeats

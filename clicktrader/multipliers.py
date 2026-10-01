@@ -83,9 +83,11 @@ class StatusPrinter:
     def show(self, price, readout: str, seen: str | None, extra: str = "") -> None:
         stamp = time.strftime("%H:%M:%S", time.localtime(self.now()))
         view = tidy(seen) if seen else None
+        # the distance to the order moves every tick; it is not a change in what the engine sees
+        key = re.sub(r"^(armed|waiting) at ", "order at ", re.sub(r", \d+(\.\d+)? away", "", view)) if view else None
         tail = f" · {extra}" if extra else ""
-        if view != self._seen:
-            self._seen, self._last = view, self.now()
+        if key != self._seen:
+            self._seen, self._last = key, self.now()
             self.emit(f"{stamp}  price {price}  ·  {readout}{tail}")
             if view:
                 self.emit(f"          {view}")
