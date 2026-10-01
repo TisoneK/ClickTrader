@@ -401,3 +401,20 @@ def test_a_premium_supply_is_refused_with_the_trend_rule_and_taken_when_counter_
     assert allowed.state is State.ARMED and "counter-trend at a premium zone" in allowed.reason
     plain = _z(12.0, 12.8, direction=Direction.DOWN)  # no flag: not a premium zone, so still refused
     assert _zone_opportunity([Candle(10, 11, 9, 10)] * 20, 19, plain, room, [], 1, 2.0, Control.DEMAND, Structure.UP, True).state is State.DECLINED
+
+
+def test_a_buy_cannot_target_through_a_seller_zone_and_a_sell_not_through_a_buyer_zone():
+    """The decks' 'room to move' means zones too, not only swing levels. A buy filled directly under fresh supply was one of the
+    owner's four demo losses."""
+    from clicktrader.forex.structure import SwingKind, SwingPoint
+    from clicktrader.smc.analyst import _zone_opportunity
+
+    demand = _z(10.0, 10.5)
+    room = [SwingPoint(3, 15.0, SwingKind.HIGH)]  # the only level that leaves 2:1 sits at 15
+    candles = [Candle(10, 11, 9, 10)] * 20
+    free = _zone_opportunity(candles, 19, demand, room, [], 1, 2.0, Control.DEMAND, Structure.UP, False, 0.0, False, ())
+    assert free.state is State.ARMED and free.target == 15.0
+    blocked = _zone_opportunity(candles, 19, demand, room, [], 1, 2.0, Control.DEMAND, Structure.UP, False, 0.0, False, ((12.0, 12.8),))
+    assert blocked.state is State.DECLINED and "opposing zone" in blocked.reason  # a seller zone at 12 is in the way of the target at 15
+    behind = _zone_opportunity(candles, 19, demand, room, [], 1, 2.0, Control.DEMAND, Structure.UP, False, 0.0, False, ((8.0, 8.5),))
+    assert behind.state is State.ARMED  # a zone BEHIND the entry is not in the path

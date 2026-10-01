@@ -244,7 +244,7 @@ class Reading:
         )
 
 
-RULES_VERSION = "2026-10-01.1"
+RULES_VERSION = "2026-10-01.3"
 """Bump this whenever a rule that changes which trades are taken changes. It is part of every log row's rules fingerprint, so a test's
 evidence is only ever one set of rules."""
 
@@ -434,6 +434,12 @@ def _veto(clocks, short: bool, strength: int) -> str:
     return ""
 
 
+def _walls(zones, me, t: int) -> list[tuple[float, float]]:
+    """The standing true zones of the OTHER kind that exist at bar `t` (fresh or used, not closed through): the walls in a plan's path."""
+    return [(q.low, q.high) for q in zones if q is not me and q.direction is not me.direction and q.valid and q.born <= t
+            and (q.died_at is None or q.died_at > t)]
+
+
 def _agrees(clocks, short: bool, strength: int) -> bool:
     """Every slower clock with enough bars has already turned the trade's way (it reads the trade's direction, not merely 'not against')."""
     want = Structure.DOWN if short else Structure.UP
@@ -458,6 +464,9 @@ def read_chart(
     counter_trend: bool = False,
     stop_buffer: float = 0.0,
     strict_choch: bool = False,
+    confluence_beats_clock: bool = False,
+    allow_knife: bool = False,
+    zones_block_path: bool = False,
 ) -> Reading:
     """Read `candles` bar by bar. `higher` is the slower clock's candles, used only to confirm direction."""
     n = len(candles)
@@ -615,7 +624,8 @@ def read_chart(
             if not z.valid or z.status != "fresh" or t <= z.end:
                 continue
             standing = zone_opps.get(id(z))
-            now_opp = _zone_opportunity(candles, t, z, known, view.at(t), strength, risk_reward, control, structure, counter_trend, stop_buffer)
+            now_opp = _zone_opportunity(candles, t, z, known, view.at(t), strength, risk_reward, control, structure, counter_trend, stop_buffer, confluence_beats_clock,
+                                      _walls(reading.zones, z, t) if zones_block_path else ())
             if standing is not None:
                 if standing.state is State.ARMED and now_opp.state is State.DECLINED:
                     standing.state, standing.closed_at = State.CANCELLED, t
@@ -648,7 +658,7 @@ def read_chart(
             if reached and t > opp.armed_at:
                 impulse = candles[(opp.impulse_from if opp.impulse_from is not None else opp.event.level_from) : opp.armed_at + 1]
                 impulse_med = _median([_body(c) for c in impulse]) or 1e-12
-                if _body(bar) >= impulse_med and (bar.close < bar.open if not short else bar.close > bar.open):
+                if not allow_knife and _body(bar) >= impulse_med and (bar.close < bar.open if not short else bar.close > bar.open):
                     opp.state, opp.closed_at = State.CANCELLED, t
                     opp.reason = "falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order"
                 else:
@@ -843,6 +853,7 @@ def fib_zone(top: float, bottom: float, *, demand: bool) -> tuple[float, float]:
 def _zone_opportunity(
     candles: Sequence[Candle], t: int, z: Zone, known: Sequence[SwingPoint], clocks, strength: int, risk_reward: float,
     control: Control | None, structure: Structure, counter_trend: bool = False, stop_buffer: float = 0.0,
+    confluence_beats_clock: bool = False, obstacles: Sequence[tuple[float, float]] = (),
 ) -> Opportunity:
     """The trade a fresh, true zone offers, or the reason it is not taken.
 
@@ -876,12 +887,21 @@ def _zone_opportunity(
         why_not = "the zone has no width to risk"
     if not why_not and not counter:
         why_not = _veto(clocks, short, strength)
+        if why_not and confluence_beats_clock and (z.fib or z.stacked):
+            why_not = ""  # the decks' strongest zone (Fibonacci 61.8-78.6 or a flip zone) is allowed to go against a lagging slower chart
+            counter = True
     want = [sw for sw in known if (sw.kind is SwingKind.LOW if short else sw.kind is SwingKind.HIGH)]
     cands = sorted({sw.price for sw in want if (sw.price < entry if short else sw.price > entry)}, reverse=short)
+    # an opposing zone in the path is a wall: a buy cannot run through a seller zone, a sell through a buyer zone
+    walls = [(lo_, hi_) for lo_, hi_ in obstacles if ((hi_ < entry) if short else (lo_ > entry))]
+    wall = (max(w[1] for w in walls) if short else min(w[0] for w in walls)) if walls else None
+    if wall is not None:
+        cands = [q for q in cands if (q >= wall if short else q <= wall)]
     target = next((q for q in cands if risk > 0 and abs(entry - q) >= risk * risk_reward), None)
     rr = abs(entry - target) / risk if (target is not None and risk > 0) else None
     if not why_not and target is None:
-        why_not = f"no room to move: no opposing level leaves {risk_reward:g}:1 from the zone"
+        why_not = (f"no room to move: an opposing zone at {wall:.5f} is in the way" if wall is not None else
+                   f"no room to move: no opposing level leaves {risk_reward:g}:1 from the zone")
     opp = Opportunity(t, z.direction, blk, entry, stop, target, None, None, z.pushed, rr, source="zone", impulse_from=z.start)
     if why_not:
         opp.state, opp.reason = State.DECLINED, why_not

@@ -237,3 +237,20 @@ def test_a_daily_loss_cap_stops_the_run_once_the_day_is_that_far_down(tmp_path):
                  strategy=FiresOnEveryTick(stop=99.0, target=102.0), poll_every=0, daily_loss_cap=0.5, ticks=iter(_ticks(30)),
                  broker=FakeBroker([-0.3, -0.3, -0.3, -0.3]), emit=said.append, now=lambda: 1_790_000_000.0)
     assert result.placed == 2 and any("daily loss cap reached" in line for line in said)  # -0.3, -0.3 = -0.6, past the 0.5 cap
+
+
+def test_a_sell_plan_is_bought_as_a_fall_and_a_buy_plan_as_a_rise_end_to_end(monkeypatch):
+    """Direction must survive the whole path: plan -> broker.place -> the contract the broker is asked for. (An owner asked whether the
+    engine might be making the opposite bets; the broker's own records said no, and this pins it.)"""
+    import clicktrader.api.deriv.trading as t
+    from clicktrader import multipliers as m
+    from clicktrader.forex.model import Direction, TradePlan
+
+    asked = []
+    monkeypatch.setattr(t, "place_multiplier", lambda ws, rise, **kw: asked.append(rise) or type("B", (), {"contract_id": 1, "buy_price": 1.0})())
+    broker = m.DerivMultiplierBroker.__new__(m.DerivMultiplierBroker)
+    broker._ws, broker.symbol, broker.stake, broker.multiplier = None, "R_100", 1.0, 100
+    broker.balance = lambda: (10000.0, "USD")
+    broker.place(TradePlan(Direction.DOWN, stop=101.0, target=95.0), 100.0)
+    broker.place(TradePlan(Direction.UP, stop=99.0, target=105.0), 100.0)
+    assert asked == [False, True]  # a sell is a fall (MULTDOWN), a buy is a rise (MULTUP)

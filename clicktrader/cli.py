@@ -303,7 +303,8 @@ def cmd_smc_chart(args: argparse.Namespace) -> int:
             continue
         chain = [m for m in (args.higher_minutes or []) if m and m > minutes]
         higher = [bars(m) for m in chain] or None
-        reading = read_chart(candles, higher=higher, stale_bars=_stale_for(args.stale_bars, minutes), counter_trend=args.counter_trend)
+        reading = read_chart(candles, higher=higher, stale_bars=_stale_for(args.stale_bars, minutes), counter_trend=args.counter_trend,
+                              confluence_beats_clock=not args.strict_clock, zones_block_path=not args.no_zone_walls)
         first = next((i for i, c in enumerate(candles) if lo_ts is None or c.opened_at >= lo_ts), 0)
         stop = next((i for i, c in enumerate(candles) if hi_ts is not None and c.opened_at >= hi_ts), len(candles))
         out = args.out if len(sizes) == 1 else args.out.replace(".png", f".{minutes:g}m.png")
@@ -313,7 +314,8 @@ def cmd_smc_chart(args: argparse.Namespace) -> int:
             from .smc.trader_view import draw_trader_view
 
             # the picture is as the chart stood on its last drawn bar: a reading of the prefix is the same as the whole's up to there
-            shown = reading if not hi_ts else read_chart(candles[:stop], higher=higher, stale_bars=_stale_for(args.stale_bars, minutes), counter_trend=args.counter_trend)
+            shown = reading if not hi_ts else read_chart(candles[:stop], higher=higher, stale_bars=_stale_for(args.stale_bars, minutes), counter_trend=args.counter_trend,
+                                                       confluence_beats_clock=not args.strict_clock, zones_block_path=not args.no_zone_walls)
             for sentence in draw_trader_view(shown, out, bars=args.bars):
                 print("  " + sentence)
         structures[minutes] = reading.structure[min(stop, len(candles)) - 1].value
@@ -500,7 +502,8 @@ def cmd_run_smc(args: argparse.Namespace) -> int:
     chain = tuple(args.higher_minutes)  # an empty chain means no slower-clock veto at all
     inner = SmcStrategy(trigger_minutes=args.minutes, higher_minutes=chain, risk_reward=args.risk_reward,
                            stale_bars=_stale_for(args.stale_bars, args.minutes), counter_trend=args.counter_trend,
-                           stop_buffer=args.stop_buffer, strict_choch=args.strict_trend_change)
+                           stop_buffer=args.stop_buffer, strict_choch=args.strict_trend_change,
+                           confluence_beats_clock=not args.strict_clock, zones_block_path=not args.no_zone_walls)
     strategy = inner
     if args.smoke_test:
         from .smc.live import SmokeTest
@@ -660,7 +663,8 @@ def cmd_ui(args: argparse.Namespace) -> int:
     from .smc.strategy import SmcStrategy
 
     load_env_file()
-    strategy = SmcStrategy(trigger_minutes=1.0, higher_minutes=tuple(args.higher_minutes), stale_bars=_stale_for(args.stale_bars, 1.0), counter_trend=args.counter_trend)
+    strategy = SmcStrategy(trigger_minutes=1.0, higher_minutes=tuple(args.higher_minutes), stale_bars=_stale_for(args.stale_bars, 1.0), counter_trend=args.counter_trend,
+                           confluence_beats_clock=True, zones_block_path=True)
     warm_from_history(strategy, args.symbol, minutes=1.0, bars=args.warm_bars, decimals=_decimals_for(args.symbol, args.decimals))
     watcher = _start_page(strategy, args, symbol=args.symbol, mode="watching the live feed")
     try:
@@ -1044,6 +1048,8 @@ def main(argv: list[str] | None = None) -> int:
     smc_chart.add_argument("--list", type=int, default=12, help="how many of the latest opportunities to print (default 12)")
     smc_chart.add_argument("--stale-bars", type=int, default=None, help="withdraw an order price has not come back to within this many bars (default: 60 on a 1-minute chart, none on slower ones; 0 = never)")
     smc_chart.add_argument("--counter-trend", action=argparse.BooleanOptionalAction, default=True, help="also take a zone against the trend when it is a premium/discount zone (Fibonacci 61.8-78.6 or a flip zone), like selling the supply above a long rally (default on; --no-counter-trend keeps the decks' with-the-trend-only rule)")
+    smc_chart.add_argument("--no-zone-walls", action="store_true")
+    smc_chart.add_argument("--strict-clock", action="store_true")
     smc_chart.add_argument("--detail", action="store_true", help="draw everything the engine knows (swings, every break, false zones) instead of the trader's few areas and the plan")
     smc_chart.add_argument("--readings", action="store_true", help="also print the choices this reading makes that are the project's own")
     smc_chart.set_defaults(func=cmd_smc_chart)
@@ -1071,6 +1077,8 @@ def main(argv: list[str] | None = None) -> int:
     run_smc.add_argument("--symbol", default="R_100", help="Deriv symbol (default R_100; 1HZ100V is the 1-second index)")
     run_smc.add_argument("--minutes", type=float, default=1.0, help="trigger bar length in minutes (default 1, the view the owner charts)")
     run_smc.add_argument("--higher-minutes", type=float, nargs="*", default=[5.0, 15.0], help="slower clock(s) that must not contradict a trade (default 5 15, the decks' alignment across timeframes). Measured causally on 16-25h of data: 5+15 arms 0.4-0.7 trades/h, 5 alone 0.8-0.9/h, none 1.1-1.4/h (about half of those cancelled as falling knives). Give none (`--higher-minutes` alone) to drop the veto")
+    run_smc.add_argument("--no-zone-walls", action="store_true", help="let a plan run through an opposing zone. By default a buy cannot target through a seller zone nor a sell through a buyer zone (the decks' 'room to move'); in hindsight that gave fewer, better trades")
+    run_smc.add_argument("--strict-clock", action="store_true", help="the slower charts can never be overridden (the decks' top-down rule as written). By default the strongest zones - Fibonacci 61.8-78.6 or a flip zone - may go against a slower chart that has not turned yet; in hindsight that added trades at a slightly better result")
     run_smc.add_argument("--stop-buffer", type=float, default=0.0, help="put the stop this many typical candle ranges beyond the zone's far edge instead of on it (default 0; in hindsight a tighter stop did better, so this is only for testing)")
     run_smc.add_argument("--strict-trend-change", action="store_true", help="only take a trend-change (CHOCH) block when the slower charts have already turned the same way. In hindsight this removes almost all such trades (the slower charts lag), so it is off by default")
     run_smc.add_argument("--daily-loss-cap", type=float, default=None, help="stop the run for the day once the demo account is this much down since midnight UTC (default: none; decide this before the test, see docs/live-demo-test-protocol.md)")
