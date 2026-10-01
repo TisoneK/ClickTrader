@@ -594,11 +594,21 @@ def _start_page(strategy, args, *, symbol: str, mode: str):
     watcher = Watcher(strategy, symbol=symbol, chart_path="recordings/ui/chart.png", mode=mode)
     if not getattr(args, "no_balance", False):
         threading.Thread(target=balance_loop, args=(watcher, symbol), daemon=True).start()
-    port = getattr(args, "ui_port", None) or getattr(args, "port", 8765)
-    server = serve(watcher, port=port)
+    first = getattr(args, "ui_port", None) or getattr(args, "port", 8765)
+    server = None
+    for port in range(first, first + 10):  # a busy port must never cost the run: take the next free one
+        try:
+            server = serve(watcher, port=port)
+            break
+        except OSError:
+            continue
+    if server is None:
+        print(f"page not started: ports {first}-{first + 9} are all busy. The run carries on without it.", flush=True)
+        return watcher
     threading.Thread(target=server.serve_forever, daemon=True).start()
     url = f"http://127.0.0.1:{port}"
-    print(f"page: {url}  (watch-only: it shows this engine and cannot place a trade)", flush=True)
+    note = "" if port == first else f" (port {first} was busy)"
+    print(f"page: {url}{note}  (watch-only: it shows this engine and cannot place a trade)", flush=True)
     if not getattr(args, "no_browser", False):
         webbrowser.open(url)
     return watcher

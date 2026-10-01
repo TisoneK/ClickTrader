@@ -92,3 +92,22 @@ def test_the_run_has_an_argument_for_the_page(capsys):
         main(["run-smc", "--help"])
     out = capsys.readouterr().out
     assert "--ui" in out and "--ui-port" in out and "--no-browser" in out  # off unless asked: a store_true flag
+
+
+def test_a_busy_port_never_kills_the_run_it_takes_the_next_free_one(tmp_path, monkeypatch, capsys):
+    import argparse
+    import socket
+
+    from clicktrader.cli import _start_page
+
+    blocker = socket.socket()
+    blocker.bind(("127.0.0.1", 0))
+    blocker.listen()
+    busy = blocker.getsockname()[1]
+    monkeypatch.chdir(tmp_path)
+    strategy = SmcStrategy(trigger_minutes=1.0, higher_minutes=(5.0,))
+    args = argparse.Namespace(ui_port=busy, no_balance=True, no_browser=True)
+    watcher = _start_page(strategy, args, symbol="R_100", mode="paper run")  # must not raise
+    out = capsys.readouterr().out
+    blocker.close()
+    assert watcher is not None and "was busy" in out
