@@ -31,6 +31,16 @@ shadowed cards, a gray uppercase label on every card, captions under everything,
 | 26 | Chart controls look designed and labelled | Done: a labelled "Show on chart" group of three toggle buttons with check boxes |
 | - | Evidence line: a plain sentence | Done: "1 of 500 demo trades settled. Not enough to judge yet." Demo and practice tables look different (solid accent rule vs dashed muted rule, practice labelled "not evidence") |
 
+## Header v4 (owner, 1 Oct 2026: no logo box, silent when healthy)
+
+Header = plain wordmark, evidence ring + plain count, demo balance (kept: asked for earlier), icon-only theme group (sun, moon,
+monitor) and an icon-only Diagnostics button, all with tooltips and accessible names. No colour box beside the name, no
+permanent Live/Watch-only badges: a warning appears in the header only when the feed is stale or gone ("Data is stale, last
+update 45 s ago" with a diamond; "Disconnected" with a triangle). The stale check runs on a browser timer, not on the feed, so a
+silent feed cannot look healthy. The favicon is a status light (circle / diamond / triangle). Chart toggles carry swatches of
+the colours they draw. Which run is being shown ("your demo-account run", "a practice run", "the live market only") and "this
+page cannot place trades" live as one quiet line at the foot of the right column, because the first changes what the numbers mean.
+
 Not covered by an automated test: the visual layout (checked in the in-app browser at 1280x720, 768 and 375 wide, dark and
 light, with injected open-position, stale and disconnected states). The last phone-width tweak (hiding the mode text and theme switch
 to shorten the strip) was made after the final look and has not been looked at.

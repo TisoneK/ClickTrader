@@ -36,7 +36,7 @@ def test_the_page_and_the_data_show_the_same_state_and_only_on_this_machine(tmp_
         assert host == "127.0.0.1"  # never reachable from another machine
         base = f"http://127.0.0.1:{port}"
         page = urllib.request.urlopen(base + "/").read().decode()
-        assert "cannot trade" in page and "Diagnostics" in page  # it says what it is, and keeps the data doors behind a drawer
+        assert "cannot place trades" in page and "Diagnostics" in page  # it says what it is, and keeps the data doors behind a drawer
         state = json.loads(urllib.request.urlopen(base + "/api/state").read())
         assert state["symbol"] == "R_100" and state["price"] is not None and state["chart"]["candles"]
         assert json.loads(urllib.request.urlopen(base + "/api/chart").read())["candles"] == state["chart"]["candles"]  # one fact, two doors
