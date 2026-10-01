@@ -81,6 +81,8 @@ class SmcStrategy:
         strict_choch: bool = False,
         confluence_beats_clock: bool = False,
         zones_block_path: bool = False,
+        velocity_gate: bool = False,
+        min_pushed: float = 0.0,
     ) -> None:
         if risk_reward < 1:
             raise ValueError("the material's floor is a minimum of 1:2; anything below 1 risks more than it targets")
@@ -98,7 +100,9 @@ class SmcStrategy:
         self._strict_choch = strict_choch
         self._confluence = confluence_beats_clock
         self._walls = zones_block_path
-        self._config = (trigger_minutes, tuple(chain), risk_reward, strength, lookback, stale_bars, counter_trend, stop_buffer, strict_choch, confluence_beats_clock, zones_block_path)
+        self._velocity = velocity_gate
+        self._min_pushed = min_pushed
+        self._config = (trigger_minutes, tuple(chain), risk_reward, strength, lookback, stale_bars, counter_trend, stop_buffer, strict_choch, confluence_beats_clock, zones_block_path, velocity_gate, min_pushed)
         self._note = ""
         self.reading = None
         """The latest reading of the chart, made on the last closed bar (None before there is enough chart) — what a page shows."""
@@ -165,7 +169,8 @@ class SmcStrategy:
             return None
         return read_chart(candles, higher=[b.last(self._window) for b in self._higher] or None, strength=self._strength,
                           lookback=self._lookback, risk_reward=self._risk_reward, stale_bars=self._stale_bars, counter_trend=self._counter_trend,
-                          stop_buffer=self._stop_buffer, strict_choch=self._strict_choch, confluence_beats_clock=self._confluence, zones_block_path=self._walls)
+                          stop_buffer=self._stop_buffer, strict_choch=self._strict_choch, confluence_beats_clock=self._confluence, zones_block_path=self._walls,
+                          velocity_gate=self._velocity, min_pushed=self._min_pushed)
 
     def describe(self) -> str:
         """What the chart says right now, in a few words — for the moment a live run starts, so the person watching can
@@ -197,6 +202,7 @@ class SmcStrategy:
             candles, higher=[b.last(self._window) for b in self._higher] or None, strength=self._strength,
             lookback=self._lookback, risk_reward=self._risk_reward, stale_bars=self._stale_bars, counter_trend=self._counter_trend,
             stop_buffer=self._stop_buffer, strict_choch=self._strict_choch, confluence_beats_clock=self._confluence, zones_block_path=self._walls,
+            velocity_gate=self._velocity, min_pushed=self._min_pushed,
         )
         self.reading = reading
         last = len(candles) - 1

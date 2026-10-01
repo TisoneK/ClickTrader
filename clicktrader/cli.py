@@ -304,7 +304,7 @@ def cmd_smc_chart(args: argparse.Namespace) -> int:
         chain = [m for m in (args.higher_minutes or []) if m and m > minutes]
         higher = [bars(m) for m in chain] or None
         reading = read_chart(candles, higher=higher, stale_bars=_stale_for(args.stale_bars, minutes), counter_trend=args.counter_trend,
-                              confluence_beats_clock=not args.strict_clock, zones_block_path=not args.no_zone_walls)
+                              confluence_beats_clock=not args.strict_clock, zones_block_path=not args.no_zone_walls, min_pushed=3.0)
         first = next((i for i, c in enumerate(candles) if lo_ts is None or c.opened_at >= lo_ts), 0)
         stop = next((i for i, c in enumerate(candles) if hi_ts is not None and c.opened_at >= hi_ts), len(candles))
         out = args.out if len(sizes) == 1 else args.out.replace(".png", f".{minutes:g}m.png")
@@ -315,7 +315,7 @@ def cmd_smc_chart(args: argparse.Namespace) -> int:
 
             # the picture is as the chart stood on its last drawn bar: a reading of the prefix is the same as the whole's up to there
             shown = reading if not hi_ts else read_chart(candles[:stop], higher=higher, stale_bars=_stale_for(args.stale_bars, minutes), counter_trend=args.counter_trend,
-                                                       confluence_beats_clock=not args.strict_clock, zones_block_path=not args.no_zone_walls)
+                                                       confluence_beats_clock=not args.strict_clock, zones_block_path=not args.no_zone_walls, min_pushed=3.0)
             for sentence in draw_trader_view(shown, out, bars=args.bars):
                 print("  " + sentence)
         structures[minutes] = reading.structure[min(stop, len(candles)) - 1].value
@@ -503,7 +503,8 @@ def cmd_run_smc(args: argparse.Namespace) -> int:
     inner = SmcStrategy(trigger_minutes=args.minutes, higher_minutes=chain, risk_reward=args.risk_reward,
                            stale_bars=_stale_for(args.stale_bars, args.minutes), counter_trend=args.counter_trend,
                            stop_buffer=args.stop_buffer, strict_choch=args.strict_trend_change,
-                           confluence_beats_clock=not args.strict_clock, zones_block_path=not args.no_zone_walls)
+                           confluence_beats_clock=not args.strict_clock, zones_block_path=not args.no_zone_walls,
+                           velocity_gate=args.velocity_gate, min_pushed=args.min_pushed)
     strategy = inner
     if args.smoke_test:
         from .smc.live import SmokeTest
@@ -664,7 +665,7 @@ def cmd_ui(args: argparse.Namespace) -> int:
 
     load_env_file()
     strategy = SmcStrategy(trigger_minutes=1.0, higher_minutes=tuple(args.higher_minutes), stale_bars=_stale_for(args.stale_bars, 1.0), counter_trend=args.counter_trend,
-                           confluence_beats_clock=True, zones_block_path=True)
+                           confluence_beats_clock=True, zones_block_path=True, min_pushed=3.0)
     warm_from_history(strategy, args.symbol, minutes=1.0, bars=args.warm_bars, decimals=_decimals_for(args.symbol, args.decimals))
     watcher = _start_page(strategy, args, symbol=args.symbol, mode="watching the live feed")
     try:
@@ -1077,6 +1078,8 @@ def main(argv: list[str] | None = None) -> int:
     run_smc.add_argument("--symbol", default="R_100", help="Deriv symbol (default R_100; 1HZ100V is the 1-second index)")
     run_smc.add_argument("--minutes", type=float, default=1.0, help="trigger bar length in minutes (default 1, the view the owner charts)")
     run_smc.add_argument("--higher-minutes", type=float, nargs="*", default=[5.0, 15.0], help="slower clock(s) that must not contradict a trade (default 5 15, the decks' alignment across timeframes). Measured causally on 16-25h of data: 5+15 arms 0.4-0.7 trades/h, 5 alone 0.8-0.9/h, none 1.1-1.4/h (about half of those cancelled as falling knives). Give none (`--higher-minutes` alone) to drop the veto")
+    run_smc.add_argument("--min-pushed", type=float, default=3.0, help="a zone is traded only if price travelled at least this many typical candle ranges away from it before coming back (the SMC deck's 'pushed distance'; default 3, 0 = off). In hindsight 3 gave fewer, clearly better trades")
+    run_smc.add_argument("--velocity-gate", action="store_true", help="ALSO skip a zone when the last three bars of the return were violent, not only the bar that touched it (the Ultimate deck's checklist item 4). Off by default: in hindsight it removed 40%% of the trades and lowered the net result per hour; the falling-knife check on the touching bar stays on")
     run_smc.add_argument("--no-zone-walls", action="store_true", help="let a plan run through an opposing zone. By default a buy cannot target through a seller zone nor a sell through a buyer zone (the decks' 'room to move'); in hindsight that gave fewer, better trades")
     run_smc.add_argument("--strict-clock", action="store_true", help="the slower charts can never be overridden (the decks' top-down rule as written). By default the strongest zones - Fibonacci 61.8-78.6 or a flip zone - may go against a slower chart that has not turned yet; in hindsight that added trades at a slightly better result")
     run_smc.add_argument("--stop-buffer", type=float, default=0.0, help="put the stop this many typical candle ranges beyond the zone's far edge instead of on it (default 0; in hindsight a tighter stop did better, so this is only for testing)")

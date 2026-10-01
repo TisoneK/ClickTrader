@@ -244,7 +244,7 @@ class Reading:
         )
 
 
-RULES_VERSION = "2026-10-01.3"
+RULES_VERSION = "2026-10-01.6"
 """Bump this whenever a rule that changes which trades are taken changes. It is part of every log row's rules fingerprint, so a test's
 evidence is only ever one set of rules."""
 
@@ -434,6 +434,14 @@ def _veto(clocks, short: bool, strength: int) -> str:
     return ""
 
 
+def _pushed_ranges(candles, blk, short: bool, t: int) -> float:
+    """How far price travelled away from the zone since it formed, in typical candle ranges."""
+    since = candles[blk.index : t + 1]
+    rng = _median([c.range for c in candles[max(0, t - 20) : t + 1]]) or 1e-12
+    away = (blk.price_low - min(c.low for c in since)) if short else (max(c.high for c in since) - blk.price_high)
+    return max(0.0, away) / rng
+
+
 def _walls(zones, me, t: int) -> list[tuple[float, float]]:
     """The standing true zones of the OTHER kind that exist at bar `t` (fresh or used, not closed through): the walls in a plan's path."""
     return [(q.low, q.high) for q in zones if q is not me and q.direction is not me.direction and q.valid and q.born <= t
@@ -467,6 +475,8 @@ def read_chart(
     confluence_beats_clock: bool = False,
     allow_knife: bool = False,
     zones_block_path: bool = False,
+    velocity_gate: bool = False,
+    min_pushed: float = 0.0,
 ) -> Reading:
     """Read `candles` bar by bar. `higher` is the slower clock's candles, used only to confirm direction."""
     n = len(candles)
@@ -658,9 +668,17 @@ def read_chart(
             if reached and t > opp.armed_at:
                 impulse = candles[(opp.impulse_from if opp.impulse_from is not None else opp.event.level_from) : opp.armed_at + 1]
                 impulse_med = _median([_body(c) for c in impulse]) or 1e-12
-                if not allow_knife and _body(bar) >= impulse_med and (bar.close < bar.open if not short else bar.close > bar.open):
+                against = (lambda c: c.close < c.open) if not short else (lambda c: c.close > c.open)
+                violent = _body(bar) >= impulse_med and against(bar)
+                if velocity_gate and not violent:
+                    # the whole approach, not just the last bar: the decks want price to LOSE momentum on the way back
+                    violent = sum(_body(c) for c in candles[max(0, t - 2) : t + 1] if against(c)) >= 2.0 * impulse_med
+                if not allow_knife and violent:
                     opp.state, opp.closed_at = State.CANCELLED, t
-                    opp.reason = "falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order"
+                    opp.reason = "falling knife: price came back into the zone too violently (the decks: wait for a slow, stepped return) — cancel the order"
+                elif min_pushed > 0 and _pushed_ranges(candles, blk, short, t) < min_pushed:
+                    opp.state, opp.closed_at = State.CANCELLED, t
+                    opp.reason = "the move away from the zone was too short before price came back (the decks: price must travel a significant distance first)"
                 else:
                     opp.state, opp.filled_at = State.FILLED, t
                 armed.remove(opp)

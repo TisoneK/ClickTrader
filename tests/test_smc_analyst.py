@@ -418,3 +418,16 @@ def test_a_buy_cannot_target_through_a_seller_zone_and_a_sell_not_through_a_buye
     assert blocked.state is State.DECLINED and "opposing zone" in blocked.reason  # a seller zone at 12 is in the way of the target at 15
     behind = _zone_opportunity(candles, 19, demand, room, [], 1, 2.0, Control.DEMAND, Structure.UP, False, 0.0, False, ((8.0, 8.5),))
     assert behind.state is State.ARMED  # a zone BEHIND the entry is not in the path
+
+
+def test_a_zone_price_barely_left_is_not_traded_the_decks_pushed_distance():
+    """SMC deck p4, Zone Quality Scorecard: 'Did the price travel a significant distance before returning?'"""
+    from clicktrader.forex.candles import Candle
+    from clicktrader.smc.analyst import _pushed_ranges
+    from clicktrader.smc.components import OrderBlock
+
+    blk = OrderBlock(10.0, 10.5, 5, Direction.UP)
+    flat = [Candle(10.2, 10.6, 10.0, 10.3)] * 20
+    far = flat[:10] + [Candle(10.5, 14.0, 10.5, 13.5)] + flat[11:]  # a leg up to 14.0 after the zone formed
+    assert _pushed_ranges(flat, blk, False, 19) < 3.0  # price never left: not worth waiting for
+    assert _pushed_ranges(far, blk, False, 19) >= 3.0
