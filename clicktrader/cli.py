@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 import time
 from datetime import datetime, timezone
@@ -518,6 +519,15 @@ def cmd_run_smc(args: argparse.Namespace) -> int:
             warm_from_history(strategy, args.symbol, minutes=1.0, bars=args.warm_bars, decimals=args.decimals)
             print(f"right now it sees: {strategy.describe()}", flush=True)
         feed = stream_ticks(args.symbol)
+        if args.ui:
+            page = _start_page(strategy, args, symbol=args.symbol, mode="demo account run" if args.place else "paper run")
+
+            def _teed(source):
+                for record in source:
+                    page.observe(float(record.tick.price))
+                    yield record
+
+            feed = _teed(feed)
         log = args.log or ("recordings/smc-demo-trades.jsonl" if args.place else "recordings/smc-paper-trades.jsonl")
         if not args.place:
             paper_run(symbol=args.symbol, log_path=log, stake=args.stake, multiplier=args.multiplier, strategy=strategy,
@@ -571,6 +581,44 @@ def _ctrl_c_always_works(*, grace: float = 3.0) -> None:
 
     signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGINT})  # the threads started below inherit the block
     threading.Thread(target=waiter, daemon=True).start()
+
+
+def _start_page(strategy, args, *, symbol: str, mode: str):
+    """Start the watch-only page on this machine and return the watcher that feeds it (the caller feeds it with `observe`)."""
+    import threading
+    import webbrowser
+
+    from .ui.server import Watcher, balance_loop, serve
+
+    os.makedirs("recordings/ui", exist_ok=True)
+    watcher = Watcher(strategy, symbol=symbol, chart_path="recordings/ui/chart.png", mode=mode)
+    if not getattr(args, "no_balance", False):
+        threading.Thread(target=balance_loop, args=(watcher, symbol), daemon=True).start()
+    port = getattr(args, "ui_port", None) or getattr(args, "port", 8765)
+    server = serve(watcher, port=port)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    url = f"http://127.0.0.1:{port}"
+    print(f"page: {url}  (watch-only: it shows this engine and cannot place a trade)", flush=True)
+    if not getattr(args, "no_browser", False):
+        webbrowser.open(url)
+    return watcher
+
+
+def cmd_ui(args: argparse.Namespace) -> int:
+    """Stand-alone page: read the live feed with the same engine (paper, never placing) and serve it on 127.0.0.1."""
+    from .api.deriv.ticks import stream_ticks
+    from .smc.live import warm_from_history
+    from .smc.strategy import SmcStrategy
+
+    load_env_file()
+    strategy = SmcStrategy(trigger_minutes=1.0, higher_minutes=tuple(args.higher_minutes), stale_bars=args.stale_bars or None)
+    warm_from_history(strategy, args.symbol, minutes=1.0, bars=args.warm_bars, decimals=args.decimals)
+    watcher = _start_page(strategy, args, symbol=args.symbol, mode="watching the live feed")
+    try:
+        watcher.follow(stream_ticks(args.symbol))
+    except KeyboardInterrupt:
+        print("stopped.")
+    return 0
 
 
 def cmd_smc_readiness(args: argparse.Namespace) -> int:
@@ -950,6 +998,17 @@ def main(argv: list[str] | None = None) -> int:
     smc_chart.add_argument("--readings", action="store_true", help="also print the choices this reading makes that are the project's own")
     smc_chart.set_defaults(func=cmd_smc_chart)
 
+    ui = sub.add_parser("ui", help="one local page showing the engine's chart, plan, balance and trades (watch-only)")
+    ui.add_argument("--symbol", default="R_100")
+    ui.add_argument("--port", type=int, default=8765)
+    ui.add_argument("--higher-minutes", type=float, nargs="*", default=[5.0, 15.0])
+    ui.add_argument("--stale-bars", type=int, default=60)
+    ui.add_argument("--warm-bars", type=int, default=1000)
+    ui.add_argument("--decimals", type=int, default=2)
+    ui.add_argument("--no-browser", action="store_true", help="do not open a browser tab")
+    ui.add_argument("--no-balance", action="store_true", help="do not look up the demo balance")
+    ui.set_defaults(func=cmd_ui)
+
     smc_cmp = sub.add_parser("smc-compare", help="compare a person's markup of a chart (JSON) with what the engine read, mark by mark")
     smc_cmp.add_argument("markup", help="markup JSON, see docs/evidence/markup/")
     smc_cmp.add_argument("recording", help="recording of the same instrument and window (history-deriv makes one)")
@@ -961,6 +1020,9 @@ def main(argv: list[str] | None = None) -> int:
     run_smc.add_argument("--symbol", default="R_100", help="Deriv symbol (default R_100; 1HZ100V is the 1-second index)")
     run_smc.add_argument("--minutes", type=float, default=1.0, help="trigger bar length in minutes (default 1, the view the owner charts)")
     run_smc.add_argument("--higher-minutes", type=float, nargs="*", default=[5.0, 15.0], help="slower clock(s) that must not contradict a trade (default 5 15, the decks' alignment across timeframes). Measured causally on 16-25h of data: 5+15 arms 0.4-0.7 trades/h, 5 alone 0.8-0.9/h, none 1.1-1.4/h (about half of those cancelled as falling knives). Give none (`--higher-minutes` alone) to drop the veto")
+    run_smc.add_argument("--ui", action="store_true", help="also serve the one-page watch-only view of this run on 127.0.0.1 and open it in a browser")
+    run_smc.add_argument("--ui-port", type=int, default=8765, help="port for --ui (default 8765)")
+    run_smc.add_argument("--no-browser", action="store_true", help="with --ui: do not open a browser tab, just print the address")
     run_smc.add_argument("--stale-bars", type=int, default=60, help="withdraw an order price has not come back to within this many trigger bars (default 60; 0 = never)")
     run_smc.add_argument("--risk-reward", type=float, default=2.0, help="minimum reward:risk (default 2, the material's floor)")
     run_smc.add_argument("--stake", type=float, default=1.0)

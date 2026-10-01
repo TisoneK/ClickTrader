@@ -89,6 +89,8 @@ class SmcStrategy:
         self._window = window
         self._stale_bars = stale_bars
         self._note = ""
+        self.reading = None
+        """The latest reading of the chart, made on the last closed bar (None before there is enough chart) — what a page shows."""
         self._stake = stake
         self._armed: _Armed | None = None
         self.last_view = "nothing seen yet"
@@ -126,6 +128,7 @@ class SmcStrategy:
             fed += 1
         self._armed = None
         self.last_view = f"warmed with {fed} historical tick(s)"
+        self.reading = self.read_now()
         return fed
 
     def _note_pass(self, reason: str) -> str:
@@ -135,14 +138,21 @@ class SmcStrategy:
         self.passes[key] = self.passes.get(key, 0) + 1
         return ", ".join(f"{v} {k}" for k, v in sorted(self.passes.items(), key=lambda kv: -kv[1]))
 
+    def read_now(self):
+        """The reading of the chart as it stands (None until there are enough bars), and the candles it was made from."""
+        candles = self._trigger.last(self._window)
+        if len(candles) < self._lookback + self._strength * 2 + 2:
+            return None
+        return read_chart(candles, higher=[b.last(self._window) for b in self._higher] or None, strength=self._strength,
+                          lookback=self._lookback, risk_reward=self._risk_reward, stale_bars=self._stale_bars)
+
     def describe(self) -> str:
         """What the chart says right now, in a few words — for the moment a live run starts, so the person watching can
         check it is reading the chart they are looking at: structure, who is in control, the zones still standing."""
         candles = self._trigger.last(self._window)
-        if len(candles) < self._lookback + self._strength * 2 + 2:
+        r = self.read_now()
+        if r is None:
             return f"only {len(candles)} bar(s) so far — not enough to read yet"
-        r = read_chart(candles, higher=[b.last(self._window) for b in self._higher] or None, strength=self._strength,
-                       lookback=self._lookback, risk_reward=self._risk_reward, stale_bars=self._stale_bars)
         fresh = [z for z in r.zones if z.verdict == "TRUE" and z.status == "fresh"]
         zones = "; ".join(f"{z.kind} {z.low:.2f}-{z.high:.2f}" + (" (weaker)" if z.weaker else "") for z in fresh[-4:]) or "none"
         control = r.control[-1].value if r.control and r.control[-1] else "not yet decided"
@@ -166,6 +176,7 @@ class SmcStrategy:
             candles, higher=[b.last(self._window) for b in self._higher] or None, strength=self._strength,
             lookback=self._lookback, risk_reward=self._risk_reward, stale_bars=self._stale_bars,
         )
+        self.reading = reading
         last = len(candles) - 1
         # An order that left the book on this bar: say which and why, so the person watching never sees one vanish unexplained.
         for gone in reading.opportunities:

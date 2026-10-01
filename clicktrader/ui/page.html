@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ClickTrader live view</title>
+<style>
+:root{
+  --bg:#0b0e13; --bg2:#10151c; --card:#141a23; --card2:#18202b; --line:#222c3a; --line2:#2b3748;
+  --ink:#e8edf4; --ink2:#b4bfce; --mute:#7a8799;
+  --up:#2fbf8a; --down:#ef5b78; --accent:#6aa6ff; --amber:#e6a23c;
+  --supply:#ef5b78; --demand:#2fbf8a; --level:#6aa6ff; --reward:#2fbf8a; --risk:#ef5b78;
+  --shadow:0 1px 0 rgba(255,255,255,.03) inset,0 10px 30px rgba(0,0,0,.35);
+  --chartbg:#0e131a; --grid:#1a2331;
+}
+@media (prefers-color-scheme:light){:root{
+  --bg:#eef1f5; --bg2:#e7ebf1; --card:#ffffff; --card2:#f6f8fb; --line:#dfe5ee; --line2:#cfd7e3;
+  --ink:#121a26; --ink2:#41506a; --mute:#7b8799;
+  --up:#14946a; --down:#d63a5b; --accent:#2f6fdc; --amber:#b9770e;
+  --supply:#d63a5b; --demand:#14946a; --level:#2f6fdc; --reward:#14946a; --risk:#d63a5b;
+  --shadow:0 1px 2px rgba(20,30,50,.06),0 8px 24px rgba(20,30,50,.07);
+  --chartbg:#fbfcfe; --grid:#e9eef5;
+}}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink)}
+body{font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;-webkit-font-smoothing:antialiased;
+  background:radial-gradient(1200px 500px at 15% -10%,rgba(106,166,255,.10),transparent 60%),radial-gradient(900px 400px at 100% 0%,rgba(47,191,138,.07),transparent 55%),var(--bg);min-height:100vh}
+.num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+
+/* top bar */
+.top{position:sticky;top:0;z-index:5;backdrop-filter:blur(12px);background:color-mix(in srgb,var(--bg) 82%,transparent);border-bottom:1px solid var(--line)}
+.top-in{max-width:1320px;margin:0 auto;padding:10px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:-.01em}
+.logo{width:26px;height:26px;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--up));display:grid;place-items:center;box-shadow:0 4px 14px rgba(106,166,255,.35)}
+.logo svg{width:15px;height:15px}
+.pill{display:inline-flex;align-items:center;gap:7px;padding:4px 10px;border-radius:999px;background:var(--card);border:1px solid var(--line);font-size:12px;color:var(--ink2);white-space:nowrap}
+.pill b{color:var(--ink);font-weight:650}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--mute);box-shadow:0 0 0 0 transparent}
+.dot.live{background:var(--up);animation:pulse 2s infinite}.dot.slow{background:var(--amber)}.dot.dead{background:var(--down)}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(47,191,138,.55)}70%{box-shadow:0 0 0 8px rgba(47,191,138,0)}100%{box-shadow:0 0 0 0 rgba(47,191,138,0)}}
+.spacer{flex:1}
+.badge{font-size:11px;font-weight:700;letter-spacing:.08em;padding:4px 9px;border-radius:6px;background:rgba(230,162,60,.13);color:var(--amber);border:1px solid rgba(230,162,60,.35)}
+
+/* layout */
+main{max-width:1320px;margin:0 auto;padding:18px 20px 40px;display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:16px}
+@media (max-width:1020px){main{grid-template-columns:1fr}}
+.col{display:flex;flex-direction:column;gap:16px;min-width:0}
+.card{background:linear-gradient(180deg,var(--card2),var(--card));border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:16px 18px;min-width:0}
+.h{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--mute);font-weight:650;margin:0 0 10px;display:flex;align-items:center;gap:8px}
+.h .sp{flex:1}
+
+/* hero */
+.hero{display:grid;grid-template-columns:auto 1fr;gap:20px;align-items:center}
+@media (max-width:560px){.hero{grid-template-columns:1fr}}
+.price{font-size:44px;line-height:1;font-weight:700;letter-spacing:-.025em}
+.price.up{animation:fu .7s}.price.down{animation:fd .7s}
+@keyframes fu{0%{color:var(--up)}100%{color:var(--ink)}}@keyframes fd{0%{color:var(--down)}100%{color:var(--ink)}}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:8px;font-size:12px;font-weight:600;background:var(--card);border:1px solid var(--line2);color:var(--ink2)}
+.chip.up{color:var(--up);border-color:color-mix(in srgb,var(--up) 45%,transparent);background:color-mix(in srgb,var(--up) 10%,transparent)}
+.chip.down{color:var(--down);border-color:color-mix(in srgb,var(--down) 45%,transparent);background:color-mix(in srgb,var(--down) 10%,transparent)}
+
+/* plan */
+.plan{display:grid;grid-template-columns:1fr 150px;gap:18px;align-items:stretch}
+@media (max-width:560px){.plan{grid-template-columns:1fr}}
+.headline{font-size:24px;font-weight:700;letter-spacing:-.02em;line-height:1.2}
+.headline.buy{color:var(--up)}.headline.sell{color:var(--down)}.headline.idle{color:var(--ink2)}
+.sub{color:var(--ink2);margin-top:6px}
+.facts{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:14px}
+@media (max-width:560px){.facts{grid-template-columns:repeat(2,1fr)}}
+.fact{background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.fact small{display:block;color:var(--mute);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase}
+.fact b{font-size:16px}
+.ladder{position:relative;min-height:170px;border-left:2px solid var(--line2);margin-left:6px}
+.ladder .rung{position:absolute;left:0;right:0;display:flex;align-items:center;gap:8px;font-size:11px;transform:translateY(-50%)}
+.ladder .rung i{width:14px;height:2px;background:currentColor;display:block;margin-left:-8px}
+.ladder .rung.t{color:var(--reward)}.ladder .rung.e{color:var(--ink)}.ladder .rung.s{color:var(--risk)}.ladder .rung.n{color:var(--accent)}
+.ladder .reward{position:absolute;left:0;width:6px;background:color-mix(in srgb,var(--reward) 40%,transparent)}
+.ladder .risk{position:absolute;left:0;width:6px;background:color-mix(in srgb,var(--risk) 40%,transparent)}
+.idle-art{display:grid;place-items:center;color:var(--mute);opacity:.7}
+
+/* chart */
+.chartwrap{position:relative}
+canvas#cv{width:100%;height:480px;display:block;border-radius:10px;background:var(--chartbg);border:1px solid var(--line);cursor:crosshair}
+@media (max-width:700px){canvas#cv{height:360px}}
+.legend{display:flex;gap:8px;flex-wrap:wrap}
+.tog{cursor:pointer;user-select:none;display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:999px;border:1px solid var(--line2);font-size:11.5px;color:var(--ink2);background:transparent}
+.tog i{width:9px;height:9px;border-radius:3px;display:block}
+.tog.off{opacity:.4}
+
+/* right column */
+.balance{font-size:30px;font-weight:700;letter-spacing:-.02em}
+.meter{height:10px;background:var(--bg2);border-radius:999px;overflow:hidden;border:1px solid var(--line);margin:10px 0 6px}
+.meter>div{height:100%;min-width:3px;background:linear-gradient(90deg,var(--accent),var(--up));border-radius:999px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.mini{background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:9px 11px}
+.mini small{color:var(--mute);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;display:block}
+.mini b{font-size:17px}
+.pos{color:var(--up)}.neg{color:var(--down)}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{color:var(--mute);font-weight:600;text-align:left;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;padding:0 6px 6px}
+td{padding:7px 6px;border-top:1px solid var(--line)}
+.tag{display:inline-block;padding:1px 8px;border-radius:6px;font-size:11px;font-weight:700}
+.tag.buy{background:color-mix(in srgb,var(--up) 15%,transparent);color:var(--up)}
+.tag.sell{background:color-mix(in srgb,var(--down) 15%,transparent);color:var(--down)}
+.tag.demo{background:color-mix(in srgb,var(--accent) 16%,transparent);color:var(--accent)}
+.tag.paper{background:var(--bg2);color:var(--mute)}
+.tl{list-style:none;margin:0;padding:0;max-height:300px;overflow:auto;position:relative}
+.tl li{position:relative;padding:0 0 12px 18px;font-size:12.5px;color:var(--ink2)}
+.tl li:before{content:"";position:absolute;left:3px;top:6px;width:7px;height:7px;border-radius:50%;background:var(--accent)}
+.tl li:after{content:"";position:absolute;left:6px;top:15px;bottom:-2px;width:1px;background:var(--line2)}
+.tl li:last-child:after{display:none}
+.tl time{color:var(--mute);font-size:11px;display:block;margin-bottom:1px}
+.empty{color:var(--mute);padding:10px 0}
+.foot{max-width:1320px;margin:0 auto;padding:0 20px 28px;color:var(--mute);font-size:12px}
+.tip{position:absolute;pointer-events:none;background:var(--card);border:1px solid var(--line2);border-radius:10px;padding:8px 10px;font-size:12px;box-shadow:var(--shadow);display:none;min-width:150px;z-index:3}
+.tip b{display:block;margin-bottom:2px}
+.tip span{display:flex;justify-content:space-between;gap:14px;color:var(--ink2)}
+</style>
+</head>
+<body>
+<div class="top"><div class="top-in">
+  <div class="brand"><div class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="#0b0e13" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16l5-5 4 4 7-8"/></svg></div>ClickTrader</div>
+  <span class="pill"><span class="dot" id="dot"></span><b id="sym">-</b><span id="stat">connecting</span></span>
+  <span class="pill" id="ago">-</span>
+  <div class="spacer"></div>
+  <span class="badge">WATCH-ONLY &middot; CANNOT TRADE</span>
+</div></div>
+
+<main>
+<div class="col">
+  <div class="card">
+    <div class="hero">
+      <div><div class="h" style="margin-bottom:6px">Price</div><div class="price num" id="price">-</div></div>
+      <div><div class="chips" id="chips"></div><div class="sub" id="trend" style="margin-top:10px"></div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="h">What the engine is doing</div>
+    <div class="plan">
+      <div>
+        <div class="headline idle" id="headline">Reading the chart...</div>
+        <div class="sub" id="why"></div>
+        <div class="facts" id="facts"></div>
+      </div>
+      <div class="ladder" id="ladder"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="h">Chart <span class="sp"></span>
+      <span class="legend" id="legend">
+        <span class="tog" data-k="zones"><i style="background:var(--supply)"></i>Zones</span>
+        <span class="tog" data-k="levels"><i style="background:var(--level)"></i>Levels</span>
+        <span class="tog" data-k="plan"><i style="background:var(--reward)"></i>Plan</span>
+      </span>
+    </div>
+    <div class="chartwrap"><canvas id="cv"></canvas><div class="tip" id="tip"></div></div>
+  </div>
+</div>
+
+<div class="col">
+  <div class="card">
+    <div class="h">Demo account</div>
+    <div class="balance num" id="balance">-</div>
+    <div class="sub small" id="balnote" style="font-size:12px;color:var(--mute)">read-only lookup</div>
+  </div>
+  <div class="card">
+    <div class="h">Evidence <span class="sp"></span><span id="evtxt" style="text-transform:none;letter-spacing:0"></span></div>
+    <div class="meter"><div id="meter" style="width:0%"></div></div>
+    <div class="sub" id="evnote" style="font-size:12px;color:var(--mute)"></div>
+    <div class="two" style="margin-top:12px">
+      <div class="mini"><small>Demo trades</small><b class="num" id="dn">0</b> <span class="num" id="dnet" style="font-size:12px"></span></div>
+      <div class="mini"><small>Paper trades</small><b class="num" id="pn">0</b> <span class="num" id="pnet" style="font-size:12px"></span></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="h">Trades</div>
+    <div id="trades"></div>
+  </div>
+  <div class="card">
+    <div class="h">What changed</div>
+    <ul class="tl" id="events"></ul>
+  </div>
+</div>
+</main>
+<div class="foot">Watch-only: this page reads the live feed with the same engine as the live run and cannot place a trade. The same facts as data: <a href="/api/state">/api/state</a> &middot; <a href="/api/chart">/api/chart</a> &middot; <a href="/chart.png">/chart.png</a></div>
+
+<script>
+const $=id=>document.getElementById(id);
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const fmt=(x,d)=>x==null?'-':Number(x).toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d});
+const show={zones:true,levels:true,plan:true};
+let S=null,hover=null,lastPrice=null;
+const dec=p=>p<20?5:2;
+
+document.querySelectorAll('.tog').forEach(t=>t.onclick=()=>{show[t.dataset.k]=!show[t.dataset.k];t.classList.toggle('off',!show[t.dataset.k]);draw()});
+
+function plain(t){return (t||'').toLowerCase().replace(/(^|\. )([a-z])/g,(m,a,b)=>a+b.toUpperCase())}
+
+/* ---------- chart ---------- */
+function draw(){
+  const cv=$('cv'),C=S&&S.chart;if(!C||!C.candles.length)return;
+  const dpr=window.devicePixelRatio||1,W=cv.clientWidth,H=cv.clientHeight;
+  cv.width=W*dpr;cv.height=H*dpr;const g=cv.getContext('2d');g.setTransform(dpr,0,0,dpr,0,0);
+  const padL=10,padR=92,padT=14,padB=26,n=C.candles.length,fut=Math.max(10,Math.round(n/5));
+  let [lo,hi]=C.range;const price=S.price;if(price!=null){lo=Math.min(lo,price);hi=Math.max(hi,price)}
+  const d=dec(hi),x=i=>padL+(i+.5)*(W-padL-padR)/(n+fut),y=p=>padT+(hi-p)/(hi-lo)*(H-padT-padB),R=W-padR;
+  g.font='11px ui-monospace,SFMono-Regular,Menlo,monospace';g.textBaseline='middle';
+  // grid + axis
+  g.strokeStyle=css('--grid');g.lineWidth=1;g.fillStyle=css('--mute');
+  for(let k=0;k<=6;k++){const p=lo+(hi-lo)*k/6,yy=Math.round(y(p))+.5;g.beginPath();g.moveTo(padL,yy);g.lineTo(R,yy);g.stroke();g.fillText(fmt(p,d),R+8,yy)}
+  const step=Math.max(1,Math.round(n/(W<600?3:5)));
+  for(let i=0;i<n;i+=step){const t=new Date(C.candles[i][0]*1000),xx=Math.round(x(i))+.5;g.beginPath();g.moveTo(xx,padT);g.lineTo(xx,H-padB);g.stroke();
+    g.fillText(t.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',hour12:false}),Math.max(padL,xx-14),H-10)}
+  const band=(lo_,hi_,s,col,a,line)=>{const x0=x(s),y0=y(hi_),y1=y(lo_);g.fillStyle=col;g.globalAlpha=a;g.fillRect(x0,y0,R-x0,Math.max(1,y1-y0));g.globalAlpha=1;
+    if(line){g.strokeStyle=col;g.globalAlpha=.7;g.setLineDash([5,4]);g.beginPath();g.moveTo(x0,y0+.5);g.lineTo(R,y0+.5);g.moveTo(x0,y1+.5);g.lineTo(R,y1+.5);g.stroke();g.setLineDash([]);g.globalAlpha=1}};
+  const tag=(txt,xx,yy,col)=>{g.font='600 11px -apple-system,Segoe UI,sans-serif';g.fillStyle=col;g.textBaseline='alphabetic';g.fillText(txt,xx,yy);g.textBaseline='middle';g.font='11px ui-monospace,Menlo,monospace'};
+  if(show.levels)C.levels.forEach(l=>{band(l.low,l.high,l.start,css('--level'),.13,false);tag('LEVEL  '+fmt(l.low,d)+' - '+fmt(l.high,d),Math.max(x(l.start)+6,padL+6),y(l.high)+13,css('--level'))});
+  if(show.zones)C.zones.forEach(z=>{const col=z.kind==='SUPPLY'?css('--supply'):css('--demand');band(z.low,z.high,z.start,col,.2,true);
+    tag(z.kind+'  '+fmt(z.low,d)+' - '+fmt(z.high,d),Math.max(x(z.start)+6,padL+6),(z.kind==='SUPPLY'?y(z.high)-5:y(z.low)+14),col)});
+  if(show.plan)C.orders.forEach(o=>{band(Math.min(o.entry,o.stop),Math.max(o.entry,o.stop),o.start,css('--risk'),.22,false);band(Math.min(o.entry,o.target),Math.max(o.entry,o.target),o.start,css('--reward'),.2,false);
+    const long=o.side==='buy';tag((long?'BUY ':'SELL ')+o.rr+' to 1',x(o.start)+8,y(o.entry)+(long?-8:16),css('--reward'));
+    [['TARGET',o.target,css('--reward')],['ENTRY',o.entry,css('--ink')],['STOP',o.stop,css('--risk')]].forEach(([k,p,c])=>{g.fillStyle=c;g.fillText(k+' '+fmt(p,d),R+8,y(p));g.strokeStyle=c;g.globalAlpha=.9;g.beginPath();g.moveTo(R-6,y(p)+.5);g.lineTo(R,y(p)+.5);g.stroke();g.globalAlpha=1});
+    // the expected path: price goes to the zone, then to the target
+    const last=C.candles[n-1][4],sx=n-1,mx=n-1+Math.max(3,Math.round(fut/3)),ex=mx+Math.max(3,Math.round(fut/3));
+    g.strokeStyle=css('--ink2');g.lineWidth=1.6;g.setLineDash([6,5]);g.beginPath();g.moveTo(x(sx),y(last));g.lineTo(x(mx),y(o.entry));g.stroke();g.setLineDash([]);
+    g.beginPath();g.moveTo(x(mx),y(o.entry));g.lineTo(x(ex),y(o.target));g.stroke();
+    const ang=Math.atan2(y(o.target)-y(o.entry),x(ex)-x(mx));[1,-1].forEach(sg=>{g.beginPath();g.moveTo(x(ex),y(o.target));g.lineTo(x(ex)-14*Math.cos(ang)-sg*6*Math.sin(ang),y(o.target)-14*Math.sin(ang)+sg*6*Math.cos(ang));g.stroke()});g.lineWidth=1});
+  // candles
+  const bw=Math.max(2,Math.min(14,(W-padL-padR)/(n+fut)*.62));
+  C.candles.forEach((c,i)=>{const up=c[4]>=c[1],col=up?css('--up'):css('--down'),xx=Math.round(x(i))+.5;g.strokeStyle=col;g.fillStyle=col;
+    g.beginPath();g.moveTo(xx,y(c[2]));g.lineTo(xx,y(c[3]));g.stroke();const t=y(Math.max(c[1],c[4])),b=y(Math.min(c[1],c[4]));g.fillRect(xx-bw/2,t,bw,Math.max(1.5,b-t))});
+  // live price
+  if(price!=null){const yy=Math.round(y(price))+.5,up=price>=C.candles[n-1][4];g.strokeStyle=css('--accent');g.setLineDash([2,4]);g.beginPath();g.moveTo(padL,yy);g.lineTo(R,yy);g.stroke();g.setLineDash([]);
+    g.fillStyle=css('--accent');g.fillRect(R+2,yy-9,padR-8,18);g.fillStyle='#0b0e13';g.font='600 11px ui-monospace,Menlo,monospace';g.fillText(fmt(price,d),R+7,yy);}
+  // crosshair
+  const tip=$('tip');
+  if(hover&&hover.x>padL&&hover.x<R){const idx=Math.round((hover.x-padL)/((W-padL-padR)/(n+fut))-.5);
+    g.strokeStyle=css('--mute');g.setLineDash([3,3]);g.beginPath();g.moveTo(hover.x+.5,padT);g.lineTo(hover.x+.5,H-padB);g.moveTo(padL,hover.y+.5);g.lineTo(R,hover.y+.5);g.stroke();g.setLineDash([]);
+    const p=hi-(hover.y-padT)/(H-padT-padB)*(hi-lo);g.fillStyle=css('--card');g.strokeStyle=css('--line2');g.fillRect(R+2,hover.y-9,padR-8,18);g.strokeRect(R+2.5,hover.y-8.5,padR-9,17);g.fillStyle=css('--ink');g.fillText(fmt(p,d),R+7,hover.y);
+    if(idx>=0&&idx<n){const c=C.candles[idx];tip.style.display='block';tip.innerHTML='<b>'+new Date(c[0]*1000).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})+'</b><span>Open<em style="font-style:normal">'+fmt(c[1],d)+'</em></span><span>High<em style="font-style:normal">'+fmt(c[2],d)+'</em></span><span>Low<em style="font-style:normal">'+fmt(c[3],d)+'</em></span><span>Close<em style="font-style:normal">'+fmt(c[4],d)+'</em></span>';
+      tip.style.left=Math.min(hover.x+16,W-170)+'px';tip.style.top=Math.max(8,hover.y-70)+'px'}else tip.style.display='none'}else tip.style.display='none';
+}
+$('cv').addEventListener('mousemove',e=>{const r=e.target.getBoundingClientRect();hover={x:e.clientX-r.left,y:e.clientY-r.top};draw()});
+$('cv').addEventListener('mouseleave',()=>{hover=null;draw()});
+window.addEventListener('resize',draw);
+
+/* ---------- panels ---------- */
+function ladder(o,price,d){
+  const el=$('ladder');
+  if(!o){el.innerHTML='<div class="idle-art"><svg width="54" height="54" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><div style="font-size:12px;margin-top:6px">waiting</div></div>';return}
+  const vals=[o.target,o.entry,o.stop,price].filter(v=>v!=null),lo=Math.min(...vals),hi=Math.max(...vals),pos=v=>((hi-v)/(hi-lo))*100;
+  const bar=(a,b,c)=>`<div class="${c}" style="top:${Math.min(pos(a),pos(b))}%;height:${Math.abs(pos(a)-pos(b))}%"></div>`;
+  // labels are spread apart so close prices (price right on the target) never print over each other; the bars keep the true positions
+  const items=[['Target',o.target,'t'],['Entry',o.entry,'e'],['Stop',o.stop,'s']].concat(price!=null?[['Now',price,'n']]:[]).map(([k,v,c])=>({k,v,c,at:pos(v)})).sort((a,b)=>a.at-b.at);
+  let prev=-100;items.forEach(it=>{it.y=Math.max(it.at,prev+11);prev=it.y});
+  const over=Math.max(0,prev-100);items.forEach(it=>it.y-=over);
+  const r=it=>`<div class="rung ${it.c}" style="top:${it.y}%"><i></i><span>${it.k} <b class="num">${fmt(it.v,d)}</b></span></div>`;
+  el.innerHTML=bar(o.entry,o.target,'reward')+bar(o.entry,o.stop,'risk')+items.map(r).join('');
+}
+function render(){
+  const s=S;if(!s)return;
+  const age=s.updated?Date.now()/1000-s.updated:999,stopped=(s.status||'').startsWith('STOPPED');
+  $('sym').textContent=s.symbol;$('stat').textContent=stopped?'feed stopped':(age<20?(s.mode||'live'):age<90?'slow - '+(s.mode||''):'no data');
+  $('dot').className='dot '+(stopped||age>=90?'dead':age<20?'live':'slow');
+  $('ago').textContent=s.updated?'updated '+new Date(s.updated*1000).toLocaleTimeString():'-';
+  const pr=s.price,d=dec(pr||100),pe=$('price');
+  if(pr!=null){pe.textContent=fmt(pr,d);if(lastPrice!=null&&pr!==lastPrice){pe.className='price num '+(pr>lastPrice?'up':'down');void pe.offsetWidth}lastPrice=pr}
+  const t=(s.trend||''),trend=/TREND (\w+)/.exec(t),who=/(BUYERS|SELLERS|NO ONE)[A-Z ]*/.exec(t);
+  const tr=trend?trend[1]:'';
+  $('chips').innerHTML=(tr?`<span class="chip ${tr==='UP'?'up':tr==='DOWN'?'down':''}">Trend ${tr.toLowerCase()}</span>`:'')+(who?`<span class="chip ${who[1]==='BUYERS'?'up':who[1]==='SELLERS'?'down':''}">${plain(who[0])}</span>`:'')+(s.chart?`<span class="chip">${s.chart.candles.length} bars read</span>`:'');
+  $('trend').textContent=s.chart?'The chart as the engine reads it: the few levels and zones that matter near price, and the one plan it is waiting for.':'';
+  const o=(s.chart&&s.chart.orders||[])[0];
+  const h=$('headline');
+  if(o){const long=o.side==='buy';h.className='headline '+(long?'buy':'sell');h.textContent=(long?'Waiting to buy':'Waiting to sell')+' - not yet';
+    $('why').textContent=plain((s.why||'').replace('WHY: ',''))+'.';
+    const z=(s.orders&&s.orders[0])?s.orders[0].zone:null;
+    $('facts').innerHTML=[['Zone',z?fmt(z[0],d)+' - '+fmt(z[1],d):'-'],['Stop',fmt(o.stop,d)],['Target',fmt(o.target,d)],['Reward : risk',o.rr+' : 1']].map(([a,b])=>`<div class="fact"><small>${a}</small><b class="num">${b}</b></div>`).join('')}
+  else{h.className='headline idle';h.textContent=stopped?'Feed stopped':(s.waiting?plain(s.waiting):'Reading the chart...');$('why').textContent=plain((s.why||'').replace('WHY: ',''))+(s.why?'.':'');$('facts').innerHTML=''}
+  ladder(o,pr,d);
+  const b=s.balance;$('balance').textContent=b&&b.amount!=null?fmt(b.amount,2)+' '+b.currency:'-';
+  $('balnote').textContent=b&&b.error?'unavailable ('+b.error+')':b?'demo account, as of '+b.at:'read-only lookup';
+  const ev=s.evidence||{need:500,demo:{n:0,wins:0,net:0},paper:{n:0,wins:0,net:0}},pct=Math.min(100,ev.demo.n/ev.need*100);
+  $('meter').style.width=Math.max(.6,pct)+'%';$('evtxt').textContent=ev.demo.n+' of '+ev.need;
+  $('evnote').textContent='Settled demo trades toward the number it takes before a result can be told from luck. Paper trades do not count: they carry no commission or slippage.';
+  const net=(v,e)=>{e.textContent=(v>0?'+':'')+fmt(v,2);e.className='num '+(v>0?'pos':v<0?'neg':'')};
+  $('dn').textContent=ev.demo.n;$('pn').textContent=ev.paper.n;net(ev.demo.net,$('dnet'));net(ev.paper.net,$('pnet'));
+  const tr2=s.trades||[];
+  $('trades').innerHTML=tr2.length?'<table><tr><th>Time</th><th>Mode</th><th>Side</th><th>Entry</th><th style="text-align:right">Result</th></tr>'+tr2.map(t=>`<tr><td class="num">${t.when?new Date(t.when*1000).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):''}</td><td><span class="tag ${t.mode==='paper'?'paper':'demo'}">${t.mode}</span></td><td><span class="tag ${t.side}">${t.side}</span></td><td class="num">${t.entry}</td><td class="num ${t.profit>0?'pos':t.profit<0?'neg':''}" style="text-align:right">${t.profit>0?'+':''}${fmt(t.profit,2)}</td></tr>`).join('')+'</table>':'<div class="empty">No trades yet.</div>';
+  $('events').innerHTML=(s.events||[]).length?(s.events||[]).map(e=>`<li><time class="num">${e.t}</time>${e.text.replace(/</g,'&lt;')}</li>`).join(''):'<li>Waiting for the first change...</li>';
+  draw();
+}
+async function tick(){try{S=await (await fetch('/api/state')).json();render()}catch(e){$('stat').textContent='page cannot reach the engine';$('dot').className='dot dead'}}
+tick();setInterval(tick,2500);
+</script>
+</body>
+</html>

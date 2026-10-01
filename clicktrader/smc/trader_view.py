@@ -74,6 +74,33 @@ def trader_view(reading: Reading, *, bars: int = 120) -> dict:
     return {"lo": lo, "candles": candles, "price": price, "orders": orders, "zones": zones, "levels": levels}
 
 
+def sentences(reading: Reading, view: dict | None = None, fmt=None, decimals: int | None = None) -> list[str]:
+    """The three header sentences: what price is doing, what the engine waits for (or that there is nothing to do), and why."""
+    view = view or trader_view(reading)
+    price = view["price"]
+    if fmt is None:
+        if decimals is None:
+            decimals = 5 if price < 20 else 2
+        fmt = lambda p: f"{p:.{decimals}f}"  # noqa: E731
+    n = len(reading.candles)
+    structure = reading.structure[-1].value.upper() if reading.structure else "?"
+    control = reading.control[-1] if reading.control else None
+    who = {"demand": "BUYERS IN CONTROL", "supply": "SELLERS IN CONTROL"}.get(control.value if control else "", "NO ONE IN CONTROL YET")
+    lines = [f"PRICE {fmt(price)}   TREND {structure}   {who}"]
+    if view["orders"]:
+        o = view["orders"][0]
+        zone = "ZONE " if o.source == "zone" else "BLOCK "
+        lines.append(f"WAITING: {'BUY' if o.direction is Direction.UP else 'SELL'} AT {fmt(min(o.block.price_low, o.block.price_high))}-"
+                     f"{fmt(max(o.block.price_low, o.block.price_high))}   STOP {fmt(o.stop)}   TARGET {fmt(o.target)}   {o.reward_risk:.1f} TO 1")
+        why = "A FRESH TRUE ZONE" if o.source == "zone" else "THE BLOCK THAT LEFT WHEN THE TREND CHANGED CHARACTER"
+        more = f"   (+{len(view['orders']) - 1} MORE WAITING)" if len(view["orders"]) > 1 else ""
+        lines.append(f"WHY: {why} - ROOM TO THE NEXT LEVEL{more}")
+    else:
+        lines.append("NOTHING TO DO NOW")
+        lines.append(f"WHY: {_why_nothing(reading, n)}")
+    return lines
+
+
 def draw_trader_view(reading: Reading, path: str, *, bars: int = 120, decimals: int | None = None, width: int = 1800, height: int = 900) -> list[str]:
     """Write the picture and return the header sentences (so a console can say the same thing in words)."""
     view = trader_view(reading, bars=bars)
@@ -108,21 +135,7 @@ def draw_trader_view(reading: Reading, path: str, *, bars: int = 120, decimals: 
         axis += [AxisLabel(o.entry, f"ENTRY {fmt(o.entry)}", _INK), AxisLabel(o.stop, f"STOP {fmt(o.stop)}", _RISK),
                  AxisLabel(o.target, f"TARGET {fmt(o.target)}", _REWARD)]
 
-    structure = reading.structure[-1].value.upper() if reading.structure else "?"
-    control = reading.control[-1] if reading.control else None
-    who = {"demand": "BUYERS IN CONTROL", "supply": "SELLERS IN CONTROL"}.get(control.value if control else "", "NO ONE IN CONTROL YET")
-    lines = [f"PRICE {fmt(price)}   TREND {structure}   {who}"]
-    if view["orders"]:
-        o = view["orders"][0]
-        zone = "ZONE " if o.source == "zone" else "BLOCK "
-        lines.append(f"WAITING: {'BUY' if o.direction is Direction.UP else 'SELL'} AT {fmt(min(o.block.price_low, o.block.price_high))}-"
-                     f"{fmt(max(o.block.price_low, o.block.price_high))}   STOP {fmt(o.stop)}   TARGET {fmt(o.target)}   {o.reward_risk:.1f} TO 1")
-        why = "A FRESH TRUE ZONE" if o.source == "zone" else "THE BLOCK THAT LEFT WHEN THE TREND CHANGED CHARACTER"
-        more = f"   (+{len(view['orders']) - 1} MORE WAITING)" if len(view["orders"]) > 1 else ""
-        lines.append(f"WHY: {why} - ROOM TO THE NEXT LEVEL{more}")
-    else:
-        lines.append("NOTHING TO DO NOW")
-        lines.append(f"WHY: {_why_nothing(reading, n)}")
+    lines = sentences(reading, view, fmt)
 
     pad = (max(c.high for c in candles) - min(c.low for c in candles)) * 0.06
     lo_p = min([c.low for c in candles] + [z.low for z in view["zones"]] + [o.stop for o in view["orders"]] + [o.target for o in view["orders"]])

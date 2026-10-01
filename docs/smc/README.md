@@ -148,3 +148,17 @@ sweep and false zone. `--stale-bars` (default 60) matches the live run. The live
 Examples in `docs/evidence/trader-view-*.png`. The gold and GBP/AUD pictures are built from **Deriv's** candles, set beside
 a trader's **TradingView/OANDA** screenshots from 30 Sep 2026: the feeds differ slightly (gold ~4,189 vs ~4,180 on screen), so
 they were compared by shape and order, not by exact level.
+
+## The one page (`run-smc --ui`, or `clicktrader ui`)
+
+A local, watch-only dashboard for two readers at once: a person looking at the page (chart drawn in the browser with hover
+prices, the plan as words and a target/entry/stop ladder, the demo balance, an evidence meter toward the 500 demo trades,
+the trades table, and a timeline of what the engine changed its mind about) and the engine's developer reading the same
+facts as data (`/api/state`, `/api/chart`, `/chart.png`). It listens on 127.0.0.1 only, shows no credentials, and cannot
+place a trade.
+
+- `run-smc --ui` serves the page from inside the run, so it shows exactly the engine that is trading (add `--ui-port N`,
+  `--no-browser`). Without `--ui` nothing changes.
+- `clicktrader ui` reads the live feed with its own paper engine and serves the same page, for looking without running.
+- The page is fed after each tick and never drives the engine; a test asserts the strategy decides identically with and
+  without it. The picture is drawn only when something asks for it.
