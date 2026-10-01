@@ -42,6 +42,7 @@ a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
 .spacer{flex:1}
 .badge{font-size:11px;font-weight:700;letter-spacing:.08em;padding:4px 9px;border-radius:6px;background:rgba(230,162,60,.13);color:var(--amber);border:1px solid rgba(230,162,60,.35)}
 
+@media (max-width:560px){.top{position:static}#ago{display:none}.top-in{padding:10px 16px}.badge{font-size:10px}.ladder.idle{display:none}.plan{grid-template-columns:1fr}.price{font-size:38px}}
 /* layout */
 main{max-width:1320px;margin:0 auto;padding:18px 20px 40px;display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:16px}
 @media (max-width:1020px){main{grid-template-columns:1fr}}
@@ -251,6 +252,7 @@ window.addEventListener('resize',draw);
 /* ---------- panels ---------- */
 function ladder(o,price,d){
   const el=$('ladder');
+  el.classList.toggle('idle',!o);
   if(!o){el.innerHTML='<div class="idle-art"><svg width="54" height="54" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><div style="font-size:12px;margin-top:6px">waiting</div></div>';return}
   const vals=[o.target,o.entry,o.stop,price].filter(v=>v!=null),lo=Math.min(...vals),hi=Math.max(...vals),pos=v=>((hi-v)/(hi-lo))*100;
   const bar=(a,b,c)=>`<div class="${c}" style="top:${Math.min(pos(a),pos(b))}%;height:${Math.abs(pos(a)-pos(b))}%"></div>`;
