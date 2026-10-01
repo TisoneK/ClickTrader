@@ -168,12 +168,12 @@ def test_a_zone_is_fresh_until_price_first_comes_back_and_then_it_is_used():
 
 
 def test_a_close_through_the_far_edge_kills_the_zone():
-    (z,) = _zones((12.5, 12.6, 12.3, 12.4), (12.4, 12.45, 9.9, 10.05))
+    (z,) = [q for q in _zones((12.5, 12.6, 12.3, 12.4), (12.4, 12.45, 9.9, 10.05)) if q.kind == "DEMAND"]  # (the crash is itself a two-candle supply origin)
     assert z.status == "dead" and z.died_at is not None
 
 
 def test_a_violent_return_is_flagged_as_a_falling_knife():
-    (z,) = _zones((12.5, 12.6, 12.3, 12.4), (12.4, 12.45, 10.3, 10.4))  # one huge bearish bar straight into the zone
+    (z,) = [q for q in _zones((12.5, 12.6, 12.3, 12.4), (12.4, 12.45, 10.3, 10.4)) if q.kind == "DEMAND"]  # one huge bearish bar straight into the zone
     assert z.status == "used" and z.knife
 
 
@@ -202,7 +202,7 @@ def test_every_zone_has_one_of_three_verdicts_true_false_or_broken():
     assert _zones(base=base)[-1].verdict == "FALSE"  # no break of structure
     (true,) = _zones()
     assert true.verdict == "TRUE"
-    (broken,) = _zones((12.5, 12.6, 12.3, 12.4), (12.4, 12.45, 9.9, 10.05))
+    (broken,) = [q for q in _zones((12.5, 12.6, 12.3, 12.4), (12.4, 12.45, 9.9, 10.05)) if q.kind == "DEMAND"]
     assert broken.verdict == "BROKEN"  # it was valid, then a bar closed through it
 
 

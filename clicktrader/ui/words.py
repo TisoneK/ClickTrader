@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import re
 
+from ..forex.model import Direction
+
 REASON = {
     "slower_chart": "The bigger charts (5 and 15 minutes) point the other way, so I am staying out until they agree.",
     "trend": "The only zone nearby is against the current trend, so it is not worth taking.",
@@ -93,4 +95,42 @@ def sentences(view: str, plans: list[dict] | None = None) -> list[str]:
         return out
     if view.startswith("dropped:"):
         out.insert(0, "The waiting order was dropped: price closed through the zone.")
+    return out
+
+
+def analysis(reading, view: dict, dec: int, stamp=lambda epoch: "") -> list[str]:
+    """How the engine reads the chart, in plain sentences: direction, who is in control, the zones and levels it is standing on, the last
+    break, and how many candidate zones it threw out. This is the analysis the picture is drawn from, said in words."""
+    price = view["price"]
+    f = lambda p: f"{p:.{dec}f}"  # noqa: E731
+    out: list[str] = []
+    struct = reading.structure[-1].value if reading.structure else "range"
+    ctrl = reading.control[-1].value if reading.control and reading.control[-1] else ""
+    out.append({"up": "Price has been making higher highs and higher lows, so the trend is up.",
+                "down": "Price has been making lower highs and lower lows, so the trend is down."}.get(struct, "Price is moving sideways between a ceiling and a floor: no clear trend.")
+               + {"demand": " Buyers are in control.", "supply": " Sellers are in control."}.get(ctrl, ""))
+
+    def zone_text(z) -> str:
+        mid = (z.low + z.high) / 2
+        where = f"{f(abs(mid - price))} {'above' if mid > price else 'below'} price"
+        return f"{f(z.low)} - {f(z.high)} ({'fresh' if z.status == 'fresh' else 'touched once, weaker'}, {where})"
+
+    zones = list(view["zones"])
+    for o in view["orders"]:
+        zones.append(type("Z", (), {"low": min(o.block.price_low, o.block.price_high), "high": max(o.block.price_low, o.block.price_high),
+                                    "status": "fresh", "direction": o.direction})())
+    buyers = [z for z in zones if z.direction is Direction.UP]
+    sellers = [z for z in zones if z.direction is Direction.DOWN]
+    out.append("Buyer zones (where buyers stepped in hard and price may turn up again): " + ("; ".join(zone_text(z) for z in buyers) if buyers else "none standing near price."))
+    out.append("Seller zones (where sellers pushed price down hard): " + ("; ".join(zone_text(z) for z in sellers) if sellers else "none standing near price."))
+    if view["levels"]:
+        out.append("Price levels where price has turned several times: " + "; ".join(f"{f(b.low)} - {f(b.high)}" if f(b.low) != f(b.high) else f(b.low) for b, _ in view["levels"]) + ".")
+    last = view["events"][-1] if view["events"] else None
+    if last:
+        idx, kind, verdict, level, _frm, _dir = last
+        text = _EVENT.get((kind, verdict))
+        if text:
+            out.append((stamp(view["candles"][idx].opened_at) + " " if hasattr(view["candles"][idx], "opened_at") else "") + text.format(lvl=f(level)))
+    if view.get("rejected"):
+        out.append(f"{view['rejected']} possible zones were thrown out as not real (the move was too small, left no gap, or broke no structure).")
     return out

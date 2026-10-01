@@ -25,7 +25,7 @@ from ..multipliers import tidy
 from ..smc.readiness import load
 from ..smc.trader_view import draw_trader_view, trader_view
 from ..smc.trader_view import sentences as trader_sentences
-from ..smc.trader_view import why_code
+from ..smc.trader_view import IMMINENT_RANGES, why_code
 from . import words
 from ..strategies import History
 
@@ -75,9 +75,20 @@ class Watcher:
             verdict = {"kind": "waiting", "headline": f"Waiting to {side}", "reason": words.why_waiting(side, o.source),
                        "detail": (f"If price goes beyond {o.stop:.{2 if price >= 20 else 5}f} the idea is wrong. Target {o.target:.{2 if price >= 20 else 5}f}, {o.reward_risk:.1f} to 1. "
                                   f"At that ratio it breaks even if it wins more than {100 / (1 + o.reward_risk):.0f} in 100 (before costs), so what counts is the win rate over many trades, not the ratio.")}
+        elif view.get("watching") is not None:
+            w = view["watching"]
+            wside = "buy" if long(w) else "sell"
+            wlo, whi = min(w.block.price_low, w.block.price_high), max(w.block.price_low, w.block.price_high)
+            dec = 2 if price >= 20 else 5
+            verdict = {"kind": "watching", "headline": "Nothing close right now",
+                       "reason": (f"Next to watch: a {'buyer' if wside == 'buy' else 'seller'} zone at {wlo:.{dec}f} - {whi:.{dec}f}, "
+                                  f"{abs(w.entry - price):.{dec}f} {'below' if wside == 'buy' else 'above'} price (about {view['watching_ranges']:.0f} typical candles away)."),
+                       "detail": f"A trade is planned only once price gets within {IMMINENT_RANGES:.0f} candles of a zone. " + words.why_waiting(wside, w.source)}
         else:
             verdict = {"kind": "idle", "headline": "No trade right now", "reason": words.why_nothing(why_code(reading, len(reading.candles))), "detail": ""}
+        stamp = lambda epoch: time.strftime("%H:%M", time.localtime(epoch))  # noqa: E731
         return {
+            "analysis": words.analysis(reading, view, 2 if price >= 20 else 5, stamp),
             "verdict": verdict,
             "trend": sentences[0], "waiting": sentences[1], "why": sentences[2], "bars_read": len(reading.candles),
             "orders": [{"side": "buy" if long(o) else "sell", "zone": [min(o.block.price_low, o.block.price_high), max(o.block.price_low, o.block.price_high)],
@@ -86,7 +97,9 @@ class Watcher:
             "chart": {
                 "candles": [[c.opened_at, c.open, c.high, c.low, c.close] for c in cs],
                 "range": [rng[0], rng[1]],
-                "zones": [{"kind": z.kind, "low": z.low, "high": z.high, "start": max(0, z.origin_index - lo), "plan": False} for z in view["zones"]]
+                "swings": [{"i": i, "price": p, "label": lab, "kind": k} for i, p, lab, k in view["swings"]],
+                "events": [{"i": i, "kind": k, "verdict": v, "level": lv, "from": fr, "dir": d} for i, k, v, lv, fr, d in view["events"]],
+                "zones": [{"kind": z.kind, "low": z.low, "high": z.high, "start": max(0, z.origin_index - lo), "plan": False, "fresh": z.status == "fresh"} for z in view["zones"]]
                          + [{"kind": "DEMAND" if long(o) else "SUPPLY", "low": min(o.block.price_low, o.block.price_high), "high": max(o.block.price_low, o.block.price_high),
                              "start": max(0, o.block.index - lo), "plan": True} for o in view["orders"]],
                 "levels": [{"low": b.low, "high": b.high, "touches": b.touches, "start": max(0, b.first_index - lo)} for b, _ in view["levels"]],

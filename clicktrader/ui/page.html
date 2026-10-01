@@ -85,6 +85,7 @@ table{width:100%;border-collapse:collapse;font-size:14px}
 th{font-weight:500;color:var(--mute);text-align:left;padding:0 6px 5px 0;font-size:12.5px}
 td{padding:5px 6px 5px 0;border-top:1px solid var(--line)}
 td:last-child,th:last-child{text-align:right;padding-right:0}
+.ana{list-style:none;margin:0;padding:0}.ana li{padding:5px 0;border-top:1px solid var(--line);color:var(--ink2);font-size:14px}.ana li:first-child{border-top:0}
 .feed{list-style:none;margin:0;padding:0}
 .feed li{display:grid;grid-template-columns:44px 1fr;gap:8px;padding:6px 0;border-top:1px solid var(--line);color:var(--ink2)}
 .feed time{color:var(--mute)}
@@ -131,6 +132,7 @@ td:last-child,th:last-child{text-align:right;padding-right:0}
       <span class="lab">Show on chart</span>
       <button class="toggle" aria-pressed="true" data-k="zones"><span class="sw"><i style="background:var(--c-demand)"></i><i style="background:var(--c-supply)"></i></span>Buyer and seller zones</button>
       <button class="toggle" aria-pressed="true" data-k="levels"><span class="sw"><i style="background:var(--c-level)"></i></span>Price levels</button>
+      <button class="toggle" aria-pressed="true" data-k="structure"><span class="sw"><i style="background:var(--ink2)"></i></span>Highs, lows and breaks</button>
       <button class="toggle" aria-pressed="true" data-k="plan"><span class="sw"><i style="background:var(--c-reward)"></i><i style="background:var(--c-risk)"></i></span>Trade plan</button>
     </div>
     <div class="chartbox" id="box"><canvas id="cv"></canvas><div class="veil" id="veil"></div><div class="tip num" id="tip"></div></div>
@@ -139,6 +141,7 @@ td:last-child,th:last-child{text-align:right;padding-right:0}
   <div class="side">
     <div class="blk"><div class="price num" id="price">-</div><div class="mood" id="mood"></div></div>
     <div class="blk" id="openblk"></div>
+    <div class="blk"><h2>How the engine reads this chart</h2><ul class="ana" id="analysis"></ul></div>
     <div class="blk demo-wrap"><div class="demo"><h2>Your demo account <span class="sub num" id="demosum"></span></h2><div id="demo"></div></div></div>
     <div class="blk"><details class="paper"><summary>Practice runs <span class="sub">no costs counted, not evidence</span></summary><div id="paper" style="margin-top:8px"></div></details></div>
     <div class="blk"><h2>What has happened</h2><ul class="feed num" id="events"></ul></div>
@@ -165,7 +168,7 @@ const fmt=(x,d)=>x==null||isNaN(x)?'-':Number(x).toLocaleString(undefined,{minim
 const dec=p=>p<20?5:2;
 const signed=(v,d=2)=>(v>0?'+':'')+fmt(v,d);
 const esc=t=>String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;');
-let S=null,hover=null,show={zones:true,levels:true,plan:true},tState='dark';
+let S=null,hover=null,show={zones:true,levels:true,plan:true,structure:true},tState='dark';
 
 /* ---------- theme: dark by default, remembered ---------- */
 function applyTheme(t){
@@ -224,8 +227,11 @@ function draw(){
   const band=(a,b,s,col,al,edges)=>{const x0=x(s),y0=y(b),y1=y(a);g.fillStyle=col;g.globalAlpha=al;g.fillRect(x0,y0,R-x0,Math.max(1,y1-y0));g.globalAlpha=1;
     if(edges){g.strokeStyle=col;g.globalAlpha=.85;g.setLineDash([5,4]);g.beginPath();g.moveTo(x0,Math.round(y0)+.5);g.lineTo(R,Math.round(y0)+.5);g.moveTo(x0,Math.round(y1)+.5);g.lineTo(R,Math.round(y1)+.5);g.stroke();g.setLineDash([]);g.globalAlpha=1}};
   if(show.levels)C.levels.forEach(l=>{band(l.low,l.high,l.start,css('--c-level'),.09,false);label('Price level '+(fmt(l.low,d)===fmt(l.high,d)?fmt(l.low,d):fmt(l.low,d)+' - '+fmt(l.high,d)),Math.max(x(l.start)+6,padL+6),y(l.high)+15,css('--c-level'),'down')});
-  if(show.zones)C.zones.forEach(z=>{const sup=z.kind==='SUPPLY',col=sup?css('--c-supply'):css('--c-demand');band(z.low,z.high,z.start,col,z.plan?.26:.10,z.plan);
-    label((z.plan?'Plan zone: ':'')+(sup?'Seller zone ':'Buyer zone ')+fmt(z.low,d)+' - '+fmt(z.high,d),Math.max(x(z.start)+6,padL+6),sup?y(z.high)-7:y(z.low)+16,col,sup?'up':'down')});
+  if(show.zones)C.zones.forEach(z=>{const sup=z.kind==='SUPPLY',col=sup?css('--c-supply'):css('--c-demand');band(z.low,z.high,z.start,col,z.plan?.26:(z.fresh?.17:.07),z.plan||z.fresh);
+    label((z.plan?'Plan zone: ':'')+(sup?'Seller zone ':'Buyer zone ')+fmt(z.low,d)+' - '+fmt(z.high,d)+(z.plan||z.fresh?'':' (used)'),Math.max(x(z.start)+6,padL+6),sup?y(z.high)-7:y(z.low)+16,col,sup?'up':'down')});
+  if(show.structure)(C.events||[]).forEach(e=>{const col=e.kind==='CHOCH'?css('--ink'):e.kind==='SWEEP'?css('--mute'):css('--c-level'),x1=x(e.i),x0=Math.max(x(Math.max(0,e.from)),x1-45*pw),yy=Math.round(y(e.level))+.5;
+    g.strokeStyle=col;g.globalAlpha=.9;g.lineWidth=1.3;g.setLineDash(e.kind==='BOS'?[5,4]:e.kind==='SWEEP'?[2,3]:[]);g.beginPath();g.moveTo(x0,yy);g.lineTo(x1,yy);g.stroke();g.setLineDash([]);g.globalAlpha=1;g.lineWidth=1;
+    label(e.kind==='BOS'?'Trend carried on':e.kind==='CHOCH'?'Trend turned':e.kind==='SWEEP'?'Stops taken':'Gap filled',Math.max(padL+6,(x0+x1)/2-34),e.dir==='down'?yy+15:yy-6,col,e.dir==='down'?'down':'up')});
   const axisQ=[];const axisTag=(txt,p,col)=>{axisQ.push([txt,p,col])};
   if(show.plan&&!ot)C.orders.forEach(o=>{const tg=o.target_off?(o.target<lo?lo+(hi-lo)*.012:hi-(hi-lo)*.012):o.target;
     band(Math.min(o.entry,o.stop),Math.max(o.entry,o.stop),o.start,css('--c-risk'),.2,false);band(Math.min(o.entry,tg),Math.max(o.entry,tg),o.start,css('--c-reward'),.16,false);
@@ -238,6 +244,7 @@ function draw(){
   const bw=Math.max(2,Math.min(14,pw*.62));
   C.candles.forEach((c,i)=>{const up=c[4]>=c[1],col=up?css('--c-up'):css('--c-down'),xx=Math.round(x(i))+.5;g.strokeStyle=col;g.fillStyle=col;
     g.beginPath();g.moveTo(xx,y(c[2]));g.lineTo(xx,y(c[3]));g.stroke();const t=y(Math.max(c[1],c[4])),b=y(Math.min(c[1],c[4]));g.fillRect(xx-bw/2,t,bw,Math.max(1.5,b-t))});
+  if(show.structure){g.font='600 11px -apple-system,Segoe UI,sans-serif';g.textBaseline='middle';(C.swings||[]).forEach(w=>{const hi_=w.kind==='high',xx=x(w.i),yy=y(w.price)+(hi_?-9:9);g.fillStyle=css('--ink2');g.globalAlpha=.85;g.textAlign='center';g.fillText(w.label,xx,yy);g.textAlign='start';g.globalAlpha=1});g.font=mono}
   if(ot){const idx=C.candles.findIndex(c=>c[0]>=ot.opened-60),x0=idx<0?x(n-1):x(idx);
     [[ot.target,css('--c-up'),'Target'],[ot.entry,css('--ink'),'Entry'],[ot.stop,css('--c-down'),'Wrong']].forEach(([p,col,k])=>{g.strokeStyle=col;g.lineWidth=1.5;g.setLineDash(k==='Entry'?[]:[6,4]);g.beginPath();g.moveTo(x0,Math.round(y(p))+.5);g.lineTo(R,Math.round(y(p))+.5);g.stroke();g.setLineDash([]);axisTag(k+' '+fmt(p,d),p,col)});g.lineWidth=1}
   // right-hand labels: the tick stays at the true price, the words step aside so none prints over another or over the live price
@@ -283,12 +290,13 @@ function render(){
   else if(ot){const long=ot.side==='buy';v1=`<span class="${long?'buy':'sell'}">Trade open: ${ot.side}</span> from ${fmt(ot.entry,d)}, <span class="${ot.profit>0?'pos':ot.profit<0?'neg':''}">${signed(ot.profit)}</span> so far`;
     v2=`It closes by itself if price reaches ${fmt(ot.target,d)} (profit) or ${fmt(ot.stop,d)} (loss).`;v3='One trade at a time: new signals are skipped until this one closes.'}
   else if(v.kind==='waiting'){const long=(v.headline||'').includes('buy');v1=`<span class="${long?'buy':'sell'}">${esc(v.headline)}</span>`;v2=esc(v.reason);v3=esc(v.detail)}
-  else{v1=esc(v.headline||'No trade right now');v2=esc(v.reason||'')}
+  else{v1=esc(v.headline||'No trade right now');v2=esc(v.reason||'');v3=esc(v.detail||'')}
   $('v1').innerHTML=v1;$('v2').innerHTML=v2;$('v3').innerHTML=v3;
   $('openblk').innerHTML=ot?`<div class="openbox"><div class="sub">Open trade${h.k!=='live'?' (last known, feed not live)':''}</div><div class="pl num ${ot.profit>0?'pos':ot.profit<0?'neg':''}">${signed(ot.profit)}</div><div><span class="${ot.side}">${ot.side}</span> from <span class="num">${fmt(ot.entry,d)}</span><br>Wrong beyond <span class="num">${fmt(ot.stop,d)}</span> · target <span class="num">${fmt(ot.target,d)}</span></div></div>`:'<div class="muted">No open trade</div>';
   const tr2=s.trades||[],demo=tr2.filter(x=>x.mode!=='paper'),paper=tr2.filter(x=>x.mode==='paper');
   $('demo').innerHTML=table(demo.slice(0,6),'No demo trades yet');$('paper').innerHTML=table(paper.slice(0,4),'No practice trades yet');
   $('demosum').innerHTML=ev.demo.all_trades?`${ev.demo.all_trades} trade${ev.demo.all_trades>1?'s':''} · <span class="${ev.demo.all_net>0?'pos':ev.demo.all_net<0?'neg':''}">${signed(ev.demo.all_net)}</span> in total`:'';
+  $('analysis').innerHTML=(s.analysis||[]).map(t=>`<li>${esc(t)}</li>`).join('')||'<li>Reading the chart...</li>';
   $('events').innerHTML=(s.events||[]).slice(0,8).map(e=>`<li><time>${e.t}</time><span>${esc(e.text)}</span></li>`).join('')||'<li><time></time><span>Nothing yet. Updates appear here as the market moves.</span></li>';
   const dg=s.diagnostics||{};
   $('dendp').innerHTML=(dg.endpoints||[]).map(u=>`<a href="${u}">${u}</a>`).join(' · ');

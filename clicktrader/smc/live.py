@@ -78,6 +78,7 @@ def warm_from_history(strategy, symbol: str, *, minutes: float, bars: int, decim
 
     granularity = int(minutes * 60)
     candles = fetch_candles(symbol, granularity=granularity, count=bars)
+    candles = [c for c in candles if int(c["epoch"]) % granularity == 0]  # the candle still forming carries the time of its last tick, not its open
     ticks = [r.tick for r in ticks_from_candles(candles, symbol=symbol, granularity=granularity, decimals=decimals)]
     fed = strategy.warm(ticks)
     emit(f"warmed with {len(candles)} {minutes:g}-minute bars of {symbol} ({fed} ticks) — the engine starts with a chart, not a blank screen")

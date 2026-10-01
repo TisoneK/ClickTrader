@@ -48,6 +48,11 @@ def why_code(reading: Reading, n: int) -> str:
     return "none"
 
 
+IMMINENT_RANGES = 10.0
+"""A plan is "waiting" only when its entry is within this many typical candle ranges of price. Farther than that is a zone to watch, not an
+opportunity: a buy zone 20 points under a market that has just rallied is not a trade the engine is about to take."""
+
+
 def _why_nothing(reading: Reading, n: int) -> str:
     """The most recent reason an order was refused or taken away, in words; else that no fresh zone is in reach."""
     for o in reversed(reading.opportunities):
@@ -75,24 +80,29 @@ def trader_view(reading: Reading, *, bars: int = 120) -> dict:
         """The band [a, b] overlaps the candles' span, or lies within `margin` spans of it."""
         return b >= base_lo - margin * span and a <= base_hi + margin * span
 
+    typical = sorted(c.range for c in candles[-20:])[len(candles[-20:]) // 2] or 1e-12
     standing = [o for o in reading.opportunities if o.state is State.ARMED and o.target is not None]
-    orders: list = []
+    every: list = []
     for o in sorted(standing, key=lambda o: (abs(o.entry - price), o.source != "zone")):  # one plan once; a zone is the plainer reason
-        if near(min(o.entry, o.stop), max(o.entry, o.stop), 1.0) and not any(
-                q.direction is o.direction and abs(q.entry - o.entry) < 1e-9 and abs(q.stop - o.stop) < 1e-9 for q in orders):
-            orders.append(o)
-    orders = orders[:2]
+        if not any(q.direction is o.direction and abs(q.entry - o.entry) < 1e-9 and abs(q.stop - o.stop) < 1e-9 for q in every):
+            every.append(o)
+    orders = [o for o in every if abs(o.entry - price) / typical <= IMMINENT_RANGES and near(min(o.entry, o.stop), max(o.entry, o.stop), 1.0)][:2]
+    far = [o for o in every if o not in orders]
+    watching = far[0] if far else None
     plan_zone = {(o.direction, round(o.block.price_low, 9), round(o.block.price_high, 9)) for o in orders}
 
-    zones = [z for z in reading.zones if z.valid and z.status == "fresh" and z.died_at is None and not z.weaker]
-    supply = sorted((z for z in zones if z.direction is Direction.DOWN and z.high > price), key=lambda z: z.low)[:1]
-    demand = sorted((z for z in zones if z.direction is Direction.UP and z.low < price), key=lambda z: -z.high)[:1]
-    zones = [z for z in (*supply, *demand) if near(z.low, z.high, 0.15) and (z.direction, round(z.low, 9), round(z.high, 9)) not in plan_zone]
-
+    # The analysis: every true zone still standing (fresh, or used once and fainter) and every live level that touches the candles'
+    # span. What keeps the scale honest is that an item far outside the span is left off, not that there are few items.
+    standing_zones = [z for z in reading.zones if z.valid and z.died_at is None and not z.weaker]
+    zones = sorted((z for z in standing_zones if near(z.low, z.high, 0.15) and (z.direction, round(z.low, 9), round(z.high, 9)) not in plan_zone),
+                   key=lambda z: abs((z.low + z.high) / 2 - price))[:8]
     alive = [(b, born) for b, born, died in reading.levels if died is None and born < n]
-    above = sorted((x for x in alive if x[0].low > price), key=lambda x: x[0].low)[:1]
-    below = sorted((x for x in alive if x[0].high < price), key=lambda x: -x[0].high)[:1]
-    levels = [x for x in (*above, *below) if near(x[0].low, x[0].high, 0.35)]
+    levels = sorted((x for x in alive if near(x[0].low, x[0].high, 0.15)), key=lambda x: abs((x[0].low + x[0].high) / 2 - price))[:6]
+
+    swings = [(ls.swing.index - lo, ls.swing.price, ls.label, ls.swing.kind.value) for ls in reading.swings
+              if ls.swing.index in reading.major and lo <= ls.swing.index < n and ls.known_at < n]
+    events = [(e.index - lo, e.kind.value, e.verdict.value, e.level, max(0, e.level_from - lo), e.direction.value)
+              for e in reading.events if lo <= e.index < n][-5:]
 
     # the scale: the candles, the plan's entry and stop, the kept zones; the target only when it does not squash the candles
     prices = [base_lo, base_hi] + [z.low for z in zones] + [z.high for z in zones]
@@ -103,7 +113,8 @@ def trader_view(reading: Reading, *, bars: int = 120) -> dict:
             prices.append(o.target)
     pad = (max(prices) - min(prices)) * 0.05
     return {"lo": lo, "candles": candles, "price": price, "orders": orders, "zones": zones, "levels": levels,
-            "range": (min(prices) - pad, max(prices) + pad)}
+            "range": (min(prices) - pad, max(prices) + pad), "watching": watching, "swings": swings, "events": events,
+            "rejected": sum(1 for z in reading.zones if not z.valid and z.died_at is None), "watching_ranges": abs(watching.entry - price) / typical if watching is not None else None}
 
 
 def sentences(reading: Reading, view: dict | None = None, fmt=None, decimals: int | None = None) -> list[str]:

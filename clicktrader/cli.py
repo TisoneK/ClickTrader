@@ -493,6 +493,10 @@ def cmd_run_smc(args: argparse.Namespace) -> int:
     from .smc.live import paper_run, warm_from_history
     from .smc.strategy import SmcStrategy
 
+    if args.preset == "decks":
+        args.minutes, args.higher_minutes = 60.0, [240.0, 1440.0]
+        if args.warm_bars == 1000:
+            args.warm_bars = 600  # 600 hourly bars = 25 days: enough for the 4-hour and daily charts to have swings
     chain = tuple(args.higher_minutes)  # an empty chain means no slower-clock veto at all
     inner = SmcStrategy(trigger_minutes=args.minutes, higher_minutes=chain, risk_reward=args.risk_reward,
                            stale_bars=_stale_for(args.stale_bars, args.minutes), counter_trend=args.counter_trend,
@@ -527,7 +531,7 @@ def cmd_run_smc(args: argparse.Namespace) -> int:
         _ctrl_c_always_works()
     try:
         if args.warm_bars:
-            warm_from_history(strategy, args.symbol, minutes=1.0, bars=args.warm_bars, decimals=args.decimals)
+            warm_from_history(strategy, args.symbol, minutes=_warm_granularity(args.minutes), bars=args.warm_bars, decimals=_decimals_for(args.symbol, args.decimals))
             print(f"right now it sees: {strategy.describe()}", flush=True)
         feed = stream_ticks(args.symbol)
         page = None
@@ -596,6 +600,20 @@ def _ctrl_c_always_works(*, grace: float = 3.0) -> None:
     threading.Thread(target=waiter, daemon=True).start()
 
 
+def _decimals_for(symbol: str, given: int | None) -> int:
+    """Price decimals the market quotes: gold and indices two, a yen pair three, other currency pairs five, synthetics two."""
+    if given is not None:
+        return given
+    if symbol.startswith("frx"):
+        return 2 if symbol[3:6] in ("XAU", "XAG") else 3 if symbol.endswith("JPY") else 5
+    return 2
+
+
+def _warm_granularity(minutes: float) -> float:
+    """The candle size to warm with: the trigger's own when Deriv serves it, else one minute."""
+    return minutes if minutes in (1, 2, 3, 5, 10, 15, 30, 60, 120, 240, 480, 1440) else 1.0
+
+
 def _stale_for(value: int | None, minutes: float) -> int | None:
     """How many bars an order may stand unfilled. Left alone it is automatic: 60 bars on a 1-minute chart (an hour), none on a
     slower one, where an order is meant to wait days. 0 means never; any other number is taken as given."""
@@ -643,7 +661,7 @@ def cmd_ui(args: argparse.Namespace) -> int:
 
     load_env_file()
     strategy = SmcStrategy(trigger_minutes=1.0, higher_minutes=tuple(args.higher_minutes), stale_bars=_stale_for(args.stale_bars, 1.0), counter_trend=args.counter_trend)
-    warm_from_history(strategy, args.symbol, minutes=1.0, bars=args.warm_bars, decimals=args.decimals)
+    warm_from_history(strategy, args.symbol, minutes=1.0, bars=args.warm_bars, decimals=_decimals_for(args.symbol, args.decimals))
     watcher = _start_page(strategy, args, symbol=args.symbol, mode="watching the live feed")
     try:
         watcher.follow(stream_ticks(args.symbol))
@@ -1037,7 +1055,7 @@ def main(argv: list[str] | None = None) -> int:
     ui.add_argument("--stale-bars", type=int, default=None)
     ui.add_argument("--counter-trend", action=argparse.BooleanOptionalAction, default=True)
     ui.add_argument("--warm-bars", type=int, default=1000)
-    ui.add_argument("--decimals", type=int, default=2)
+    ui.add_argument("--decimals", type=int, default=None)
     ui.add_argument("--no-browser", action="store_true", help="do not open a browser tab")
     ui.add_argument("--no-balance", action="store_true", help="do not look up the demo balance")
     ui.set_defaults(func=cmd_ui)
@@ -1070,7 +1088,8 @@ def main(argv: list[str] | None = None) -> int:
     run_smc.add_argument("--max-seconds", type=float, default=None, help="stop after this many seconds (default: no cap)")
     run_smc.add_argument("--max-loss-per-trade", type=float, default=None, help="optional: refuse a plan whose stop is worth more than this (default: no limit)")
     run_smc.add_argument("--warm-bars", type=int, default=1000, help="one-minute bars of history to start with (default 1000; 0 = start blind)")
-    run_smc.add_argument("--decimals", type=int, default=2)
+    run_smc.add_argument("--decimals", type=int, default=None, help="price decimals (default: by symbol - gold 2, a yen pair 3, other pairs 5, synthetics 2)")
+    run_smc.add_argument("--preset", choices=("decks", "fast-test"), default=None, help="decks: the method as the decks teach it - 1-hour trigger, 4-hour and daily slower charts (hours to days per trade; use a real market such as frxXAUUSD or frxGBPAUD). fast-test: 1-minute bars, a plumbing test only (the default settings)")
     run_smc.add_argument("--report-every", type=float, default=60.0, help="seconds between status lines saying what the engine sees (default 60)")
     run_smc.add_argument("--log", default=None)
     run_smc.add_argument("--place", action="store_true", help="actually place orders on the DEMO account (default is paper: nothing placed)")

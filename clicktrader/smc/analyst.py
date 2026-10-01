@@ -453,7 +453,7 @@ def read_chart(
     strength: int = 2,
     lookback: int = 20,
     risk_reward: float = 2.0,
-    zone_min_candles: int = 3,
+    zone_min_candles: int = 2,
     stale_bars: int | None = None,
     counter_trend: bool = False,
     stop_buffer: float = 0.0,
@@ -559,17 +559,18 @@ def read_chart(
                     prior = major_swings([sw for sw in all_swings if sw.index + strength <= st])
                     ref = [sw for sw in prior if sw.kind is (SwingKind.HIGH if up else SwingKind.LOW)][-1:]
                     has_bos = bool(ref) and any((c.high > ref[0].price) if up else (c.low < ref[0].price) for c in candles[st : en + 1])
-                    z = zone_by_start.get(st)
+                    z = zone_by_start.get(st) or zone_by_start.get(("origin", o))  # one zone per origin candle, however many runs grew from it
                     # An aggressive run is always a candidate. An ordinary-sized one only when it still breaks structure —
                     # the decks' "invalid: fails the aggression rule" — otherwise it is just noise and is not a zone at all.
                     if z is None and (aggressive or has_bos):
                         origin = candles[o]
                         z = Zone(Direction.UP if up else Direction.DOWN, origin.low, origin.high, o, st, en, t, aggressive=aggressive)
                         zone_by_start[st] = z
+                        zone_by_start[("origin", o)] = z
                         reading.zones.append(z)
                     if z is not None:
-                        z.end = en
-                        z.has_gap, z.has_bos = has_gap, has_bos
+                        z.end = max(z.end, en)
+                        z.has_gap, z.has_bos = z.has_gap or has_gap, z.has_bos or has_bos
                         z.aggressive = z.aggressive or aggressive  # once the growing run is far larger than ordinary, it stays so
         rng = _median([c.range for c in candles[max(0, t - lookback) : t + 1]]) or 1e-12
         for z in reading.zones:
