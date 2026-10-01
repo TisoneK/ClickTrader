@@ -244,7 +244,7 @@ class Reading:
         )
 
 
-RULES_VERSION = "2026-10-01.6"
+RULES_VERSION = "2026-10-01.8"
 """Bump this whenever a rule that changes which trades are taken changes. It is part of every log row's rules fingerprint, so a test's
 evidence is only ever one set of rules."""
 
@@ -434,6 +434,34 @@ def _veto(clocks, short: bool, strength: int) -> str:
     return ""
 
 
+def _wrong_half(candles, t: int, mid: float, short: bool, bars: int = 100) -> str:
+    """Why a zone sits in the wrong half of the current range, or "": a sell belongs in the premium (upper) half, a buy in the discount (lower) half.
+
+    The range is the high and low of the last `bars` bars - the move the market is in, not the latest wiggle inside it (the swing-based
+    version measured a 3-point wiggle on a 22-point fall and let the sell through)."""
+    window = candles[max(0, t - bars + 1) : t + 1]
+    high, low = max(c.high for c in window), min(c.low for c in window)
+    if high <= low:
+        return ""
+    eq = (high + low) / 2
+    if short and mid < eq:
+        return f"in the discount half of the current range ({low:.5f}-{high:.5f}, midpoint {eq:.5f}): a sell belongs in the premium half"
+    if not short and mid > eq:
+        return f"in the premium half of the current range ({low:.5f}-{high:.5f}, midpoint {eq:.5f}): a buy belongs in the discount half"
+    return ""
+
+
+def _control_age(control, t: int) -> int:
+    """How many bars the market has been in the same hands (demand or supply), counting back from bar t; large if it never changed."""
+    now = control[t - 1] if 0 < t <= len(control) else None
+    age = 0
+    for i in range(min(t, len(control)) - 1, -1, -1):
+        if control[i] != now:
+            return age
+        age += 1
+    return 10**9
+
+
 def _pushed_ranges(candles, blk, short: bool, t: int) -> float:
     """How far price travelled away from the zone since it formed, in typical candle ranges."""
     since = candles[blk.index : t + 1]
@@ -474,6 +502,8 @@ def read_chart(
     strict_choch: bool = False,
     confluence_beats_clock: bool = False,
     allow_knife: bool = False,
+    equilibrium: bool = False,
+    settle_bars: int = 0,
     zones_block_path: bool = False,
     velocity_gate: bool = False,
     min_pushed: float = 0.0,
@@ -635,7 +665,8 @@ def read_chart(
                 continue
             standing = zone_opps.get(id(z))
             now_opp = _zone_opportunity(candles, t, z, known, view.at(t), strength, risk_reward, control, structure, counter_trend, stop_buffer, confluence_beats_clock,
-                                      _walls(reading.zones, z, t) if zones_block_path else ())
+                                      _walls(reading.zones, z, t) if zones_block_path else (), equilibrium,
+                                      _control_age(reading.control, t), settle_bars)
             if standing is not None:
                 if standing.state is State.ARMED and now_opp.state is State.DECLINED:
                     standing.state, standing.closed_at = State.CANCELLED, t
@@ -871,7 +902,8 @@ def fib_zone(top: float, bottom: float, *, demand: bool) -> tuple[float, float]:
 def _zone_opportunity(
     candles: Sequence[Candle], t: int, z: Zone, known: Sequence[SwingPoint], clocks, strength: int, risk_reward: float,
     control: Control | None, structure: Structure, counter_trend: bool = False, stop_buffer: float = 0.0,
-    confluence_beats_clock: bool = False, obstacles: Sequence[tuple[float, float]] = (),
+    confluence_beats_clock: bool = False, obstacles: Sequence[tuple[float, float]] = (), equilibrium: bool = False,
+    control_age: int = 10**9, settle_bars: int = 0,
 ) -> Opportunity:
     """The trade a fresh, true zone offers, or the reason it is not taken.
 
@@ -893,12 +925,14 @@ def _zone_opportunity(
     # sold or bought after it has gone far. A person takes that trade (the supply above a long rally); the decks' "only with
     # the trend" rule refuses it. Optional, because it is a judgement the decks do not make; the slower-clock veto does not
     # apply to it, since it is counter-trend by definition.
-    counter = counter_trend and not with_trend and bool(z.fib or z.stacked)
+    counter = counter_trend and not with_trend and bool(z.fib or z.stacked) and control_age >= settle_bars  # not the first bounce after control changed hands
     if not with_trend and not counter:
         up = control is Control.DEMAND or (control is None and structure is Structure.UP)
         down = control is Control.SUPPLY or (control is None and structure is Structure.DOWN)
         state = "an up-trend (the decks only look for demand)" if up else "a down-trend (the decks only look for supply)" if down else "no established trend yet"
         why_not = f"against the trend: it is {state}, and this is a {z.kind.lower()} zone"
+    elif equilibrium and _wrong_half(candles, t, (z.low + z.high) / 2, short):
+        why_not = "the zone sits " + _wrong_half(candles, t, (z.low + z.high) / 2, short)
     elif z.weaker:
         why_not = f"a weaker zone: another {z.kind.lower()} zone in the same leg is {'lower' if not short else 'higher'} and holds the deeper liquidity"
     elif risk <= 0:

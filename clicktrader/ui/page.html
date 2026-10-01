@@ -281,7 +281,8 @@ function render(){
   $('price').textContent=pr==null?'-':fmt(pr,d);
   const t=s.trend||'',tr=/TREND (\w+)/.exec(t),who=/(BUYERS|SELLERS)/.exec(t);
   const dirc=w=>w==='UP'||w==='BUYERS'?'buy':w==='DOWN'||w==='SELLERS'?'sell':'';
-  $('mood').innerHTML=tr?`Trend <span class="${dirc(tr[1])}">${tr[1].toLowerCase()}</span>${who?`. <span class="${dirc(who[1])}">${who[1][0]+who[1].slice(1).toLowerCase()}</span> are in control.`:''}`:'';
+  const mixed=tr&&who&&((tr[1]==='DOWN'&&who[1]==='BUYERS')||(tr[1]==='UP'&&who[1]==='SELLERS'));
+  $('mood').innerHTML=mixed?`Swings still ${tr[1]==='DOWN'?'falling':'rising'}, but <span class="${dirc(who[1])}">${who[1].toLowerCase()}</span> have just taken control`:(tr?`Trend <span class="${dirc(tr[1])}">${tr[1].toLowerCase()}</span>${who?`. <span class="${dirc(who[1])}">${who[1][0]+who[1].slice(1).toLowerCase()}</span> are in control.`:''}`:'');
   // the verdict: the largest text after the price. An open position first; a stale feed shows no plan at all.
   const box=$('box');box.classList.toggle('dim',h.k!=='live');
   $('veil').textContent=h.k==='stale'?'Feed stale: the picture may be out of date':h.k==='dead'?'Feed disconnected: nothing here is current':'';

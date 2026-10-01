@@ -106,6 +106,11 @@ def analysis(reading, view: dict, dec: int, stamp=lambda epoch: "") -> list[str]
     out: list[str] = []
     struct = reading.structure[-1].value if reading.structure else "range"
     ctrl = reading.control[-1].value if reading.control and reading.control[-1] else ""
+    mixed = (struct == "down" and ctrl == "demand") or (struct == "up" and ctrl == "supply")
+    if mixed:
+        out.append(f"The swing pattern still reads {struct} (lower highs and lows)" if struct == "down" else "The swing pattern still reads up (higher highs and lows)")
+        out[-1] += (", but buyers have just taken control after a change of direction. The engine goes by who has control, and it sells only in the upper half of the range, so it will not sell the bounce from a low."
+                    if struct == "down" else ", but sellers have just taken control after a change of direction. The engine goes by who has control, and it buys only in the lower half of the range.")
     out.append({"up": "Price has been making higher highs and higher lows, so the trend is up.",
                 "down": "Price has been making lower highs and lower lows, so the trend is down."}.get(struct, "Price is moving sideways between a ceiling and a floor: no clear trend.")
                + {"demand": " Buyers are in control.", "supply": " Sellers are in control."}.get(ctrl, ""))

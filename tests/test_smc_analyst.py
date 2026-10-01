@@ -431,3 +431,13 @@ def test_a_zone_price_barely_left_is_not_traded_the_decks_pushed_distance():
     far = flat[:10] + [Candle(10.5, 14.0, 10.5, 13.5)] + flat[11:]  # a leg up to 14.0 after the zone formed
     assert _pushed_ranges(flat, blk, False, 19) < 3.0  # price never left: not worth waiting for
     assert _pushed_ranges(far, blk, False, 19) >= 3.0
+
+
+def test_a_zone_in_the_wrong_half_of_the_range_is_declined_only_when_the_option_is_on():
+    from clicktrader.smc.analyst import _wrong_half
+
+    candles = [Candle(15, 20, 10, 15)] * 100  # a range 10-20, midpoint 15
+    assert _wrong_half(candles, 99, 12.0, short=True)  # a sell at 12 is in the discount half
+    assert not _wrong_half(candles, 99, 18.0, short=True)
+    assert _wrong_half(candles, 99, 18.0, short=False)  # a buy at 18 is in the premium half
+    assert not _wrong_half(candles, 99, 12.0, short=False)
