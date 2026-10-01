@@ -147,6 +147,27 @@ class Segment:
 
 
 @dataclass(frozen=True)
+class Arrow:
+    """A path the person expects, drawn with a head at the end (the head is in pixels, so it looks right at any zoom)."""
+
+    start: int
+    start_price: float
+    end: int
+    end_price: float
+    color: tuple[int, int, int] = SWING
+    dashed: bool = False
+
+
+@dataclass(frozen=True)
+class AxisLabel:
+    """Text in the right-hand price axis, level with `price` — how a zone's edges are read off the chart."""
+
+    price: float
+    text: str
+    color: tuple[int, int, int] = SWING
+
+
+@dataclass(frozen=True)
 class Mark:
     """A point on a bar — a swing high (`above=True`) or swing low."""
 
@@ -220,6 +241,11 @@ def render_chart(
     control: Sequence[str] | None = None,
     price_range: tuple[float, float] | None = None,
     xticks: Sequence[tuple[int, str]] = (),
+    arrows: Sequence[Arrow] = (),
+    axis: Sequence[AxisLabel] = (),
+    header: Sequence[tuple[str, tuple[int, int, int]]] = (),
+    right_margin: int = 10,
+    future: int = 0,
     width: int = 1600,
     height: int = 800,
 ) -> None:
@@ -230,7 +256,7 @@ def render_chart(
     """
     if not candles:
         raise ValueError("nothing to draw")
-    left, right, top, bottom = 10, 10, 30, 22
+    left, right, top, bottom = 10, right_margin, 30 + 20 * len(header), 22
     plot_w, plot_h = width - left - right, height - top - bottom
     n = len(candles)
     lo = min(c.low for c in candles)
@@ -246,7 +272,7 @@ def render_chart(
     lo -= span * 0.03
     hi += span * 0.03
     span = hi - lo
-    step = plot_w / n
+    step = plot_w / (n + future)  # `future` empty bars on the right, for a plan that has not happened yet
     body_w = max(1, int(step * 0.6))
 
     def x_of(i: float) -> int:
@@ -298,6 +324,7 @@ def render_chart(
                 break
             ty += dy
         ty = max(top, min(ty, height - bottom - h - 14))  # keep the text on the canvas
+        tx = max(left, min(tx, width - right - w))
         placed.append((tx, ty, w, h))
         canvas.text(tx, ty, lab.text, lab.color, lab.scale)
     for idx, text in xticks:
@@ -305,6 +332,26 @@ def render_chart(
             xx = x_of(idx)
             canvas.rect(xx, top, xx, height - bottom, GRID)
             canvas.text(max(left, xx - len(text) * 6 // 2), height - bottom - 12, text, (90, 90, 90), 1)
+    for arrow in arrows:
+        x0, y0, x1, y1 = x_of(arrow.start), y_of(arrow.start_price), x_of(arrow.end), y_of(arrow.end_price)
+        canvas.line(x0, y0, x1, y1, arrow.color, arrow.dashed)
+        length = max(1.0, ((x1 - x0) ** 2 + (y1 - y0) ** 2) ** 0.5)
+        ux, uy = (x1 - x0) / length, (y1 - y0) / length
+        for sign in (1, -1):  # two barbs of the head, 14px back along the line, 6px to either side
+            bx = x1 - ux * 14 - sign * uy * 6
+            by = y1 - uy * 14 + sign * ux * 6
+            canvas.line(int(bx), int(by), x1, y1, arrow.color)
+    # the price axis: labels level with their price in the right margin, pushed apart so none overprints another
+    last_y = -100
+    for label in sorted(axis, key=lambda a: -a.price):
+        if label.price < lo or label.price > hi:
+            continue
+        yy = max(y_of(label.price) - 6, last_y + 14)
+        canvas.rect(width - right, y_of(label.price), width - right + 4, y_of(label.price), label.color)
+        canvas.text(width - right + 6, yy, label.text, label.color, 1)
+        last_y = yy
+    for row, (text, colour) in enumerate(header):
+        canvas.text(14, 8 + 20 * row, text, colour, 2)
     if control:
         for i, state in enumerate(control[:n]):
             colour = UP if state == "demand" else DOWN if state == "supply" else (190, 190, 190)

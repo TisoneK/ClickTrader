@@ -84,7 +84,7 @@ class StatusPrinter:
         stamp = time.strftime("%H:%M:%S", time.localtime(self.now()))
         view = tidy(seen) if seen else None
         # the distance to the order moves every tick; it is not a change in what the engine sees
-        key = re.sub(r"^(armed|waiting) at ", "order at ", re.sub(r", \d+(\.\d+)? away", "", view)) if view else None
+        key = re.sub(r"^(armed|waiting) at ", "order at ", re.sub(r", \d+(\.\d+)? (away|above now|below now)", "", view)) if view else None
         tail = f" · {extra}" if extra else ""
         if key != self._seen:
             self._seen, self._last = key, self.now()

@@ -181,8 +181,7 @@ class SmcStrategy:
             plan = TradePlan(opp.direction, stop=opp.stop, target=opp.target)
             same = self._armed is not None and self._armed.plan == plan and self._armed.block == opp.block
             self._armed = self._armed if same else _Armed(plan=plan, block=opp.block, reason=f"smc: {opp.reason}")
-            self.last_view = (f"{'waiting at' if same else 'armed at'} {opp.entry:.2f}, {abs(opp.entry - price):.2f} away ({len(standing)} standing order(s)): {opp.reason}"
-                              + (f" [last: {self._note}]" if self._note else ""))
+            self.last_view = self._waiting_words(opp, price, len(standing)) + (f" [last: {self._note}]" if self._note else "")
             return
         if self._armed is not None:
             self._armed = None  # nothing qualifies any more: the order is withdrawn
@@ -195,6 +194,18 @@ class SmcStrategy:
         opp = fresh[0]
         total = self._note_pass(opp.reason)
         self.last_view = f"passed on a setup — {opp.reason}. Passed on {sum(self.passes.values())} so far: {total}"
+
+    @staticmethod
+    def _waiting_words(opp, price: float, count: int) -> str:
+        """The standing order as the trader would say it: what he waits for, where he is wrong, where it pays, and why."""
+        long = opp.direction is Direction.UP
+        lo, hi = sorted((opp.block.price_low, opp.block.price_high))
+        why = ("a fresh true " + ("demand" if long else "supply") + " zone") if opp.source == "zone" else "the block left when the trend changed character"
+        extras = opp.reason.split("conviction: ")[1] if "conviction: " in opp.reason else ""
+        more = f" ({count - 1} more waiting)" if count > 1 else ""
+        return (f"waiting to {'buy' if long else 'sell'} when price {'falls' if long else 'rises'} to {lo:.2f}-{hi:.2f}, "
+                f"{abs(opp.entry - price):.2f} {'below' if long else 'above'} now. Wrong beyond {opp.stop:.2f}, target {opp.target:.2f}, "
+                f"{opp.reward_risk:.1f} to 1. Why: {why}{' (' + extras + ')' if extras else ''}{more}")
 
     @staticmethod
     def _signature(plan: TradePlan, block: OrderBlock) -> tuple:

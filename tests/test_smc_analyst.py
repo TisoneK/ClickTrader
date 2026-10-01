@@ -358,3 +358,17 @@ def test_the_reading_is_causal_with_slower_clocks_too():
     assert [(o.armed_at, o.direction, o.state.value if o.state.value in ("declined",) else "x") for o in part.opportunities if o.armed_at < k] == [
         (o.armed_at, o.direction, o.state.value if o.state.value in ("declined",) else "x") for o in whole.opportunities if o.armed_at < k
     ]
+
+
+def test_the_trader_view_keeps_only_what_a_person_would_draw_and_says_what_it_waits_for(tmp_path):
+    from clicktrader.smc.trader_view import draw_trader_view, trader_view
+
+    reading = read_chart(chart((12.4, 12.45, 10.9, 11.0)), lookback=3, strength=1)
+    view = trader_view(reading)
+    assert [o.direction for o in view["orders"]] == [Direction.DOWN]  # the one standing order, nothing else of its kind
+    assert len(view["zones"]) <= 4 and len(view["levels"]) <= 4  # never the whole set of marks
+    sentences = draw_trader_view(reading, str(tmp_path / "t.png"))
+    assert sentences[1].startswith("WAITING: SELL AT 12.25000-12.80000") and "STOP 12.80000" in sentences[1]
+    assert (tmp_path / "t.png").stat().st_size > 1000
+    flat = read_chart(chart(), lookback=3, strength=1)
+    assert draw_trader_view(flat, str(tmp_path / "f.png"))[1] == "NOTHING TO DO NOW"

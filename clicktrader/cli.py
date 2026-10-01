@@ -302,11 +302,19 @@ def cmd_smc_chart(args: argparse.Namespace) -> int:
             continue
         chain = [m for m in (args.higher_minutes or []) if m and m > minutes]
         higher = [bars(m) for m in chain] or None
-        reading = read_chart(candles, higher=higher)
+        reading = read_chart(candles, higher=higher, stale_bars=args.stale_bars or None)
         first = next((i for i, c in enumerate(candles) if lo_ts is None or c.opened_at >= lo_ts), 0)
         stop = next((i for i, c in enumerate(candles) if hi_ts is not None and c.opened_at >= hi_ts), len(candles))
         out = args.out if len(sizes) == 1 else args.out.replace(".png", f".{minutes:g}m.png")
-        draw_reading(reading, out, bars=args.bars, start=first if (lo_ts or hi_ts) else None, end=stop if (lo_ts or hi_ts) else None, marks_owner=tuple(args.mark or ()))
+        if args.detail or args.mark:
+            draw_reading(reading, out, bars=args.bars, start=first if (lo_ts or hi_ts) else None, end=stop if (lo_ts or hi_ts) else None, marks_owner=tuple(args.mark or ()))
+        else:
+            from .smc.trader_view import draw_trader_view
+
+            # the picture is as the chart stood on its last drawn bar: a reading of the prefix is the same as the whole's up to there
+            shown = reading if not hi_ts else read_chart(candles[:stop], higher=higher, stale_bars=args.stale_bars or None)
+            for sentence in draw_trader_view(shown, out, bars=args.bars):
+                print("  " + sentence)
         structures[minutes] = reading.structure[min(stop, len(candles)) - 1].value
         print(f"{minutes:g}m -> {out}")
         print("  " + reading.summary())
@@ -937,6 +945,8 @@ def main(argv: list[str] | None = None) -> int:
     smc_chart.add_argument("--bars", type=int, default=160, help="without --from/--to, how many of the latest bars to draw (default 160)")
     smc_chart.add_argument("--mark", type=float, nargs="+", help="price level(s) you drew by hand; overlaid and compared with the engine's levels")
     smc_chart.add_argument("--list", type=int, default=12, help="how many of the latest opportunities to print (default 12)")
+    smc_chart.add_argument("--stale-bars", type=int, default=60, help="withdraw an order price has not come back to within this many bars, as the live run does (default 60; 0 = never)")
+    smc_chart.add_argument("--detail", action="store_true", help="draw everything the engine knows (swings, every break, false zones) instead of the trader's few areas and the plan")
     smc_chart.add_argument("--readings", action="store_true", help="also print the choices this reading makes that are the project's own")
     smc_chart.set_defaults(func=cmd_smc_chart)
 

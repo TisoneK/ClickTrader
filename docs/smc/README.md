@@ -134,3 +134,17 @@ marks go in the same format.
 **Running it live.** See [`docs/live-demo-test.md`](../live-demo-test.md): paper first (`clicktrader run-smc`, places
 nothing), then the demo account (`--place`), then `smc-readiness` for whether the evidence is enough. There is no
 real-money path.
+
+
+## The trader's view (`smc-chart` default) and the full view (`--detail`)
+
+`smc-chart` now draws what a person leaves on the screen, not everything the engine knows: at most two strongest live levels
+and two fresh true zones each side of price, the order it is waiting with as two boxes (green = where it pays, red = where it
+is wrong) plus an arrow for the expected path, a price axis with every edge, and three sentences at the top (what price is
+doing, what it is waiting for, why — or why there is nothing to do). `--detail` gives the old picture with every swing, break,
+sweep and false zone. `--stale-bars` (default 60) matches the live run. The live console says the same thing in words:
+"waiting to sell when price rises to 618.82-619.44, 5.46 above now. Wrong beyond 619.44, target 616.98, 3.0 to 1. Why: ...".
+
+Examples in `docs/evidence/trader-view-*.png`. The gold and GBP/AUD pictures are built from **Deriv's** candles, set beside
+a trader's **TradingView/OANDA** screenshots from 30 Sep 2026: the feeds differ slightly (gold ~4,189 vs ~4,180 on screen), so
+they were compared by shape and order, not by exact level.

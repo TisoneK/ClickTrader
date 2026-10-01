@@ -198,3 +198,14 @@ def test_a_run_does_not_count_a_trade_that_timed_out_while_open(tmp_path):
                  broker=Stuck([]), emit=said.append)
     assert result.placed == 0 and (tmp_path / "t.jsonl").read_text() == ""
     assert any("NOT counted" in line for line in said)
+
+
+def test_the_human_wording_with_a_moving_distance_is_not_a_changed_view():
+    from clicktrader.multipliers import StatusPrinter
+
+    said, t = [], [0.0]
+    printer = StatusPrinter(said.append, heartbeat=300, now=lambda: t[0])
+    for gap in (5.46, 3.96, 6.95):
+        t[0] += 60
+        printer.show(615.0, "no trades yet", f"waiting to sell when price rises to 618.82-619.44, {gap} above now. Wrong beyond 619.44")
+    assert len(said) == 2
