@@ -32,6 +32,9 @@ class FakeBroker:
         self.placed.append(plan)
         return 1000 + len(self.placed), 1.0, "USD"
 
+    def poll(self, contract_id):
+        return {"is_sold": 1, "profit": self._profits.pop(0)}
+
     def watch(self, contract_id, *, timeout, poll_every, sleep=None, on_poll=None):
         return self._profits.pop(0)
 
@@ -189,23 +192,40 @@ def test_a_timeout_is_never_reported_as_a_zero_result(monkeypatch):
 
 def test_a_run_does_not_count_a_trade_that_timed_out_while_open(tmp_path):
     class Stuck(FakeBroker):
-        def watch(self, contract_id, *, timeout, poll_every, sleep=None, on_poll=None):
-            raise TimeoutError("contract 1001 was still open after 5s")
+        def poll(self, contract_id):
+            return {"is_sold": 0, "profit": 0.1}
 
-    said = []
+    said, clock = [], iter(range(0, 10_000, 10))
     result = run(symbol="R_100", log_path=str(tmp_path / "t.jsonl"), stake=1.0, multiplier=100,
-                 strategy=FiresOnEveryTick(stop=99.0, target=102.0), max_trades=1, hold_timeout=5, ticks=iter(_ticks(2)),
-                 broker=Stuck([]), emit=said.append)
+                 strategy=FiresOnEveryTick(stop=99.0, target=102.0), max_trades=1, hold_timeout=15, ticks=iter(_ticks(6)),
+                 broker=Stuck([]), emit=said.append, now=lambda: next(clock))
     assert result.placed == 0 and (tmp_path / "t.jsonl").read_text() == ""
     assert any("NOT counted" in line for line in said)
 
 
-def test_the_human_wording_with_a_moving_distance_is_not_a_changed_view():
-    from clicktrader.multipliers import StatusPrinter
+def test_the_loop_keeps_reading_ticks_and_tells_the_page_while_a_position_is_open(tmp_path):
+    """The defect: a placed trade used to block the whole loop in `watch` - no ticks read, the page frozen, the terminal silent."""
+    class Slow(FakeBroker):
+        polls = 0
 
-    said, t = [], [0.0]
-    printer = StatusPrinter(said.append, heartbeat=300, now=lambda: t[0])
-    for gap in (5.46, 3.96, 6.95):
-        t[0] += 60
-        printer.show(615.0, "no trades yet", f"waiting to sell when price rises to 618.82-619.44, {gap} above now. Wrong beyond 619.44")
-    assert len(said) == 2
+        def poll(self, contract_id):
+            Slow.polls += 1
+            return {"is_sold": 1 if Slow.polls >= 3 else 0, "profit": -0.2 if Slow.polls >= 3 else 0.05, "current_spot": 100.2}
+
+    states, seen, said = [], [], []
+
+    class Feed:
+        def __iter__(self):
+            for r in _ticks(12):
+                seen.append(float(r.tick.price))  # a tick is read only when the loop asks for the next one
+                yield r
+
+    clock = iter(range(0, 10_000, 10))
+    result = run(symbol="R_100", log_path=str(tmp_path / "t.jsonl"), stake=1.0, multiplier=100,
+                 strategy=FiresOnEveryTick(stop=99.0, target=102.0), max_trades=1, poll_every=10, narrate_every=10,
+                 ticks=iter(Feed()), broker=Slow([]), emit=said.append, now=lambda: next(clock), on_state=states.append)
+    assert len(seen) >= 4  # it went on reading ticks after the buy
+    assert states[0]["side"] == "buy" and states[0]["entry"] == 100.0 and states[-1] is None  # opened, updated, then closed
+    assert result.placed == 1 and result.net == -0.2
+    assert any("still open at the broker" in line for line in said)
+    assert any(line.startswith("closed ") for line in said)

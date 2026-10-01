@@ -46,6 +46,7 @@ class Watcher:
         self._last_view = None
         self.error: str | None = None
         self.balance = None
+        self.open_trade = None
 
     def note(self, text: str) -> None:
         self.events.appendleft({"t": time.strftime("%H:%M:%S", time.localtime(self.now())), "text": text})
@@ -95,6 +96,10 @@ class Watcher:
             self.error = f"{type(exc).__name__}: {exc}"
             self.note(f"the page could not read the engine: {self.error}")
 
+    def set_open(self, trade: dict | None) -> None:
+        """The run tells the page about the position it has open (None when it closes): the page must never say 'waiting' over it."""
+        self.open_trade = trade
+
     def stopped(self, why: str) -> None:
         self.error = why
         self.note(f"the live feed stopped: {why}")
@@ -129,6 +134,7 @@ class Watcher:
         state["trades"] = recent_trades()
         state["evidence"] = evidence()
         state["balance"] = self.balance
+        state["open_trade"] = self.open_trade
         return state
 
 

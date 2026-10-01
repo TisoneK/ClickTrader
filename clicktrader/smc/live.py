@@ -20,7 +20,7 @@ from dataclasses import dataclass
 
 from ..forex.model import Direction
 from ..forex.trade_strategies import TradeStrategy
-from ..multipliers import MultiplierRun, StatusPrinter, _say
+from ..multipliers import MultiplierRun, StatusPrinter, _say, _tell
 from ..strategies import History
 
 
@@ -61,6 +61,7 @@ def paper_run(
     max_seconds: float | None = None,
     max_loss_per_trade: float | None = None,
     report_every: float = 300.0,
+    on_state: Callable[[dict | None], None] | None = None,
     emit: Callable[[str], None] = _say,
     now: Callable[[], float] = time.time,
 ) -> MultiplierRun:
@@ -94,6 +95,9 @@ def paper_run(
                 printer.show(price, run.readout(), getattr(strategy, "last_view", None))
             if open_pos is not None:
                 long = open_pos.direction is Direction.UP
+                _tell(on_state, {"contract_id": "paper", "side": "buy" if long else "sell", "entry": open_pos.entry, "stop": open_pos.stop,
+                                 "target": open_pos.target, "price": price, "opened": open_pos.opened,
+                                 "profit": max(-stake, exposure * (price - open_pos.entry) / open_pos.entry * (1 if long else -1))})
                 hit_stop = price <= open_pos.stop if long else price >= open_pos.stop
                 hit_target = price >= open_pos.target if long else price <= open_pos.target
                 if hit_stop or hit_target:
@@ -114,6 +118,7 @@ def paper_run(
                     os.fsync(log.fileno())
                     emit(f"paper trade closed at the {'stop' if hit_stop else 'target'}: {profit:+.2f} — {run.readout()}")
                     open_pos = None
+                    _tell(on_state, None)
                     if max_trades is not None and run.placed >= max_trades:
                         emit(f"reached the cap of {max_trades} paper trades; stopping")
                         break

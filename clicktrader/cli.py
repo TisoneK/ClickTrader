@@ -519,6 +519,7 @@ def cmd_run_smc(args: argparse.Namespace) -> int:
             warm_from_history(strategy, args.symbol, minutes=1.0, bars=args.warm_bars, decimals=args.decimals)
             print(f"right now it sees: {strategy.describe()}", flush=True)
         feed = stream_ticks(args.symbol)
+        page = None
         if args.ui:
             page = _start_page(strategy, args, symbol=args.symbol, mode="demo account run" if args.place else "paper run")
 
@@ -532,13 +533,13 @@ def cmd_run_smc(args: argparse.Namespace) -> int:
         if not args.place:
             paper_run(symbol=args.symbol, log_path=log, stake=args.stake, multiplier=args.multiplier, strategy=strategy,
                       ticks=feed, max_trades=args.max_trades, max_seconds=args.max_seconds, max_loss_per_trade=max_loss,
-                      report_every=args.report_every)
+                      report_every=args.report_every, on_state=page.set_open if page else None)
             return 0
         broker = DerivMultiplierBroker(symbol=args.symbol, stake=args.stake, multiplier=args.multiplier)
         try:
             run_multipliers(symbol=args.symbol, log_path=log, stake=args.stake, multiplier=args.multiplier, strategy=strategy,
                             max_trades=args.max_trades, max_seconds=args.max_seconds, max_loss_per_trade=max_loss,
-                            ticks=feed, broker=broker, report_every=args.report_every)
+                            ticks=feed, broker=broker, report_every=args.report_every, on_state=page.set_open if page else None)
         finally:
             broker.close()
     except DerivAPIError as exc:

@@ -55,12 +55,15 @@ class MultiplierRun:
     won: int = 0
     net: float = 0.0
     outcomes: list[float] = field(default_factory=list)
+    open: str = ""
+    """One line about the position now open at the broker ("" when none) — the readout says it first."""
 
     def readout(self) -> str:
         refused = f", {self.refused} refused" if self.refused else ""
+        head = f"{self.open} - " if self.open else ""
         if not self.placed:
-            return f"no trades yet{refused}"
-        return f"{self.placed} trade(s): won {self.won}, net {self.net:+.2f}{refused}"
+            return f"{head}no trades yet{refused}"
+        return f"{head}{self.placed} trade(s): won {self.won}, net {self.net:+.2f}{refused}"
 
 
 def tidy(text: str) -> str:
@@ -94,6 +97,15 @@ class StatusPrinter:
         elif self._last is None or self.now() - self._last >= self.heartbeat:
             self._last = self.now()
             self.emit(f"{stamp}  price {price}  ·  {readout}{tail}  (view unchanged)")
+
+
+def _tell(callback, state) -> None:
+    """Tell whoever is watching (a page) about the open position; a watcher's failure never reaches the trading loop."""
+    if callback is not None:
+        try:
+            callback(state)
+        except Exception:
+            pass
 
 
 def _connection_errors() -> tuple[type[Exception], ...]:
@@ -190,6 +202,17 @@ class DerivMultiplierBroker:
             raise
         return bought.contract_id, bought.buy_price, currency
 
+    def poll(self, contract_id: int) -> dict:
+        """One look at the broker's record of a contract (reconnecting once if the socket dropped). Never blocks for long, so a
+        live loop can keep reading ticks between looks."""
+        from .api.deriv.trading import get_contract_status
+
+        try:
+            return get_contract_status(self._ws, contract_id)
+        except _connection_errors():
+            self._reconnect()
+            return get_contract_status(self._ws, contract_id)
+
     def watch(self, contract_id: int, *, timeout: float | None, poll_every: float, sleep=time.sleep, on_poll=None) -> float:
         """Poll the broker's record until the position is closed, and return its realised profit.
 
@@ -245,9 +268,11 @@ def run(
     max_loss_per_trade: float | None = None,
     ticks: Iterator | None = None,
     broker=None,
-    poll_every: float = 60.0,
+    poll_every: float = 10.0,
     hold_timeout: float | None = None,
     report_every: float = 300.0,
+    narrate_every: float = 60.0,
+    on_state: Callable[[dict | None], None] | None = None,
     emit: Callable[[str], None] = _say,
     now: Callable[[], float] = time.time,
 ) -> MultiplierRun:
@@ -261,6 +286,7 @@ def run(
     run = MultiplierRun()
     feed = ticks if ticks is not None else stream_ticks(symbol)
     history: list = []
+    open_trade: dict | None = None
     started = now()
     last_report = started
     # a fresh clone has no recordings/ (it is not in git) — the log must not be the thing that kills a run
@@ -294,6 +320,52 @@ def run(
                 last_report = now()
                 printer.show(record.tick.price, run.readout(), getattr(strategy, "last_view", None),
                              money() if hasattr(broker, "balance") else "")
+            if open_trade is not None:
+                # One position at a time, and the loop keeps reading ticks while it is open: the page and the terminal stay
+                # alive, the feed is not left unread, Ctrl-C has something to interrupt. A signal that fires during a
+                # trade is skipped (the paper run does the same).
+                if now() - open_trade["polled"] >= poll_every:
+                    open_trade["polled"] = now()
+                    rec = broker.poll(open_trade["id"])
+                    now_profit = float(rec.get("profit", 0.0))
+                    if _is_sold(rec):
+                        d, cid = open_trade["decision"], open_trade["id"]
+                        run.placed += 1
+                        run.net += now_profit
+                        run.outcomes.append(now_profit)
+                        run.won += 1 if now_profit > 0 else 0
+                        log.write(json.dumps({"ts": now(), "contract_id": cid, "symbol": symbol,
+                                              "direction": d.plan.direction.value, "stake": stake,
+                                              "multiplier": multiplier, "entry": open_trade["entry"], "stop": d.plan.stop,
+                                              "target": d.plan.target, "profit": now_profit, "reason": d.reason}) + "\n")
+                        log.flush()
+                        os.fsync(log.fileno())
+                        run.open = ""
+                        open_trade = None
+                        _tell(on_state, None)
+                        emit(f"closed {cid}: {now_profit:+.2f} {rec.get('currency', 'USD')} — {run.readout()}"
+                             + (f" — {money()}" if hasattr(broker, "balance") else ""))
+                        if max_trades is not None and run.placed >= max_trades:
+                            emit(f"reached the cap of {max_trades} trades; stopping")
+                            break
+                        if max_seconds is not None and now() - started > max_seconds:
+                            emit("reached the time cap; stopping")
+                            break
+                    else:
+                        run.open = f"position {open_trade['id']} open {now_profit:+.2f}"
+                        _tell(on_state, {"contract_id": open_trade["id"], "side": "buy" if open_trade["decision"].plan.direction.value == "up" else "sell",
+                                         "entry": open_trade["entry"], "stop": open_trade["decision"].plan.stop,
+                                         "target": open_trade["decision"].plan.target, "profit": now_profit,
+                                         "price": rec.get("current_spot"), "opened": open_trade["opened"]})
+                        if now() - open_trade["narrated"] >= narrate_every:
+                            open_trade["narrated"] = now()
+                            emit(f"  position {open_trade['id']} still open at the broker: {now_profit:+.2f} so far, price {rec.get('current_spot', '?')}")
+                if hold_timeout is not None and open_trade is not None and now() - open_trade["opened"] > hold_timeout:
+                    emit(f"contract {open_trade['id']} was still open after {hold_timeout:.0f}s — it is still open at the broker with its stop and target; NOT counted as a trade")
+                    run.open = ""
+                    open_trade = None
+                    _tell(on_state, None)
+                continue
             if decision is None:
                 continue
             run.plans += 1
@@ -314,34 +386,12 @@ def run(
                 continue
             emit(f"placed {contract_id}: {price:.2f} {currency} at risk, stop {decision.plan.stop}, "
                  f"target {decision.plan.target}")
-            def _open(rec, _cid=contract_id):
-                emit(f"  position {_cid} still open at the broker: {float(rec.get('profit', 0.0)):+.2f} so far, "
-                     f"price {rec.get('current_spot', '?')}")
-            try:
-                profit = broker.watch(contract_id, timeout=hold_timeout, poll_every=poll_every, on_poll=_open)
-            except TimeoutError as exc:
-                # Not a result: it has no profit yet, so it is not counted or logged as a closed trade.
-                emit(f"{exc} — it is still open at the broker with its stop and target; NOT counted as a trade")
-                continue
-            run.placed += 1
-            run.net += profit
-            run.outcomes.append(profit)
-            run.won += 1 if profit > 0 else 0
-            log.write(json.dumps({"ts": now(), "contract_id": contract_id, "symbol": symbol,
-                                  "direction": decision.plan.direction.value, "stake": stake,
-                                  "multiplier": multiplier, "entry": entry, "stop": decision.plan.stop,
-                                  "target": decision.plan.target, "profit": profit,
-                                  "reason": decision.reason}) + "\n")
-            log.flush()
-            os.fsync(log.fileno())
-            emit(f"closed {contract_id}: {profit:+.2f} {currency} — {run.readout()}"
-                 + (f" — {money()}" if hasattr(broker, "balance") else ""))
-            if max_trades is not None and run.placed >= max_trades:
-                emit(f"reached the cap of {max_trades} trades; stopping")
-                break
-            if max_seconds is not None and now() - started > max_seconds:
-                emit(f"reached the time cap; stopping")
-                break
+            open_trade = {"id": contract_id, "decision": decision, "entry": entry, "currency": currency,
+                          "opened": now(), "polled": float("-inf"), "narrated": now()}
+            run.open = f"position {contract_id} open"
+            _tell(on_state, {"contract_id": contract_id, "side": "buy" if decision.plan.direction.value == "up" else "sell",
+                             "entry": entry, "stop": decision.plan.stop, "target": decision.plan.target, "profit": 0.0,
+                             "opened": open_trade["opened"]})
     except DerivAPIError as exc:
         emit(f"Deriv API error: {exc}. Stopped; whatever was logged is written.")
     finally:
