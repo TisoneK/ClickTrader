@@ -36,7 +36,7 @@ def test_the_page_and_the_data_show_the_same_state_and_only_on_this_machine(tmp_
         assert host == "127.0.0.1"  # never reachable from another machine
         base = f"http://127.0.0.1:{port}"
         page = urllib.request.urlopen(base + "/").read().decode()
-        assert "watch-only" in page.lower() or "Watch-only" in page and "/api/state" in page
+        assert "cannot trade" in page and "Diagnostics" in page  # it says what it is, and keeps the data doors behind a drawer
         state = json.loads(urllib.request.urlopen(base + "/api/state").read())
         assert state["symbol"] == "R_100" and state["price"] is not None and state["chart"]["candles"]
         assert json.loads(urllib.request.urlopen(base + "/api/chart").read())["candles"] == state["chart"]["candles"]  # one fact, two doors
@@ -62,7 +62,8 @@ def test_a_dead_feed_is_said_on_the_page_not_hidden(tmp_path):
     watcher.follow(broken())
     snap = watcher.snapshot()
     assert snap["status"].startswith("STOPPED") and "socket closed" in snap["status"]
-    assert any("feed stopped" in e["text"] for e in snap["events"])
+    assert any("feed stopped" in e["text"] for e in snap["events"])  # said in plain words, once
+    assert any("socket closed" in e["text"] for e in snap["diagnostics"]["raw_events"])  # the engine's own words stay in diagnostics
 
 
 def test_attaching_the_page_to_a_running_engine_costs_it_nothing_and_never_changes_what_it_does(tmp_path):
@@ -111,3 +112,16 @@ def test_a_busy_port_never_kills_the_run_it_takes_the_next_free_one(tmp_path, mo
     out = capsys.readouterr().out
     blocker.close()
     assert watcher is not None and "was busy" in out
+
+
+def test_engine_wording_becomes_plain_sentences_and_plumbing_stays_out_of_the_main_view():
+    from clicktrader.ui.words import sentences
+
+    sweep = sentences("up structure; last event SWEEP false at 619.61")
+    assert sweep == ["Price poked past 619.61 and came straight back. Stops were grabbed, not a real move."]
+    waiting = sentences("waiting to sell when price rises to 618.82-619.44, 5.46 above now. Wrong beyond 619.44, target 616.98, 3.0 to 1. "
+                        "Why: a fresh true supply zone [last: sell order at 620.41 withdrawn \u2014 against the higher timeframe, which reads up]")
+    assert waiting[0].startswith("Now waiting to sell if price rises to 618.82 - 619.44") and "bigger chart turned against it" in waiting[1]
+    assert sentences("warmed with 4000 historical tick(s)") == []  # plumbing: diagnostics only
+    for text in sweep + waiting:  # none of the engine's vocabulary reaches the main view
+        assert not any(term in text for term in ("SWEEP", "structure", "BOS", "CHOCH", "slower chart", "higher timeframe"))

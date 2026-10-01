@@ -36,6 +36,18 @@ _WHY = {
 }
 
 
+def why_code(reading: Reading, n: int) -> str:
+    """The most recent reason an order was refused or taken away, as a short code ("slower_chart", "room", ...); "none" if there is no such reason."""
+    codes = (("higher timeframe", "slower_chart"), ("against the trend", "trend"), ("room", "room"), ("weaker zone", "better_zone"),
+             ("knife", "knife"), ("dead", "dead"))
+    for o in reversed(reading.opportunities):
+        if o.state in (State.DECLINED, State.CANCELLED, State.DEAD) and n - 1 - (o.closed_at or o.armed_at) <= 30:
+            for key, code in codes:
+                if key in o.reason:
+                    return code
+    return "none"
+
+
 def _why_nothing(reading: Reading, n: int) -> str:
     """The most recent reason an order was refused or taken away, in words; else that no fresh zone is in reach."""
     for o in reversed(reading.opportunities):

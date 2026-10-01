@@ -25,6 +25,8 @@ from ..multipliers import tidy
 from ..smc.readiness import load
 from ..smc.trader_view import draw_trader_view, trader_view
 from ..smc.trader_view import sentences as trader_sentences
+from ..smc.trader_view import why_code
+from . import words
 from ..strategies import History
 
 TRADE_LOGS = ("recordings/smc-demo-trades.jsonl", "recordings/smc-paper-trades.jsonl")
@@ -41,7 +43,9 @@ class Watcher:
         self.strategy, self.symbol, self.chart_path, self.mode, self.decimals, self.now = strategy, symbol, chart_path, mode, decimals, now
         self.lock = threading.Lock()
         self.state: dict = {"symbol": symbol, "mode": mode, "status": "starting - reading the chart", "updated": None, "price": None}
-        self.events: deque = deque(maxlen=40)
+        self.events: deque = deque(maxlen=40)  # plain sentences, for the main view
+        self.raw_events: deque = deque(maxlen=60)  # the engine's own words, for the diagnostics drawer
+        self._said: deque = deque(maxlen=30)
         self._seen = None  # the reading the state was last built from
         self._last_view = None
         self.error: str | None = None
@@ -49,18 +53,33 @@ class Watcher:
         self.open_trade = None
 
     def note(self, text: str) -> None:
-        self.events.appendleft({"t": time.strftime("%H:%M:%S", time.localtime(self.now())), "text": text})
+        """Record an engine message: raw in diagnostics, and as plain sentences in the main feed (each said once)."""
+        stamp = time.strftime("%H:%M", time.localtime(self.now()))
+        self.raw_events.appendleft({"t": time.strftime("%H:%M:%S", time.localtime(self.now())), "text": text})
+        for sentence in words.sentences(text):
+            if sentence not in self._said:
+                self._said.append(sentence)
+                self.events.appendleft({"t": stamp, "text": sentence})
 
     def _build(self, reading, price) -> dict:
         sentences = trader_sentences(reading, decimals=self.decimals)
         view = trader_view(reading)
+        price = view["price"]
         lo, cs = view["lo"], view["candles"]
         long = lambda o: o.direction is Direction.UP  # noqa: E731
         prices = [c.low for c in cs] + [c.high for c in cs] + [z.low for z in view["zones"]] + [z.high for z in view["zones"]]
         for o in view["orders"]:
             prices += [o.stop, o.target, o.entry]
         pad = (max(prices) - min(prices)) * 0.05
+        o = view["orders"][0] if view["orders"] else None
+        if o is not None:
+            side = "buy" if long(o) else "sell"
+            verdict = {"kind": "waiting", "headline": f"Waiting to {side}", "reason": words.why_waiting(side, o.source),
+                       "detail": f"If price goes beyond {o.stop:.{2 if price >= 20 else 5}f} the idea is wrong. Target {o.target:.{2 if price >= 20 else 5}f}, {o.reward_risk:.1f} to 1."}
+        else:
+            verdict = {"kind": "idle", "headline": "No trade right now", "reason": words.why_nothing(why_code(reading, len(reading.candles))), "detail": ""}
         return {
+            "verdict": verdict,
             "trend": sentences[0], "waiting": sentences[1], "why": sentences[2], "bars_read": len(reading.candles),
             "orders": [{"side": "buy" if long(o) else "sell", "zone": [min(o.block.price_low, o.block.price_high), max(o.block.price_low, o.block.price_high)],
                         "entry": o.entry, "stop": o.stop, "target": o.target, "reward_to_risk": round(o.reward_risk, 2), "source": o.source,
@@ -131,6 +150,9 @@ class Watcher:
         with self.lock:
             state = dict(self.state)
         state["events"] = list(self.events)
+        state["diagnostics"] = {"raw_events": list(self.raw_events), "engine_view": state.get("engine_view") or tidy(self.strategy.last_view or ""),
+                                "bars_read": state.get("bars_read"), "endpoints": ["/api/state", "/api/chart", "/chart.png"],
+                                "log_files": list(TRADE_LOGS)}
         state["trades"] = recent_trades()
         state["evidence"] = evidence()
         state["balance"] = self.balance
