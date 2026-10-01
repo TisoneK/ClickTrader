@@ -75,6 +75,7 @@ class SmcStrategy:
         lookback: int = 20,
         window: int = 400,
         stake: float = 1.0,
+        stale_bars: int | None = None,
     ) -> None:
         if risk_reward < 1:
             raise ValueError("the material's floor is a minimum of 1:2; anything below 1 risks more than it targets")
@@ -86,6 +87,8 @@ class SmcStrategy:
         self._strength = strength
         self._lookback = lookback
         self._window = window
+        self._stale_bars = stale_bars
+        self._note = ""
         self._stake = stake
         self._armed: _Armed | None = None
         self.last_view = "nothing seen yet"
@@ -139,7 +142,7 @@ class SmcStrategy:
         if len(candles) < self._lookback + self._strength * 2 + 2:
             return f"only {len(candles)} bar(s) so far — not enough to read yet"
         r = read_chart(candles, higher=[b.last(self._window) for b in self._higher] or None, strength=self._strength,
-                       lookback=self._lookback, risk_reward=self._risk_reward)
+                       lookback=self._lookback, risk_reward=self._risk_reward, stale_bars=self._stale_bars)
         fresh = [z for z in r.zones if z.verdict == "TRUE" and z.status == "fresh"]
         zones = "; ".join(f"{z.kind} {z.low:.2f}-{z.high:.2f}" + (" (weaker)" if z.weaker else "") for z in fresh[-4:]) or "none"
         control = r.control[-1].value if r.control and r.control[-1] else "not yet decided"
@@ -161,9 +164,13 @@ class SmcStrategy:
                 self.last_view = "dropped: the bar closed through the block's far edge — dead zone"
         reading = read_chart(
             candles, higher=[b.last(self._window) for b in self._higher] or None, strength=self._strength,
-            lookback=self._lookback, risk_reward=self._risk_reward,
+            lookback=self._lookback, risk_reward=self._risk_reward, stale_bars=self._stale_bars,
         )
         last = len(candles) - 1
+        # An order that left the book on this bar: say which and why, so the person watching never sees one vanish unexplained.
+        for gone in reading.opportunities:
+            if gone.closed_at == last and gone.state in (State.CANCELLED, State.DEAD):
+                self._note = f"{'sell' if gone.direction is Direction.DOWN else 'buy'} order at {gone.entry:.2f} withdrawn — {gone.reason.removeprefix('withdrawn: ')}"
         # Standing orders, not just new ones: every opportunity the reading still has ARMED (a zone waiting to be tapped,
         # a block waiting for its retrace) is what the person would have a limit order at right now. Take the nearest.
         standing = [o for o in reading.opportunities if o.state is State.ARMED and o.target is not None
@@ -174,15 +181,16 @@ class SmcStrategy:
             plan = TradePlan(opp.direction, stop=opp.stop, target=opp.target)
             same = self._armed is not None and self._armed.plan == plan and self._armed.block == opp.block
             self._armed = self._armed if same else _Armed(plan=plan, block=opp.block, reason=f"smc: {opp.reason}")
-            self.last_view = f"{'waiting at' if same else 'armed at'} {opp.entry:.2f}, {abs(opp.entry - price):.2f} away ({len(standing)} standing order(s)): {opp.reason}"
+            self.last_view = (f"{'waiting at' if same else 'armed at'} {opp.entry:.2f}, {abs(opp.entry - price):.2f} away ({len(standing)} standing order(s)): {opp.reason}"
+                              + (f" [last: {self._note}]" if self._note else ""))
             return
         if self._armed is not None:
             self._armed = None  # nothing qualifies any more: the order is withdrawn
         fresh = [o for o in reading.opportunities if o.armed_at == last]
         if not fresh:
             latest = reading.events[-1] if reading.events else None
-            what = f"{reading.structure[-1].value} structure" + (f"; last event {latest.kind.value} {latest.verdict.value} at bar {latest.index}" if latest else "")
-            self.last_view = what
+            what = f"{reading.structure[-1].value} structure" + (f"; last event {latest.kind.value} {latest.verdict.value} at {latest.level:.2f}" if latest else "")
+            self.last_view = what + (f" [last: {self._note}]" if self._note else "")
             return
         opp = fresh[0]
         total = self._note_pass(opp.reason)

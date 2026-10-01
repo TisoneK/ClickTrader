@@ -485,7 +485,8 @@ def cmd_run_smc(args: argparse.Namespace) -> int:
     from .smc.strategy import SmcStrategy
 
     chain = tuple(args.higher_minutes)  # an empty chain means no slower-clock veto at all
-    strategy = SmcStrategy(trigger_minutes=args.minutes, higher_minutes=chain, risk_reward=args.risk_reward)
+    strategy = SmcStrategy(trigger_minutes=args.minutes, higher_minutes=chain, risk_reward=args.risk_reward,
+                           stale_bars=args.stale_bars or None)
     max_loss = args.max_loss_per_trade
     mode = "DEMO ACCOUNT (virtual money)" if args.place else "PAPER (nothing is placed)"
     caps = ", ".join(x for x in (
@@ -914,6 +915,7 @@ def main(argv: list[str] | None = None) -> int:
     run_smc.add_argument("--symbol", default="R_100", help="Deriv symbol (default R_100; 1HZ100V is the 1-second index)")
     run_smc.add_argument("--minutes", type=float, default=1.0, help="trigger bar length in minutes (default 1, the view the owner charts)")
     run_smc.add_argument("--higher-minutes", type=float, nargs="*", default=[5.0, 15.0], help="slower clock(s) that must not contradict a trade (default 5 15, the decks' alignment across timeframes). Measured causally on 16-25h of data: 5+15 arms 0.4-0.7 trades/h, 5 alone 0.8-0.9/h, none 1.1-1.4/h (about half of those cancelled as falling knives). Give none (`--higher-minutes` alone) to drop the veto")
+    run_smc.add_argument("--stale-bars", type=int, default=60, help="withdraw an order price has not come back to within this many trigger bars (default 60; 0 = never)")
     run_smc.add_argument("--risk-reward", type=float, default=2.0, help="minimum reward:risk (default 2, the material's floor)")
     run_smc.add_argument("--stake", type=float, default=1.0)
     run_smc.add_argument("--multiplier", type=int, default=100)

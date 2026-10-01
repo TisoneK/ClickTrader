@@ -87,6 +87,16 @@ def test_a_slow_return_fills_on_the_first_tap_and_hindsight_grades_it():
     assert loss.state is State.FILLED and loss.outcome == "loss"
 
 
+def test_an_order_that_price_never_comes_back_to_goes_stale_and_says_so():
+    quiet = [(11.0, 11.2, 10.95, 11.1)] * 6
+    (waiting,) = read((12.4, 12.45, 10.9, 11.0), *quiet).opportunities
+    assert waiting.state is State.ARMED  # without an expiry it stands for ever
+    (old,) = read((12.4, 12.45, 10.9, 11.0), *quiet, stale_bars=4).opportunities
+    assert old.state is State.CANCELLED and old.reason.startswith("stale:") and "bars" in old.reason
+    (young,) = read((12.4, 12.45, 10.9, 11.0), *quiet, stale_bars=50).opportunities
+    assert young.state is State.ARMED
+
+
 def test_the_reading_is_causal_a_prefix_reads_the_same_as_the_whole():
     import random
 

@@ -418,6 +418,7 @@ def read_chart(
     lookback: int = 20,
     risk_reward: float = 2.0,
     zone_min_candles: int = 3,
+    stale_bars: int | None = None,
 ) -> Reading:
     """Read `candles` bar by bar. `higher` is the slower clock's candles, used only to confirm direction."""
     n = len(candles)
@@ -593,6 +594,11 @@ def read_chart(
         for opp in list(armed):
             blk = opp.block
             short = opp.direction is Direction.DOWN
+            if stale_bars is not None and t - opp.armed_at >= stale_bars:
+                opp.state, opp.closed_at = State.CANCELLED, t
+                opp.reason = f"stale: the order stood {t - opp.armed_at} bars without price coming back to it — the chart has moved on"
+                armed.remove(opp)
+                continue
             dead = bar.close > blk.price_high if short else bar.close < blk.price_low
             if dead:
                 opp.state, opp.closed_at, opp.reason = State.DEAD, t, "closed through the zone's far edge before the tap — dead zone, deleted"
