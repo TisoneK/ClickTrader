@@ -364,6 +364,42 @@ def _as_clocks(higher) -> list[Sequence[Candle]]:
     return [higher] if isinstance(higher[0], Candle) else [h for h in higher if h]
 
 
+class _ClockView:
+    """The slower clocks as they stood when bar `t` closed — only their bars that had already CLOSED by then.
+
+    The veto asks "what does the slower chart say?"; reading history with the whole slower series would let a bar at
+    08:00 see the slower chart as it looked at 12:00. Truncating by time keeps the reading causal."""
+
+    def __init__(self, trigger: Sequence[Candle], clocks: list[Sequence[Candle]]) -> None:
+        self._clocks = clocks
+        self._timed = bool(trigger) and hasattr(trigger[0], "opened_at") and all(c and hasattr(c[0], "opened_at") for c in clocks)
+        self._trigger_step = self._step(trigger)
+        self._steps = [self._step(c) for c in clocks]
+        self._ends = [[b.opened_at + st for b in c] for c, st in zip(clocks, self._steps)] if self._timed else []
+        self._trigger = trigger
+
+    @staticmethod
+    def _step(series: Sequence[Candle]) -> float:
+        diffs = sorted(b.opened_at - a.opened_at for a, b in zip(series, series[1:]) if hasattr(a, "opened_at"))
+        return diffs[len(diffs) // 2] if diffs else 0.0
+
+    def at(self, t: int) -> list[Sequence[Candle]]:
+        if not self._timed:
+            return self._clocks  # untimed candles carry no clock: nothing to truncate by
+        until = self._trigger[t].opened_at + self._trigger_step
+        out = []
+        for series, ends in zip(self._clocks, self._ends):
+            lo, hi = 0, len(ends)
+            while lo < hi:  # bisect: how many slower bars had closed by `until`
+                mid = (lo + hi) // 2
+                if ends[mid] <= until:
+                    lo = mid + 1
+                else:
+                    hi = mid
+            out.append(series[:lo])
+        return out
+
+
 def _veto(clocks, short: bool, strength: int) -> str:
     """Why a trade is against the slower clocks, or "" — every clock in the chain gets a say."""
     for htf in clocks:
@@ -393,7 +429,8 @@ def read_chart(
 
     all_swings = swing_points(candles, strength=strength)
     reading.swings = label_swings(all_swings, strength)
-    clocks = _as_clocks(higher)
+    all_clocks = _as_clocks(higher)
+    view = _ClockView(candles, all_clocks)
 
     gaps_all = fair_value_gaps(candles)
     major_ever: set[int] = set()
@@ -403,6 +440,7 @@ def read_chart(
     armed: list[Opportunity] = []
     level_life: dict[tuple[str, int], list] = {}
     zone_by_start: dict[int, Zone] = {}
+    zone_opps: dict[int, Opportunity] = {}
 
     for t in range(n):
         bar = candles[t]
@@ -528,14 +566,28 @@ def read_chart(
                         z.fib = "61.8-78.6"
         _mark_weaker(reading.zones)
 
-        # -- a fresh true zone is itself an opportunity: limit at its near edge, stop beyond its far edge
+        # -- a fresh true zone is itself an opportunity — judged EVERY bar until it is tapped or dies, not once at birth.
+        # A person leaves a limit order at a fresh zone and re-judges it as the trend and the slower clocks change: a zone
+        # that could not be traded when it formed (against the trend, no room yet, a weaker neighbour) can become tradeable
+        # an hour later, and an order that stops qualifying is withdrawn.
         for z in reading.zones:
-            if t != z.end + 1 or not z.valid or z.status != "fresh":
+            if not z.valid or z.status != "fresh" or t <= z.end:
                 continue
-            opp = _zone_opportunity(candles, t, z, known, clocks, strength, risk_reward, control, structure)
-            reading.opportunities.append(opp)
-            if opp.state is State.ARMED:
-                armed.append(opp)
+            standing = zone_opps.get(id(z))
+            now_opp = _zone_opportunity(candles, t, z, known, view.at(t), strength, risk_reward, control, structure)
+            if standing is not None:
+                if standing.state is State.ARMED and now_opp.state is State.DECLINED:
+                    standing.state, standing.closed_at = State.CANCELLED, t
+                    standing.reason = f"withdrawn: {now_opp.reason}"
+                    if standing in armed:
+                        armed.remove(standing)
+                continue
+            if now_opp.state is State.ARMED:
+                reading.opportunities.append(now_opp)
+                zone_opps[id(z)] = now_opp
+                armed.append(now_opp)
+            elif t == z.end + 1:
+                reading.opportunities.append(now_opp)  # the decision at birth is recorded once, so the picture can say why
 
         # -- opportunities waiting for a retrace: dead zone, first tap, falling knife
         for opp in list(armed):
@@ -649,7 +701,7 @@ def read_chart(
         reading.control.append(control)
 
         # -- the opportunity this change of character leaves behind
-        opp = _opportunity(candles, t, event, known, clocks, strength, risk_reward)
+        opp = _opportunity(candles, t, event, known, view.at(t), strength, risk_reward)
         reading.opportunities.append(opp)
         if opp.state is State.ARMED:
             armed.append(opp)
@@ -760,7 +812,10 @@ def _zone_opportunity(
     )
     why_not = ""
     if not with_trend:
-        why_not = f"against the trend: in {'an up' if not short else 'a down'}-trend the decks only look for {'demand' if not short else 'supply'}"
+        up = control is Control.DEMAND or (control is None and structure is Structure.UP)
+        down = control is Control.SUPPLY or (control is None and structure is Structure.DOWN)
+        state = "an up-trend (the decks only look for demand)" if up else "a down-trend (the decks only look for supply)" if down else "no established trend yet"
+        why_not = f"against the trend: it is {state}, and this is a {z.kind.lower()} zone"
     elif z.weaker:
         why_not = f"a weaker zone: another {z.kind.lower()} zone in the same leg is {'lower' if not short else 'higher'} and holds the deeper liquidity"
     elif risk <= 0:

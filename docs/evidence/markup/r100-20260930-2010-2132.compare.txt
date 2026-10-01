@@ -4,5 +4,5 @@ zone 630.40-631.40: 4 level band(s), e.g. 631.22-631.77, 631.05-631.12, 630.46-6
 CHOCH down ~20:54 @634.2: SAME BREAK, DIFFERENT LABEL — engine has a BOS at 20:55 level 634.20 (it had already called a CHOCH down at 20:44, so this one was a continuation)
 no-trade 21:18-21:32: engine called 1 CHOCH and armed 0 trade(s) there
 engine CHOCHs the marker did not mark: 3 (of 3 in the window)
-engine trades the marker did not mark: 1 (of 1 armed in the window)
+engine trades the marker did not mark: 0 (of 0 armed in the window)
 agreement on the marks given: 3 of 4 (+1 with the level right and a different label)

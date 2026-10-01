@@ -1,13 +1,20 @@
 5m -> docs/evidence/r100-zoomed-out.5m.png
-  200 bars, 44 swings; events: 6 BOS, 6 CHOCH, 20 sweep, 0 gap fill; zones: 2 true (1 fresh, 1 used), 8 false, 4 broken; opportunities: 1 true (0 won, 0 lost in hindsight), 5 rejected
+  200 bars, 44 swings; events: 7 BOS, 4 CHOCH, 21 sweep, 0 gap fill; zones: 2 true (1 fresh, 1 used), 8 false, 4 broken; opportunities: 1 true (0 won, 0 lost in hindsight), 10 rejected
     bar 20: up armed — CHOCH then a block at 608.33000-610.47000; limit 610.47000, stop 608.33000, target 623.50000 (6.1:1); gap yes; pushed 2.3 bands
-    bar 73: down declined — against the higher timeframe, which reads up
+    bar 24: up cancelled — withdrawn: against the trend: it is a down-trend (the decks only look for supply), and this is a demand zone
+    bar 68: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
+    bar 73: down cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
+    bar 74: down cancelled — withdrawn: against the trend: it is an up-trend (the decks only look for demand), and this is a supply zone
+    bar 77: down cancelled — withdrawn: against the trend: it is an up-trend (the decks only look for demand), and this is a supply zone
+    bar 78: down declined — a weaker zone: another supply zone in the same leg is higher and holds the deeper liquidity
+    bar 81: down declined — a weaker zone: another supply zone in the same leg is higher and holds the deeper liquidity
     bar 87: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
-    bar 91: down declined — against the higher timeframe, which reads up
-    bar 130: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
-    bar 144: down declined — against the higher timeframe, which reads up
+    bar 91: down cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
+    bar 132: up declined — against the trend: it is a down-trend (the decks only look for supply), and this is a demand zone
 15m -> docs/evidence/r100-zoomed-out.15m.png
-  67 bars, 17 swings; events: 1 BOS, 2 CHOCH, 5 sweep, 0 gap fill; zones: 0 true (0 fresh, 0 used), 3 false, 1 broken; opportunities: 0 true (0 won, 0 lost in hindsight), 2 rejected
+  67 bars, 17 swings; events: 1 BOS, 2 CHOCH, 5 sweep, 0 gap fill; zones: 0 true (0 fresh, 0 used), 3 false, 1 broken; opportunities: 1 true (0 won, 1 lost in hindsight), 3 rejected
+    bar 27: down declined — against the trend: it is no established trend yet, and this is a supply zone
+    bar 29: down filled (loss) — fresh supply zone 626.15000-631.88000; limit 626.15000, stop 631.88000, target 608.33000 (3.1:1); conviction: Fibonacci 61.8-78.6
     bar 44: up declined — no room to move: no opposing level leaves 2:1 from the block
     bar 65: down declined — against the higher timeframe, which reads up
 structure by zoom: 5m up, 15m range

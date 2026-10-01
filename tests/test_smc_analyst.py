@@ -244,6 +244,7 @@ def test_a_fresh_true_demand_zone_with_the_trend_and_room_is_armed_with_the_deck
 def test_a_demand_zone_in_a_down_trend_is_declined_because_the_decks_only_look_for_supply():
     opp = _opp(_z(10.0, 10.5), control=Control.SUPPLY, structure=Structure.DOWN)
     assert opp.state is State.DECLINED and "against the trend" in opp.reason
+    assert "down-trend" in opp.reason and "demand zone" in opp.reason  # the message names the trend and the zone correctly
 
 
 def test_a_weaker_zone_is_declined_in_favour_of_the_lowest_one():
@@ -264,3 +265,86 @@ def test_every_clock_in_a_chain_gets_a_say():
     assert _opp(_z(10.0, 10.5), clocks=[zigzag]).state is State.ARMED  # agrees with the long
     blocked = _opp(_z(10.0, 10.5), clocks=[zigzag, down])
     assert blocked.state is State.DECLINED and "higher timeframe" in blocked.reason
+
+
+# --- zones are judged every bar, not once at birth ----------------------------------------------------------------
+def _rising_base():
+    """A gently rising zig-zag (higher highs, higher lows) of small candles: structure UP, demand in control."""
+    out = []
+    for k in range(6):
+        b = 10 + 0.25 * k
+        out += [(b, b + 0.12, b - 0.04, b + 0.1), (b + 0.1, b + 0.24, b + 0.06, b + 0.22),
+                (b + 0.22, b + 0.26, b + 0.1, b + 0.12), (b + 0.12, b + 0.16, b + 0.02, b + 0.05)]
+    return out
+
+
+def _trend_chart(*after):
+    base = _rising_base()
+    last = base[-1][3]
+    origin = (last, last + 0.03, last - 0.12, last - 0.08)
+    o = origin[3]
+    run = [(o, o + 0.9, o - 0.02, o + 0.85), (o + 0.85, o + 1.8, o + 0.8, o + 1.75), (o + 1.75, o + 2.6, o + 1.2, o + 2.5)]
+    return [Candle(*b) for b in (*base, origin, *run, *after)], o
+
+
+def test_a_zone_that_cannot_be_traded_when_it_forms_is_armed_later_when_it_can():
+    # The run ends on a bar that makes a HIGHER high, so at birth the run's top is not yet a confirmed swing and no level
+    # lies far enough above the zone to target: declined for room. One bar later that high is a confirmed swing, and the
+    # same zone — untapped, with the trend — qualifies and is armed from that later bar.
+    _c, o = _trend_chart()
+    candles, _ = _trend_chart((o + 2.5, o + 2.7, o + 2.2, o + 2.3), (o + 2.3, o + 2.4, o + 2.1, o + 2.2), (o + 2.2, o + 2.3, o + 2.0, o + 2.1))
+    opps = [x for x in read_chart(candles, lookback=6, strength=1).opportunities if x.source == "zone"]
+    assert opps[0].state is State.DECLINED and "no room" in opps[0].reason
+    later = [x for x in opps if x.state is State.ARMED]
+    assert later and later[0].armed_at > opps[0].armed_at
+    assert later[0].entry == later[0].block.price_high and later[0].stop == later[0].block.price_low  # the decks' levels
+
+
+def test_a_tapped_zone_is_not_a_standing_order():
+    _c, o = _trend_chart()
+    candles, _ = _trend_chart((o + 2.5, o + 2.7, o + 2.2, o + 2.3), (o + 2.3, o + 2.4, o + 2.1, o + 2.2), (o + 2.2, o + 2.3, o + 1.9, o + 2.0),
+                              (o + 2.0, o + 2.05, o - 0.05, o + 0.1))  # price drops into the zone: first tap
+    r = read_chart(candles, lookback=6, strength=1)
+    z = next(z for z in r.zones if z.valid)
+    assert z.status in ("used", "dead")
+    opp = next(x for x in r.opportunities if x.source == "zone" and x.state is not State.DECLINED)
+    assert opp.state is not State.ARMED  # it was armed, then filled/cancelled/dead once price reached it
+
+
+def test_slower_clocks_are_read_as_they_stood_when_each_bar_closed_not_as_they_end_up():
+    from clicktrader.forex.candles import TimedCandle
+    from clicktrader.smc.analyst import _ClockView
+
+    trigger = [TimedCandle(1, 2, 0, 1, opened_at=60.0 * i) for i in range(20)]  # 1-minute bars
+    slow = [TimedCandle(1, 2, 0, 1, opened_at=300.0 * i) for i in range(4)]  # 5-minute bars at 0, 5, 10, 15 min
+    view = _ClockView(trigger, [slow])
+    assert len(view.at(3)[0]) == 0  # at 00:03 close (ends 00:04) the first 5-minute bar has not closed
+    assert len(view.at(4)[0]) == 1  # at the 00:04 bar's close (ends 00:05) it has
+    assert len(view.at(9)[0]) == 2 and len(view.at(19)[0]) == 4
+
+
+def test_the_reading_is_causal_with_slower_clocks_too():
+    import random
+
+    from clicktrader.forex.candles import TimeCandleBuilder
+
+    rng = random.Random(9)
+    price, ticks = 100.0, []
+    for i in range(6000):
+        price += rng.gauss(0, 0.05)
+        ticks.append((1_700_000_000.0 + i * 2, price))
+
+    def bars(minutes, upto=None):
+        b = TimeCandleBuilder(minutes * 60)
+        for ts, p in ticks:
+            if upto is None or ts < upto:
+                b.feed(ts, p)
+        return b.last(10**6)
+
+    whole = read_chart(bars(1), higher=[bars(5), bars(15)], lookback=10, strength=2)
+    cut = 1_700_000_000.0 + 3600 * 2
+    part = read_chart(bars(1, cut), higher=[bars(5, cut), bars(15, cut)], lookback=10, strength=2)
+    k = len(part.candles) - 1  # the last bar of the prefix may be cut mid-bar in the whole chart's builder; leave it out
+    assert [(o.armed_at, o.direction, o.state.value if o.state.value in ("declined",) else "x") for o in part.opportunities if o.armed_at < k] == [
+        (o.armed_at, o.direction, o.state.value if o.state.value in ("declined",) else "x") for o in whole.opportunities if o.armed_at < k
+    ]

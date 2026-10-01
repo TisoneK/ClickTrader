@@ -913,7 +913,7 @@ def main(argv: list[str] | None = None) -> int:
     run_smc = sub.add_parser("run-smc", help="run the SMC engine on the live feed: PAPER by default, --place for the DEMO account (never real money)")
     run_smc.add_argument("--symbol", default="R_100", help="Deriv symbol (default R_100; 1HZ100V is the 1-second index)")
     run_smc.add_argument("--minutes", type=float, default=1.0, help="trigger bar length in minutes (default 1, the view the owner charts)")
-    run_smc.add_argument("--higher-minutes", type=float, nargs="*", default=[5.0], help="slower clock(s) that must not contradict a trade (default 5). Measured on 16-25h of data a 5+15 chain armed 0.9/h on R_100 and 0 on V100 (1s); 5 alone 0.6-0.9/h; none (`--higher-minutes` alone) 1.5-1.8/h but about half of those are cancelled as falling knives")
+    run_smc.add_argument("--higher-minutes", type=float, nargs="*", default=[5.0, 15.0], help="slower clock(s) that must not contradict a trade (default 5 15, the decks' alignment across timeframes). Measured causally on 16-25h of data: 5+15 arms 0.4-0.7 trades/h, 5 alone 0.8-0.9/h, none 1.1-1.4/h (about half of those cancelled as falling knives). Give none (`--higher-minutes` alone) to drop the veto")
     run_smc.add_argument("--risk-reward", type=float, default=2.0, help="minimum reward:risk (default 2, the material's floor)")
     run_smc.add_argument("--stake", type=float, default=1.0)
     run_smc.add_argument("--multiplier", type=int, default=100)

@@ -50,7 +50,7 @@ from ..forex.model import Direction, TradePlan
 from ..forex.trade_strategies import TradeDecision
 from ..strategies import History
 from .components import OrderBlock
-from .analyst import read_chart
+from .analyst import State, read_chart
 
 
 @dataclass
@@ -89,6 +89,8 @@ class SmcStrategy:
         self._stake = stake
         self._armed: _Armed | None = None
         self.last_view = "nothing seen yet"
+        self._taken: set[tuple] = set()
+        """Orders already filled, so the same standing zone is never traded twice."""
         self.passes: dict[str, int] = {}
         """Setups it saw and passed on, by reason: so \"it found nothing\" and \"it found things and said no\" read differently."""
 
@@ -162,20 +164,33 @@ class SmcStrategy:
             lookback=self._lookback, risk_reward=self._risk_reward,
         )
         last = len(candles) - 1
+        # Standing orders, not just new ones: every opportunity the reading still has ARMED (a zone waiting to be tapped,
+        # a block waiting for its retrace) is what the person would have a limit order at right now. Take the nearest.
+        standing = [o for o in reading.opportunities if o.state is State.ARMED and o.target is not None
+                    and self._signature(TradePlan(o.direction, stop=o.stop, target=o.target), o.block) not in self._taken]
+        price = candles[-1].close
+        if standing:
+            opp = min(standing, key=lambda o: abs(o.entry - price))
+            plan = TradePlan(opp.direction, stop=opp.stop, target=opp.target)
+            same = self._armed is not None and self._armed.plan == plan and self._armed.block == opp.block
+            self._armed = self._armed if same else _Armed(plan=plan, block=opp.block, reason=f"smc: {opp.reason}")
+            self.last_view = f"{'waiting at' if same else 'armed at'} {opp.entry:.2f}, {abs(opp.entry - price):.2f} away ({len(standing)} standing order(s)): {opp.reason}"
+            return
+        if self._armed is not None:
+            self._armed = None  # nothing qualifies any more: the order is withdrawn
         fresh = [o for o in reading.opportunities if o.armed_at == last]
         if not fresh:
             latest = reading.events[-1] if reading.events else None
             what = f"{reading.structure[-1].value} structure" + (f"; last event {latest.kind.value} {latest.verdict.value} at bar {latest.index}" if latest else "")
-            self.last_view = what if self._armed is None else f"waiting for the retrace; {what}"
+            self.last_view = what
             return
         opp = fresh[0]
-        if not opp.is_true or opp.target is None:
-            total = self._note_pass(opp.reason)
-            self.last_view = f"passed on a setup — {opp.reason}. Passed on {sum(self.passes.values())} so far: {total}"
-            return
-        plan = TradePlan(opp.direction, stop=opp.stop, target=opp.target)
-        self._armed = _Armed(plan=plan, block=opp.block, reason=f"smc: {opp.reason}")
-        self.last_view = f"armed: {opp.reason}"
+        total = self._note_pass(opp.reason)
+        self.last_view = f"passed on a setup — {opp.reason}. Passed on {sum(self.passes.values())} so far: {total}"
+
+    @staticmethod
+    def _signature(plan: TradePlan, block: OrderBlock) -> tuple:
+        return (plan.direction.value, round(plan.stop, 6), round(plan.target, 6), round(block.price_low, 6), round(block.price_high, 6))
 
     def _fill(self, price: float) -> TradeDecision | None:
         """Fill the waiting order the moment price trades back into the block."""
@@ -191,6 +206,7 @@ class SmcStrategy:
             self._armed = None
             return None
         self._armed = None
+        self._taken.add(self._signature(armed.plan, block))
         return TradeDecision(armed.plan, self._stake, f"{armed.reason}; filled at {price:.5f}")
 
 

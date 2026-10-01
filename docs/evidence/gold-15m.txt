@@ -1,13 +1,13 @@
 15m -> docs/evidence/gold-15m.png
-  287 bars, 66 swings; events: 10 BOS, 12 CHOCH, 41 sweep, 0 gap fill; zones: 4 true (3 fresh, 1 used), 19 false, 4 broken; opportunities: 3 true (0 won, 2 lost in hindsight), 9 rejected
-    bar 31: down declined — against the higher timeframe, which reads up
-    bar 68: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
-    bar 73: down declined — against the higher timeframe, which reads up
-    bar 85: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
-    bar 99: down declined — against the higher timeframe, which reads up
-    bar 109: up filled (loss) — CHOCH then a block at 4120.49000-4125.12000; limit 4125.12000, stop 4120.49000, target 4140.92000 (3.4:1); gap no; pushed 0.7 bands
-    bar 178: down declined — against the higher timeframe, which reads up
+  287 bars, 66 swings; events: 9 BOS, 12 CHOCH, 42 sweep, 0 gap fill; zones: 4 true (3 fresh, 1 used), 19 false, 4 broken; opportunities: 3 true (0 won, 2 lost in hindsight), 21 rejected
+    bar 170: up declined — against the higher timeframe, which reads down
+    bar 178: down filled (loss) — CHOCH then a block at 4149.69000-4154.65000; limit 4149.69000, stop 4154.65000, target 4136.78000 (2.6:1); gap no; pushed 0.2 bands
     bar 193: up filled (loss) — CHOCH then a block at 4172.25000-4177.40000; limit 4177.40000, stop 4172.25000, target 4292.97000 (22.4:1); gap no; pushed 0.0 bands
+    bar 194: up cancelled — withdrawn: against the trend: it is a down-trend (the decks only look for supply), and this is a demand zone
+    bar 194: up cancelled — withdrawn: against the trend: it is a down-trend (the decks only look for supply), and this is a demand zone
+    bar 233: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
+    bar 234: up declined — a weaker zone: another demand zone in the same leg is lower and holds the deeper liquidity
+    bar 242: down declined — against the trend: it is an up-trend (the decks only look for demand), and this is a supply zone
     bar 248: down declined — against the higher timeframe, which reads up
     bar 254: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
     bar 261: down declined — against the higher timeframe, which reads up

@@ -8,7 +8,7 @@ There is no real-money path in this repository and none should be added on the s
 
 ```bash
 cd ~/Code/ClickTrader
-.venv/bin/clicktrader run-smc --symbol R_100 --minutes 1 --higher-minutes 5
+.venv/bin/clicktrader run-smc --symbol R_100 --minutes 1
 ```
 
 (`clicktrader` is installed inside the project's virtual environment, so it is not on your PATH: run it as
@@ -63,17 +63,25 @@ carry no costs. Exit code 0 means READY, 1 means not.
 
 ## "It isn't trading" — how often to expect a trade, and the one setting that decides it
 
-Measured on 16 hours of R_100 and 25 hours of the 1-second V100 (hindsight readings, no orders), trades armed per hour:
+Measured on 16 hours of R_100 and 25 hours of the 1-second V100 (hindsight readings, no orders; **causal**: each bar sees
+only the slower-clock bars that had already closed), trades armed per hour:
 
 | slower-clock veto | R_100 | V100 (1s) |
 |---|---|---|
-| 5-minute **and** 15-minute (`--higher-minutes 5 15`) | 0.9 | **0.0** |
-| 5-minute only (**the default**) | 0.9 | 0.6 |
-| none (`--higher-minutes` with no values) | 1.8 | 1.5 |
+| 5-minute **and** 15-minute (`--higher-minutes 5 15`, **the default**: the decks' alignment across timeframes) | 0.66 | 0.44 |
+| 5-minute only (`--higher-minutes 5`) | 0.90 | 0.76 |
+| none (`--higher-minutes` with no values) | 1.38 | 1.12 |
 
-The veto (a trade may not go against a slower clock's structure) is the decks' "align across timeframes" and is what
-passes on most setups. With no veto it trades about twice as often, but about **half of those are then cancelled** as
-falling knives (the return into the zone was as violent as the move that made it), and the trades taken against the
-slower clock are the ones the decks say not to take. The run tells you what it passed on and why
-("Passed on 14 so far: 9 against the slower clock, 3 a weaker zone, …"), shows your balance at the start, in every status
-line and after each trade, and reports a broker refusal in plain words and carries on with the next plan.
+Most of what it sees it passes on, and it says so: "Passed on 14 so far: 9 against the slower clock, 3 a weaker zone, …".
+Dropping the veto roughly doubles the trades but they are the ones the decks say not to take, and about half of the
+armed orders are cancelled as falling knives anyway. A fresh true zone is a **standing order**: it is judged again on
+every bar until price taps it or it dies, so a zone that could not be traded when it formed (against the trend, no level
+to aim at yet) is picked up later when it can.
+
+The run shows your balance at the start, in every status line and after each trade, and a broker refusal is reported in
+plain words ("BROKER REFUSED this plan: …") and the run carries on with the next plan.
+
+**A correction worth knowing:** an earlier version of this table said the 5+15 chain armed *zero* trades on V100. That was
+a bug in the reading, not a property of the engine: the slower clock was being read as it ended up, not as it stood when
+each bar closed, so a bar at 08:00 saw the 15-minute chart of 12:00. It did not affect live runs (the future does not
+exist yet) but it contaminated every historical number computed with the veto on. Fixed, with tests.

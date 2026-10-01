@@ -1,57 +1,62 @@
 1m -> docs/evidence/r100-1m-test-live.png
-  999 bars, 247 swings; events: 44 BOS, 43 CHOCH, 130 sweep, 0 gap fill; zones: 4 true (3 fresh, 1 used), 60 false, 31 broken; opportunities: 15 true (7 won, 7 lost in hindsight), 62 rejected
-    bar 38: down declined — against the higher timeframe, which reads up
+  999 bars, 247 swings; events: 44 BOS, 43 CHOCH, 130 sweep, 0 gap fill; zones: 4 true (3 fresh, 1 used), 60 false, 31 broken; opportunities: 11 true (5 won, 5 lost in hindsight), 75 rejected
+    bar 38: down declined — no room to move: no opposing level leaves 2:1 from the zone
+    bar 44: down cancelled — withdrawn: against the trend: it is an up-trend (the decks only look for demand), and this is a supply zone
     bar 62: up filled (win) — CHOCH then a block at 610.11000-611.15000; limit 611.15000, stop 610.11000, target 613.59000 (2.3:1); gap no; pushed 0.9 bands
-    bar 86: down declined — against the higher timeframe, which reads up
+    bar 86: down declined — no room to move: no opposing level leaves 2:1 from the block
     bar 100: up armed — CHOCH then a block at 611.75000-612.44000; limit 612.44000, stop 611.75000, target 614.20000 (2.6:1); gap yes; pushed 2.9 bands
-    bar 110: up filled (win) — fresh demand zone 614.07000-615.12000; limit 615.12000, stop 614.07000, target 619.30000 (4.0:1); conviction: flip zone
-    bar 131: down declined — against the higher timeframe, which reads up
-    bar 135: up filled (loss) — CHOCH then a block at 619.76000-620.90000; limit 620.90000, stop 619.76000, target 623.50000 (2.3:1); gap no; pushed 1.3 bands
-    bar 148: down declined — against the trend: in a down-trend the decks only look for supply
-    bar 153: down declined — against the higher timeframe, which reads up
+    bar 110: up declined — against the higher timeframe, which reads down
+    bar 131: down cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
+    bar 135: up declined — against the higher timeframe, which reads down
+    bar 148: down declined — against the trend: it is an up-trend (the decks only look for demand), and this is a supply zone
+    bar 153: down cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
     bar 165: up declined — no room to move: no opposing level leaves 2:1 from the block
-    bar 177: down declined — against the higher timeframe, which reads up
+    bar 166: up cancelled — withdrawn: against the trend: it is a down-trend (the decks only look for supply), and this is a demand zone
+    bar 177: down cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
     bar 188: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
     bar 191: up filled (win) — fresh demand zone 621.60000-622.41000; limit 622.41000, stop 621.60000, target 624.25000 (2.3:1); conviction: flip zone, Fibonacci 61.8-78.6
     bar 256: up dead — closed through the zone's far edge before the tap — dead zone, deleted
     bar 262: down declined — against the higher timeframe, which reads up
     bar 264: down declined — against the higher timeframe, which reads up
     bar 265: down declined — a weaker zone: another supply zone in the same leg is higher and holds the deeper liquidity
+    bar 267: down cancelled — withdrawn: against the trend: it is an up-trend (the decks only look for demand), and this is a supply zone
     bar 284: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
-    bar 309: down declined — against the higher timeframe, which reads up
-    bar 310: down declined — against the higher timeframe, which reads up
+    bar 309: down cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
+    bar 310: down filled (loss) — fresh supply zone 630.64000-631.77000; limit 630.64000, stop 631.77000, target 625.80000 (4.3:1); conviction: Fibonacci 61.8-78.6
     bar 331: up filled (loss) — CHOCH then a block at 629.08000-630.23000; limit 630.23000, stop 629.08000, target 634.44000 (3.7:1); gap no; pushed 0.8 bands
-    bar 353: down declined — against the higher timeframe, which reads up
-    bar 366: down declined — against the higher timeframe, which reads up
+    bar 353: down filled (win) — CHOCH then a block at 629.87000-631.16000; limit 629.87000, stop 631.16000, target 626.15000 (2.9:1); gap no; pushed 0.7 bands
+    bar 366: down cancelled — withdrawn: against the trend: it is an up-trend (the decks only look for demand), and this is a supply zone
     bar 373: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
-    bar 381: down declined — against the higher timeframe, which reads up
-    bar 406: up filled (win) — CHOCH then a block at 615.17000-616.25000; limit 616.25000, stop 615.17000, target 618.42000 (2.0:1); gap yes; pushed 2.2 bands
-    bar 407: up filled (win) — fresh demand zone 615.17000-616.25000; limit 616.25000, stop 615.17000, target 618.42000 (2.0:1); conviction: flip zone, Fibonacci 61.8-78.6
-    bar 422: down declined — against the higher timeframe, which reads up
-    bar 433: up filled (loss) — CHOCH then a block at 617.74000-618.52000; limit 618.52000, stop 617.74000, target 622.28000 (4.8:1); gap no; pushed 0.2 bands
-    bar 438: up dead — closed through the zone's far edge before the tap — dead zone, deleted
-    bar 449: down declined — against the trend: in a down-trend the decks only look for supply
-    bar 457: down declined — against the higher timeframe, which reads up
-    bar 472: up filled (loss) — CHOCH then a block at 615.54000-617.40000; limit 617.40000, stop 615.54000, target 621.57000 (2.2:1); gap yes; pushed 1.4 bands
-    bar 481: down declined — against the higher timeframe, which reads up
-    bar 482: down declined — against the higher timeframe, which reads up
-    bar 500: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
-    bar 525: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
+    bar 381: down cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
+    bar 406: up declined — against the higher timeframe, which reads down
+    bar 407: up declined — against the higher timeframe, which reads down
+    bar 422: down dead — closed through the zone's far edge before the tap — dead zone, deleted
+    bar 433: up declined — against the higher timeframe, which reads down
+    bar 438: up declined — against the higher timeframe, which reads down
+    bar 449: down declined — against the trend: it is an up-trend (the decks only look for demand), and this is a supply zone
+    bar 457: down declined — no room to move: no opposing level leaves 2:1 from the block
+    bar 458: down cancelled — withdrawn: against the trend: it is an up-trend (the decks only look for demand), and this is a supply zone
+    bar 472: up declined — against the higher timeframe, which reads down
+    bar 481: down cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
+    bar 482: down cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
+    bar 500: up declined — against the higher timeframe, which reads down
+    bar 525: up declined — against the higher timeframe, which reads down
     bar 526: up declined — a weaker zone: another demand zone in the same leg is lower and holds the deeper liquidity
-    bar 541: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
-    bar 556: down declined — against the trend: in a down-trend the decks only look for supply
-    bar 559: down declined — against the higher timeframe, which reads up
-    bar 562: down declined — against the higher timeframe, which reads up
-    bar 578: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
+    bar 541: up declined — against the higher timeframe, which reads down
+    bar 556: down declined — against the trend: it is an up-trend (the decks only look for demand), and this is a supply zone
+    bar 559: down cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
+    bar 562: down cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
+    bar 578: up declined — against the higher timeframe, which reads down
     bar 602: down declined — against the higher timeframe, which reads up
-    bar 608: up filled (loss) — CHOCH then a block at 628.35000-629.21000; limit 629.21000, stop 628.35000, target 631.48000 (2.6:1); gap yes; pushed 1.3 bands
+    bar 608: up declined — against the higher timeframe, which reads down
     bar 612: down declined — against the higher timeframe, which reads up
     bar 613: down declined — against the higher timeframe, which reads up
     bar 640: up filled (win) — CHOCH then a block at 627.18000-628.40000; limit 628.40000, stop 627.18000, target 631.77000 (2.8:1); gap yes; pushed 1.3 bands
     bar 653: up declined — a weaker zone: another demand zone in the same leg is lower and holds the deeper liquidity
     bar 654: up declined — no room to move: no opposing level leaves 2:1 from the zone
     bar 658: up declined — a weaker zone: another demand zone in the same leg is lower and holds the deeper liquidity
-    bar 676: down declined — against the trend: in a down-trend the decks only look for supply
+    bar 659: up cancelled — withdrawn: against the trend: it is a down-trend (the decks only look for supply), and this is a demand zone
+    bar 676: down declined — against the trend: it is an up-trend (the decks only look for demand), and this is a supply zone
     bar 681: down declined — against the higher timeframe, which reads up
     bar 684: down declined — against the higher timeframe, which reads up
     bar 691: down declined — against the higher timeframe, which reads up
@@ -60,18 +65,22 @@
     bar 709: down declined — against the higher timeframe, which reads up
     bar 728: down declined — against the higher timeframe, which reads up
     bar 749: up dead — closed through the zone's far edge before the tap — dead zone, deleted
-    bar 769: up filled (loss) — fresh demand zone 628.79000-630.44000; limit 630.44000, stop 628.79000, target 633.94000 (2.1:1); conviction: flip zone
+    bar 769: up cancelled — withdrawn: against the trend: it is a down-trend (the decks only look for supply), and this is a demand zone
     bar 796: down declined — against the higher timeframe, which reads up
     bar 804: down declined — against the higher timeframe, which reads up
     bar 819: down declined — against the higher timeframe, which reads up
-    bar 829: down declined — against the higher timeframe, which reads up
-    bar 832: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
-    bar 857: down declined — against the higher timeframe, which reads up
+    bar 827: down cancelled — withdrawn: against the trend: it is an up-trend (the decks only look for demand), and this is a supply zone
+    bar 827: down cancelled — withdrawn: against the trend: it is an up-trend (the decks only look for demand), and this is a supply zone
+    bar 827: down cancelled — withdrawn: against the trend: it is an up-trend (the decks only look for demand), and this is a supply zone
+    bar 827: down cancelled — withdrawn: against the trend: it is an up-trend (the decks only look for demand), and this is a supply zone
+    bar 829: down cancelled — withdrawn: against the trend: it is an up-trend (the decks only look for demand), and this is a supply zone
+    bar 832: up declined — against the higher timeframe, which reads down
+    bar 857: down filled (loss) — CHOCH then a block at 628.49000-629.58000; limit 628.49000, stop 629.58000, target 626.09000 (2.2:1); gap no; pushed 0.3 bands
     bar 870: up filled (win) — CHOCH then a block at 629.80000-630.67000; limit 630.67000, stop 629.80000, target 633.72000 (3.5:1); gap no; pushed 1.1 bands
-    bar 884: down declined — against the higher timeframe, which reads up
+    bar 884: down cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
     bar 891: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
-    bar 892: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
-    bar 898: down declined — against the higher timeframe, which reads up
+    bar 892: up cancelled — withdrawn: against the trend: it is a down-trend (the decks only look for supply), and this is a demand zone
+    bar 898: down filled (loss) — CHOCH then a block at 635.60000-637.54000; limit 635.60000, stop 637.54000, target 631.66000 (2.0:1); gap no; pushed 0.4 bands
     bar 928: up cancelled — falling knife: the bar that reached the zone is as large as the impulse's own median body — cancel the order
     bar 947: down declined — against the higher timeframe, which reads up
     bar 961: down declined — against the higher timeframe, which reads up

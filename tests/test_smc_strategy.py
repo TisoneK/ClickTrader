@@ -104,3 +104,14 @@ def test_the_strategy_counts_what_it_passed_on_and_says_why():
 def test_an_empty_chain_means_no_slower_clock_veto():
     s = SmcStrategy(trigger_minutes=1.0, higher_minutes=())
     assert s._higher == []
+
+
+def test_a_filled_order_is_never_armed_again():
+    from clicktrader.smc.components import OrderBlock as OB
+
+    s = SmcStrategy(trigger_minutes=1.0)
+    block = OB(price_low=99.0, price_high=100.0, index=0, direction=Direction.DOWN)
+    plan = TradePlan(Direction.DOWN, stop=100.0, target=98.0)
+    s._armed = _Armed(plan=plan, block=block, reason="test")
+    assert s.decide(History([Tick(0.0, "99.50", "X")], 1)) is not None  # filled
+    assert s._signature(plan, block) in s._taken  # so the standing-order logic will skip this zone from now on
