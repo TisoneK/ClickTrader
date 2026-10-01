@@ -56,7 +56,7 @@ def test_the_stop_and_target_go_in_as_money_converted_from_the_price_levels():
 def test_a_fall_is_a_multdown():
     ws = FakeSocket({"proposal": {"spot": 1000.0}}, {"proposal": {"id": "p2", "ask_price": 1.0}}, _buy())
     place_multiplier(ws, False, symbol="1HZ100V", stake=1.0, multiplier=50,
-                     stop_loss=1030.0, take_profit=1000.0, currency="USD")
+                     stop_loss=1030.0, take_profit=970.0, currency="USD")
     assert ws.sent[0]["contract_type"] == "MULTDOWN"
 
 
@@ -212,3 +212,20 @@ def test_run_creates_a_missing_log_directory(tmp_path):
                     strategy=NoStrategy(), ticks=feed, broker=QuietBroker(), emit=lambda _line: None)
 
     assert log_path.exists()
+
+
+def test_a_stop_worth_less_than_the_brokers_minimum_is_refused_before_anything_is_sent():
+    # 0.53 points on a 613 price at a 100 exposure is 0.09 of currency; the broker said "equal to or higher than 0.10"
+    ws = FakeSocket({"proposal": {"spot": 613.49}})
+    with pytest.raises(DerivAPIError) as caught:
+        place_multiplier(ws, True, symbol="R_100", stake=1.0, multiplier=100,
+                         stop_loss=612.96, take_profit=615.43, currency="USD")
+    assert "minimum" in str(caught.value) and len(ws.sent) == 1  # only the spot quote was asked for
+
+
+def test_a_plan_the_market_has_already_gone_through_is_skipped_with_the_reason():
+    ws = FakeSocket({"proposal": {"spot": 606.5}})  # a long whose stop is 614.72 while the price is 606.5
+    with pytest.raises(DerivAPIError) as caught:
+        place_multiplier(ws, True, symbol="R_100", stake=1.0, multiplier=100,
+                         stop_loss=614.72, take_profit=618.67, currency="USD")
+    assert "moved" in str(caught.value)

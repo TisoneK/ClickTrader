@@ -106,6 +106,11 @@ def _connection_errors() -> tuple[type[Exception], ...]:
     return (websocket.WebSocketException, TimeoutError, ConnectionError)
 
 
+def _is_sold(record: dict) -> bool:
+    """The broker's record says the position is over — by any of the fields that say so."""
+    return bool(record.get("is_sold")) or bool(record.get("sell_time")) or record.get("sell_price") not in (None, "")
+
+
 class DerivMultiplierBroker:
     """The live side: open a session, place a plan, and watch the position until the broker says it is sold.
 
@@ -185,17 +190,22 @@ class DerivMultiplierBroker:
             raise
         return bought.contract_id, bought.buy_price, currency
 
-    def watch(self, contract_id: int, *, timeout: float, poll_every: float, sleep=time.sleep) -> float:
+    def watch(self, contract_id: int, *, timeout: float | None, poll_every: float, sleep=time.sleep, on_poll=None) -> float:
         """Poll the broker's record until the position is closed, and return its realised profit.
 
         A socket drop between polls must not end the run while a position is open: reconnect (a fresh
         OTP session) and keep polling the same contract — the broker still holds the stop and target
-        through every reconnect.
+        through every reconnect. `timeout=None` waits as long as it takes (the broker's own stop and
+        target end it); `on_poll(record)` is called after every successful poll so a long wait is not silent.
+
+        "Sold" is read from any of the broker's signs of it (`is_sold`, a `sell_time`, a `sell_price`): a live run
+        once waited an hour on a contract the broker had stopped out after 86 seconds. And a timeout is never
+        reported as a result — it re-reads the contract once, and only a contract still open raises.
         """
         from .api.deriv.trading import get_contract_status
 
-        waited, delay = 0.0, max(poll_every, 60.0)  # the first minute is closed to selling anyway
-        while waited < timeout:
+        waited, delay, record = 0.0, max(poll_every, 60.0), {}  # the first minute is closed to selling anyway
+        while timeout is None or waited < timeout:
             sleep(delay)
             waited += delay
             try:
@@ -203,8 +213,17 @@ class DerivMultiplierBroker:
             except _connection_errors():
                 self._reconnect(sleep=sleep)
                 continue
-            if record.get("is_sold"):
+            if _is_sold(record):
                 return float(record.get("profit", 0.0))
+            if on_poll is not None:
+                on_poll(record)
+        try:
+            record = get_contract_status(self._ws, contract_id)
+        except _connection_errors():
+            self._reconnect(sleep=sleep)
+            record = get_contract_status(self._ws, contract_id)
+        if _is_sold(record):
+            return float(record.get("profit", 0.0))
         raise TimeoutError(f"contract {contract_id} was still open after {timeout:.0f}s")
 
     def close(self) -> None:
@@ -227,7 +246,7 @@ def run(
     ticks: Iterator | None = None,
     broker=None,
     poll_every: float = 60.0,
-    hold_timeout: float = 3600.0,
+    hold_timeout: float | None = None,
     report_every: float = 300.0,
     emit: Callable[[str], None] = _say,
     now: Callable[[], float] = time.time,
@@ -295,11 +314,15 @@ def run(
                 continue
             emit(f"placed {contract_id}: {price:.2f} {currency} at risk, stop {decision.plan.stop}, "
                  f"target {decision.plan.target}")
+            def _open(rec, _cid=contract_id):
+                emit(f"  position {_cid} still open at the broker: {float(rec.get('profit', 0.0)):+.2f} so far, "
+                     f"price {rec.get('current_spot', '?')}")
             try:
-                profit = broker.watch(contract_id, timeout=hold_timeout, poll_every=poll_every)
+                profit = broker.watch(contract_id, timeout=hold_timeout, poll_every=poll_every, on_poll=_open)
             except TimeoutError as exc:
-                emit(f"{exc} — it will still stop itself out at {decision.plan.stop}")
-                profit = 0.0
+                # Not a result: it has no profit yet, so it is not counted or logged as a closed trade.
+                emit(f"{exc} — it is still open at the broker with its stop and target; NOT counted as a trade")
+                continue
             run.placed += 1
             run.net += profit
             run.outcomes.append(profit)

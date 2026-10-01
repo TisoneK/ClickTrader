@@ -183,6 +183,10 @@ proposing 10 at multiplier 100 and reading `LimitOrderAmountTooHigh: Enter an am
 than 500.00`. Kept here as a named constant so the guard and the message agree."""
 
 
+MULTIPLIER_MIN_AMOUNT = 0.10
+"""The least a stop-loss or take-profit amount may be — from a live refusal: "Enter an amount equal to or higher than 0.10." """
+
+
 def place_multiplier(
     ws: websocket.WebSocket,
     rise: bool,
@@ -219,9 +223,21 @@ def place_multiplier(
     # because a Multipliers position of `notional` moves `distance / spot * notional` in currency.
     spot = _spot(ws, symbol=symbol, stake=stake, multiplier=multiplier, currency=currency,
                  rise=rise, contract_type="MULTUP" if rise else "MULTDOWN")
+    # The plan was drawn against the price a moment ago; the market may have gone through its stop (or target) since.
+    # Sending that would be nonsense the broker answers with a confusing amount error, so say what happened instead.
+    if (rise and not stop_loss < spot < take_profit) or (not rise and not take_profit < spot < stop_loss):
+        raise DerivAPIError(
+            f"the price moved before the order could be placed: it is {spot:g}, outside the plan's stop {stop_loss:g} and "
+            f"target {take_profit:g} — skipped"
+        )
     risk_money = abs(spot - stop_loss) / spot * notional
     reward_money = abs(take_profit - spot) / spot * notional
     for label, value in (("stop", risk_money), ("target", reward_money)):
+        if value < MULTIPLIER_MIN_AMOUNT:
+            raise DerivAPIError(
+                f"the {label} works out at {value:.2f}, under the broker's {MULTIPLIER_MIN_AMOUNT:.2f} minimum — the zone is too "
+                f"tight for stake {stake:g} at x{multiplier} (it needs a stake or multiplier that makes it at least {MULTIPLIER_MIN_AMOUNT:.2f}); skipped"
+            )
         if value > MULTIPLIER_LIMIT_MULTIPLE * stake:
             raise DerivAPIError(
                 f"the {label} works out at {value:.2f} of currency, over the "

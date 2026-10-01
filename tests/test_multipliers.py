@@ -32,7 +32,7 @@ class FakeBroker:
         self.placed.append(plan)
         return 1000 + len(self.placed), 1.0, "USD"
 
-    def watch(self, contract_id, *, timeout, poll_every, sleep=None):
+    def watch(self, contract_id, *, timeout, poll_every, sleep=None, on_poll=None):
         return self._profits.pop(0)
 
 
@@ -142,3 +142,59 @@ def test_a_moving_distance_is_not_a_changed_view():
         t[0] += 60
         printer.show(615.0, "no trades yet", f"armed at 618.82, {away} away (1 standing order(s)): fresh supply zone")
     assert len(said) == 2  # one block, no repeats
+
+
+class _WatchSocket:
+    """A broker whose open-contract answers are scripted, to drive `watch` without a network."""
+
+    def __init__(self, *records):
+        self.records = list(records)
+
+
+def _watcher(records):
+    from clicktrader import multipliers as m
+
+    broker = m.DerivMultiplierBroker.__new__(m.DerivMultiplierBroker)
+    broker._ws = None
+    it = iter(records)
+    import clicktrader.api.deriv.trading as t
+    return broker, it, t
+
+
+def test_a_position_the_broker_has_sold_is_seen_by_any_of_its_signs(monkeypatch):
+    from clicktrader.multipliers import _is_sold
+
+    assert _is_sold({"is_sold": 1}) and _is_sold({"sell_time": 1790827580}) and _is_sold({"sell_price": 0.8})
+    assert not _is_sold({"is_sold": 0, "profit": 0.3}) and not _is_sold({})
+
+
+def test_watch_returns_the_brokers_realised_profit_and_narrates_a_long_wait(monkeypatch):
+    broker, it, t = _watcher([{"is_sold": 0, "profit": 0.1}, {"is_sold": 0, "profit": 0.2}, {"is_sold": 0, "sell_time": 5, "profit": -0.2}])
+    monkeypatch.setattr(t, "get_contract_status", lambda ws, cid: next(it))
+    seen = []
+    assert broker.watch(1, timeout=None, poll_every=60, sleep=lambda s: None, on_poll=seen.append) == -0.2
+    assert [r["profit"] for r in seen] == [0.1, 0.2]  # a status for every poll while it was open
+
+
+def test_a_timeout_is_never_reported_as_a_zero_result(monkeypatch):
+    broker, it, t = _watcher([{"is_sold": 0}, {"is_sold": 0}])
+    monkeypatch.setattr(t, "get_contract_status", lambda ws, cid: next(it))
+    with pytest.raises(TimeoutError):
+        broker.watch(1, timeout=60, poll_every=60, sleep=lambda s: None)
+    # ...and a contract that was sold by the time of the final re-read is a result, not a timeout
+    broker, it, t = _watcher([{"is_sold": 0}, {"is_sold": 1, "profit": -0.2}])
+    monkeypatch.setattr(t, "get_contract_status", lambda ws, cid: next(it))
+    assert broker.watch(1, timeout=60, poll_every=60, sleep=lambda s: None) == -0.2
+
+
+def test_a_run_does_not_count_a_trade_that_timed_out_while_open(tmp_path):
+    class Stuck(FakeBroker):
+        def watch(self, contract_id, *, timeout, poll_every, sleep=None, on_poll=None):
+            raise TimeoutError("contract 1001 was still open after 5s")
+
+    said = []
+    result = run(symbol="R_100", log_path=str(tmp_path / "t.jsonl"), stake=1.0, multiplier=100,
+                 strategy=FiresOnEveryTick(stop=99.0, target=102.0), max_trades=1, hold_timeout=5, ticks=iter(_ticks(2)),
+                 broker=Stuck([]), emit=said.append)
+    assert result.placed == 0 and (tmp_path / "t.jsonl").read_text() == ""
+    assert any("NOT counted" in line for line in said)
